@@ -1,0 +1,124 @@
+/**
+ * Structured card-effect schema for The Twilight Effect.
+ *
+ * Effects live ON the card (the `effects` field of a Card), authored alongside
+ * the card's stats and text — one source of truth, churn-proof. A card-agnostic
+ * interpreter resolves these descriptors against game events; the engine knows
+ * primitives, never specific cards.
+ *
+ * This vocabulary is derived from Game_Rules_Updated.md + Card_Design_Parameters.md.
+ * Slice 1 defines the schema; later slices implement the interpreter primitive by
+ * primitive. NOT-yet-modeled future mechanics (Blueprint modal, Overkill, Warded,
+ * gain-control) have stubs marked `future`. Stripped per design owner: Initiative,
+ * Exile (Dead Zone is the only discard pile).
+ */
+
+// ─── WHEN an effect fires ──────────────────────────────────────────────────────
+export type Trigger =
+  | 'onPlay'        // Action card resolves
+  | 'onEnter'       // companion/construct enters the encounter
+  | 'equipped'      // item becomes attached (continuous while equipped)
+  | 'static'        // continuous aura while this permanent is in play
+  | 'onAttack'      // this character declares an attack
+  | 'onDealDamage'  // after this character deals damage
+  | 'onDamaged'     // this character is dealt damage
+  | 'onKill'        // this character reduces another to 0 HP
+  | 'onDeath'       // this is reduced to 0 HP
+  | 'onDestroy'     // this is removed by a destroy effect
+  | 'onLeave'       // this leaves the encounter (any removal — catch-all)
+  | 'startOfTurn'
+  | 'endOfTurn'
+  | 'onOpponentAction' // reactive: the opponent plays an Action card (counter wards)
+  | 'activated';    // player-initiated; see `cost`
+
+// ─── WHO/WHAT an effect targets ────────────────────────────────────────────────
+// Interactive specs require a board selection step (reuses the pendingTrigger layer).
+// Per rules: "companion" excludes the Player Character; "character" includes it.
+export type TargetSpec =
+  // interactive single targets
+  | 'anyCharacter' | 'enemyCharacter' | 'ownCharacter' | 'otherCharacter'
+  | 'anyCompanion' | 'enemyCompanion' | 'ownCompanion'
+  | 'anyConstruct' | 'physicalConstruct' | 'magicalConstruct'
+  | 'anyItem' | 'targetPlayer'
+  // auto-scoped groups (no selection)
+  | 'self' | 'allEnemies' | 'allEnemyCompanions' | 'ownCompanions' | 'ownPhysicalConstructs'
+  | 'frontLineOwn' | 'frontLineEnemy' | 'backLineEnemy' | 'sameLineAsTarget' | 'ownParty'
+  // combat-trigger context (resolved from the event, not the board)
+  | 'damagedController';   // the Player Character of the just-damaged entity's owner
+
+// ─── Conditions for `if`/`while` ───────────────────────────────────────────────
+export type Condition =
+  | { kind: 'controlsType'; cardType: 'Companion' | 'Construct'; subtype?: string }
+  | { kind: 'controlsCount'; of: 'companions' | 'constructs'; min: number }
+  | { kind: 'willpowerAtLeast'; value: number }
+  | { kind: 'targetIsSubtype'; subtype: string }
+  // combat-trigger event gates (checked against the damage/kill event, not the board)
+  | { kind: 'damagedIsEnemyCompanion' }
+  | { kind: 'killedIsCompanion' }
+  | { kind: 'killedIsPhysicalConstruct' };
+
+// ─── Amounts (fixed or derived/random) ─────────────────────────────────────────
+export type Amount = number | { die: number } | { halfDie: number } | { halfDieUp: number } | { perControlled: 'companions' | 'constructs' };
+
+// ─── Activated-ability costs ───────────────────────────────────────────────────
+export type Cost =
+  | { kind: 'exhaustSelf' }
+  | { kind: 'sacrificeSelf' }
+  | { kind: 'sacrifice'; target: TargetSpec }
+  | { kind: 'payHP'; amount: number }
+  | { kind: 'discard'; count: number }
+  | { kind: 'removeAnchor'; count: number };
+
+// ─── WHAT an effect does (the primitive vocabulary) ────────────────────────────
+export type Effect =
+  // damage / healing
+  | { op: 'damage'; amount: Amount; target: TargetSpec; splash?: 'line' | 'board' }
+  | { op: 'damageSelfPC'; amount: Amount }
+  | { op: 'heal'; amount: Amount; target: TargetSpec }
+  // attack/stat modification (HP buffs ONLY as continuous statics — no temp +HP per rules §8)
+  | { op: 'buff'; stat?: 'atk' | 'hp'; amount?: number; grant?: string[]; modifiers?: Modifier[]; scope: TargetSpec; duration: 'endOfTurn' | 'while'; where?: { line?: 'front' | 'back'; cls?: string } }
+  // card / zone movement
+  | { op: 'draw'; count: number; if?: Condition }
+  | { op: 'discard'; count: number; target: TargetSpec; random?: boolean }
+  | { op: 'mill'; count: number; target: TargetSpec }
+  | { op: 'deckPeek'; look: number; dests: ('hand' | 'top' | 'bottom')[]; maxHand?: number }  // scry/select
+  | { op: 'returnFromDead'; cardType?: string; to: 'hand' | 'encounter' }
+  | { op: 'search'; cardType: string }
+  // board manipulation
+  | { op: 'move'; target: TargetSpec; to: 'anySlot' | 'adjacent'; forced?: boolean }
+  | { op: 'bounce'; target: TargetSpec }                    // return permanent to hand
+  | { op: 'extraAttack'; target: TargetSpec }               // attack an additional time
+  | { op: 'forceAttack'; attackers: TargetSpec; target: TargetSpec }
+  | { op: 'anchor'; delta: number; target: TargetSpec }     // Reinforce/Dismantle/Shore Up/Demolish
+  | { op: 'sacrifice'; target: TargetSpec }
+  | { op: 'sacrificeItem'; target: TargetSpec }
+  | { op: 'equipFromHand'; target: TargetSpec }
+  | { op: 'animate'; atk: number; hp: number; target: TargetSpec }  // Animate Magic X
+  | { op: 'dieCheck'; threshold: number; onPass: Effect[]; onFail: Effect[] }  // roll d6, branch
+  | { op: 'attackDisarm'; attacker: TargetSpec; target: TargetSpec }  // two-step: your char attacks, then sac an item on the target
+  | { op: 'moveAnchor'; count: number }  // two-step: move N anchors from one of your Physical Constructs to another
+  // damage MODIFIERS (passive, consulted by the damage pipeline — not standalone instances)
+  | { op: 'attackBonus'; amount: number }        // (onAttack, gated by clause `if`) +dmg to the bearer's attack
+  | { op: 'magicDamageBonus'; amount: number }   // (static) +dmg to each enemy your Magic Actions damage
+  | { op: 'preventAnchorDecay' }                 // (static) your Physical Constructs skip start-of-turn anchor decay
+  | { op: 'lineWard' }                           // (static) opposing companions can't attack characters on the line opposite this construct
+  | { op: 'exhaustSelf' }                        // exhaust the source permanent (e.g. Library of Memory's "if you do")
+  // future (declared so authored cards validate; interpreter support added later)
+  | { op: 'modal'; options: { label: string; effects: Effect[] }[] }  // Blueprint
+  | { op: 'gainControl'; target: TargetSpec; duration: 'while' }
+  | { op: 'suppressKeywords'; scope: TargetSpec; where?: { line?: 'front' | 'back' } }  // static aura: affected lose all keywords
+  | { op: 'counterAction' };  // sacrifice this; the opponent's Action is countered to their Dead Zone
+
+/** Non-stat continuous modifiers a buff can grant (rules-flavored flags). */
+export type Modifier = 'hpFloor1' | 'cannotBeMoved' | 'cannotAttack' | 'doesNotReady';
+
+/** One trigger→effects clause on a card. */
+export interface CardEffect {
+  trigger: Trigger;
+  effects: Effect[];
+  optional?: boolean;          // "you may"
+  oncePerTurn?: boolean;
+  if?: Condition;              // gate the whole clause
+  cost?: Cost;                 // required when trigger === 'activated'
+  uncounterable?: boolean;     // (on an Action's onPlay clause) cannot be countered
+}

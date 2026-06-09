@@ -1,0 +1,1572 @@
+{
+  "cards": [
+    {
+      "id": "efcc9bf4",
+      "name": "Tower Apprentice",
+      "level": 1,
+      "type": "Companion",
+      "subtype": "Human Scholar",
+      "rarity": "Common",
+      "class1": "Wizard",
+      "class2": "",
+      "attack": 1,
+      "hp": 1,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "When this enters, look at the top card of your deck. You may put it on the bottom.",
+      "flavor": "Theory before practice, then practice for years.",
+      "createdAt": "2026-05-16T19:02:21.323951Z",
+      "updatedAt": "2026-05-16T19:02:21.324054Z",
+      "effects": [
+        {
+          "trigger": "onEnter",
+          "effects": [
+            {
+              "op": "deckPeek",
+              "look": 1,
+              "dests": [
+                "top",
+                "bottom"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "61140f3f",
+      "name": "Cipher-Keeper",
+      "level": 2,
+      "type": "Companion",
+      "subtype": "Elf Archivist",
+      "rarity": "Common",
+      "class1": "Wizard",
+      "class2": "",
+      "attack": 2,
+      "hp": 2,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "When this enters, draw a card.",
+      "flavor": "Every word preserved. Every word remembered.",
+      "createdAt": "2026-05-16T19:02:21.324078Z",
+      "updatedAt": "2026-05-16T19:02:21.324080Z",
+      "effects": [
+        {
+          "trigger": "onEnter",
+          "effects": [
+            {
+              "op": "draw",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "756138f8",
+      "name": "Patient Conjurer",
+      "level": 2,
+      "type": "Companion",
+      "subtype": "Human Wizard",
+      "rarity": "Uncommon",
+      "class1": "Wizard",
+      "class2": "",
+      "attack": 1,
+      "hp": 3,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [
+        "Ranged"
+      ],
+      "text": "RANGED. When you play a Magical Construct, this character heals 1.",
+      "flavor": "",
+      "createdAt": "2026-05-16T19:02:21.324090Z",
+      "updatedAt": "2026-05-16T19:02:21.324091Z"
+    },
+    {
+      "id": "eb29a579",
+      "name": "Glassweaver Adept",
+      "level": 3,
+      "type": "Companion",
+      "subtype": "Human Artificer",
+      "rarity": "Uncommon",
+      "class1": "Wizard",
+      "class2": "",
+      "attack": 2,
+      "hp": 3,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "Once per turn, you may return target Magical Construct you control to its owner's hand.",
+      "flavor": "",
+      "createdAt": "2026-05-16T19:02:21.324098Z",
+      "updatedAt": "2026-05-16T19:02:21.324100Z",
+      "effects": [
+        {
+          "trigger": "activated",
+          "oncePerTurn": true,
+          "effects": [
+            {
+              "op": "bounce",
+              "target": "magicalConstruct"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "be743133",
+      "name": "Sigil-Bound Scholar",
+      "level": 3,
+      "type": "Companion",
+      "subtype": "Elf Wizard",
+      "rarity": "Rare",
+      "class1": "Wizard",
+      "class2": "",
+      "attack": 3,
+      "hp": 3,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "When this enters, you may animate target Magical Construct you control as a 2/2 Manifest with its text and Anchor counters retained. If it would leave the encounter, sacrifice it instead.",
+      "flavor": "He read the binding aloud and the stone began to walk.",
+      "createdAt": "2026-05-16T19:02:21.324106Z",
+      "updatedAt": "2026-05-16T19:02:21.324107Z",
+      "effects": [
+        {
+          "trigger": "onEnter",
+          "effects": [
+            {
+              "op": "animate",
+              "atk": 2,
+              "hp": 2,
+              "target": "magicalConstruct"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "66b8354c",
+      "name": "High Reader of the Convergence",
+      "level": 4,
+      "type": "Companion",
+      "subtype": "Elf Sage",
+      "rarity": "Rare",
+      "class1": "Wizard",
+      "class2": "",
+      "attack": 3,
+      "hp": 4,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "At the start of your turn, look at the top two cards of your deck. Put one on the bottom.",
+      "flavor": "",
+      "createdAt": "2026-05-16T19:02:21.324142Z",
+      "updatedAt": "2026-05-16T19:02:21.324146Z",
+      "effects": [
+        {
+          "trigger": "startOfTurn",
+          "effects": [
+            {
+              "op": "deckPeek",
+              "look": 2,
+              "dests": [
+                "top",
+                "bottom"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "b8f5c0d3",
+      "name": "Eiralyth, the Still",
+      "level": 5,
+      "type": "Companion",
+      "subtype": "Legendary Elf Mage",
+      "rarity": "Legendary",
+      "class1": "Wizard",
+      "class2": "",
+      "attack": 4,
+      "hp": 5,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [
+        "Ranged"
+      ],
+      "text": "RANGED. When this enters, target Magical Construct you control becomes a Companion with the type Manifest and Attack and HP equal to 4. It is no longer a Construct but retains its text and Anchor counters. If it would leave the encounter, sacrifice it instead.",
+      "flavor": "She did not cast; she made the world consent.",
+      "createdAt": "2026-05-16T19:02:21.324185Z",
+      "updatedAt": "2026-05-16T19:02:21.324188Z",
+      "effects": [
+        {
+          "trigger": "onEnter",
+          "effects": [
+            {
+              "op": "animate",
+              "atk": 4,
+              "hp": 4,
+              "target": "magicalConstruct"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "18cba87f",
+      "name": "Binding Sigil",
+      "level": 1,
+      "type": "Construct",
+      "subtype": "Incantation",
+      "rarity": "Common",
+      "class1": "Wizard",
+      "class2": "",
+      "attack": 0,
+      "hp": 0,
+      "anchor": 2,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "Opposing companions in the front line lose all keywords.",
+      "flavor": "",
+      "createdAt": "2026-05-16T19:02:21.324197Z",
+      "updatedAt": "2026-05-16T19:02:21.324198Z",
+      "effects": [
+        {
+          "trigger": "static",
+          "effects": [
+            {
+              "op": "suppressKeywords",
+              "scope": "allEnemyCompanions",
+              "where": {
+                "line": "front"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "16c5d294",
+      "name": "Ward of Silence",
+      "level": 1,
+      "type": "Construct",
+      "subtype": "Incantation",
+      "rarity": "Common",
+      "class1": "Wizard",
+      "class2": "",
+      "attack": 0,
+      "hp": 0,
+      "anchor": 2,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "When an opponent plays an Action card, sacrifice this construct. That action is countered and placed in its owner's Dead Zone.",
+      "flavor": "",
+      "createdAt": "2026-05-16T19:02:21.324205Z",
+      "updatedAt": "2026-05-16T19:02:21.324206Z",
+      "effects": [
+        {
+          "trigger": "onOpponentAction",
+          "effects": [
+            {
+              "op": "counterAction"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "051d6926",
+      "name": "Echoing Glyph",
+      "level": 2,
+      "type": "Construct",
+      "subtype": "Incantation",
+      "rarity": "Common",
+      "class1": "Wizard",
+      "class2": "",
+      "attack": 0,
+      "hp": 0,
+      "anchor": 3,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "At the start of your turn, draw a card.",
+      "flavor": "The mark repeats what was given to it.",
+      "createdAt": "2026-05-16T19:02:21.324213Z",
+      "updatedAt": "2026-05-16T19:02:21.324214Z",
+      "effects": [
+        {
+          "trigger": "startOfTurn",
+          "effects": [
+            {
+              "op": "draw",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "1eb675da",
+      "name": "Lens of Foretelling",
+      "level": 2,
+      "type": "Construct",
+      "subtype": "Incantation",
+      "rarity": "Uncommon",
+      "class1": "Wizard",
+      "class2": "",
+      "attack": 0,
+      "hp": 0,
+      "anchor": 3,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "At the start of your turn, you may look at the top card of any deck and put it on top or bottom.",
+      "flavor": "",
+      "createdAt": "2026-05-16T19:02:21.324220Z",
+      "updatedAt": "2026-05-16T19:02:21.324222Z",
+      "effects": [
+        {
+          "trigger": "startOfTurn",
+          "effects": [
+            {
+              "op": "deckPeek",
+              "look": 1,
+              "dests": [
+                "top",
+                "bottom"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "3b490c20",
+      "name": "Reflecting Pool",
+      "level": 2,
+      "type": "Construct",
+      "subtype": "Incantation",
+      "rarity": "Uncommon",
+      "class1": "Wizard",
+      "class2": "",
+      "attack": 0,
+      "hp": 0,
+      "anchor": 2,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "When a Wizard companion you control would take damage, prevent 1 of that damage.",
+      "flavor": "",
+      "createdAt": "2026-05-16T19:02:21.324227Z",
+      "updatedAt": "2026-05-16T19:02:21.324229Z"
+    },
+    {
+      "id": "cdbf2f86",
+      "name": "Translocation Circle",
+      "level": 3,
+      "type": "Construct",
+      "subtype": "Incantation",
+      "rarity": "Common",
+      "class1": "Wizard",
+      "class2": "",
+      "attack": 0,
+      "hp": 0,
+      "anchor": 3,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "As a Minor Action, return a companion you control to its owner's hand.",
+      "flavor": "",
+      "createdAt": "2026-05-16T19:02:21.324234Z",
+      "updatedAt": "2026-05-16T19:02:21.324236Z"
+    },
+    {
+      "id": "0fa95215",
+      "name": "Crystalline Sentinel",
+      "level": 3,
+      "type": "Construct",
+      "subtype": "Incantation",
+      "rarity": "Uncommon",
+      "class1": "Wizard",
+      "class2": "",
+      "attack": 0,
+      "hp": 0,
+      "anchor": 4,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "Opposing back-line companions cannot attack.",
+      "flavor": "A held breath, frozen.",
+      "createdAt": "2026-05-16T19:02:21.324242Z",
+      "updatedAt": "2026-05-16T19:02:21.324243Z"
+    },
+    {
+      "id": "9cf32caf",
+      "name": "Library of Memory",
+      "level": 4,
+      "type": "Construct",
+      "subtype": "Incantation",
+      "rarity": "Uncommon",
+      "class1": "Wizard",
+      "class2": "",
+      "attack": 0,
+      "hp": 0,
+      "anchor": 3,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "At the start of your turn, you may return a card from your Dead Zone to your hand. If you do, exhaust this construct until your next turn.",
+      "flavor": "",
+      "createdAt": "2026-05-16T19:02:21.324248Z",
+      "updatedAt": "2026-05-16T19:02:21.324250Z",
+      "effects": [
+        {
+          "trigger": "startOfTurn",
+          "optional": true,
+          "effects": [
+            {
+              "op": "returnFromDead",
+              "to": "hand"
+            },
+            {
+              "op": "exhaustSelf"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "35f7cf8f",
+      "name": "Convergence Sigil",
+      "level": 4,
+      "type": "Construct",
+      "subtype": "Incantation",
+      "rarity": "Rare",
+      "class1": "Wizard",
+      "class2": "",
+      "attack": 0,
+      "hp": 0,
+      "anchor": 4,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "When this enters, target opponent shuffles their hand into their deck and draws that many cards minus one. At the start of your turn, draw a card.",
+      "flavor": "",
+      "createdAt": "2026-05-16T19:02:21.324255Z",
+      "updatedAt": "2026-05-16T19:02:21.324257Z"
+    },
+    {
+      "id": "39ab02db",
+      "name": "The Verdant Still",
+      "level": 5,
+      "type": "Construct",
+      "subtype": "Incantation",
+      "rarity": "Rare",
+      "class1": "Wizard",
+      "class2": "",
+      "attack": 0,
+      "hp": 0,
+      "anchor": 4,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "When this enters, animate up to two Magical Constructs you control as 3/3 Manifest companions with their text and Anchor counters retained. If a Manifest would leave the encounter, sacrifice it instead.",
+      "flavor": "",
+      "createdAt": "2026-05-16T19:02:21.324264Z",
+      "updatedAt": "2026-05-16T19:02:21.324265Z"
+    },
+    {
+      "id": "c1bb0234",
+      "name": "Runic Convergence Staff",
+      "level": 2,
+      "type": "Item",
+      "subtype": "Weapon - Staff",
+      "rarity": "Uncommon",
+      "class1": "Wizard",
+      "class2": "",
+      "attack": 0,
+      "hp": 0,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "Weapon",
+      "keywords": [],
+      "text": "Equipped character has +2 attack. Once per turn, the equipped character may look at the top card of any deck.",
+      "flavor": "",
+      "createdAt": "2026-05-16T19:02:21.324271Z",
+      "updatedAt": "2026-05-16T19:02:21.324273Z",
+      "effects": [
+        {
+          "trigger": "equipped",
+          "effects": [
+            {
+              "op": "buff",
+              "stat": "atk",
+              "amount": 2,
+              "scope": "self",
+              "duration": "while"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "3765f464",
+      "name": "Scribe's Apron",
+      "level": 1,
+      "type": "Item",
+      "subtype": "Armor",
+      "rarity": "Common",
+      "class1": "Wizard",
+      "class2": "",
+      "attack": 0,
+      "hp": 0,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "Armor",
+      "keywords": [
+        "Armor 1"
+      ],
+      "text": "ARMOR 1. If the equipped character would be dealt damage, prevent all of that damage and put an armor counter on this item. When this item has 1 armor counter, sacrifice it.",
+      "flavor": "",
+      "createdAt": "2026-05-16T19:02:21.324278Z",
+      "updatedAt": "2026-05-16T19:02:21.324280Z"
+    },
+    {
+      "id": "6948a781",
+      "name": "Memory Stone",
+      "level": 1,
+      "type": "Item",
+      "subtype": "Trinket",
+      "rarity": "Common",
+      "class1": "Wizard",
+      "class2": "",
+      "attack": 0,
+      "hp": 0,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "Trinket",
+      "keywords": [],
+      "text": "Equipped character has +1 HP. When equipped character is destroyed, return target card from your Dead Zone to your hand.",
+      "flavor": "",
+      "createdAt": "2026-05-16T19:02:21.324285Z",
+      "updatedAt": "2026-05-16T19:02:21.324287Z",
+      "effects": [
+        {
+          "trigger": "equipped",
+          "effects": [
+            {
+              "op": "buff",
+              "stat": "hp",
+              "amount": 1,
+              "scope": "self",
+              "duration": "while"
+            }
+          ]
+        },
+        {
+          "trigger": "onDestroy",
+          "effects": [
+            {
+              "op": "returnFromDead",
+              "to": "hand"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "7e816702",
+      "name": "Quill of Unmaking",
+      "level": 3,
+      "type": "Item",
+      "subtype": "Trinket",
+      "rarity": "Rare",
+      "class1": "Wizard",
+      "class2": "",
+      "attack": 0,
+      "hp": 0,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "Trinket",
+      "keywords": [],
+      "text": "Equipped character has +1 attack. As a Major Action, sacrifice this trinket: return target Construct to its owner's hand.",
+      "flavor": "",
+      "createdAt": "2026-05-16T19:02:21.324292Z",
+      "updatedAt": "2026-05-16T19:02:21.324293Z",
+      "effects": [
+        {
+          "trigger": "equipped",
+          "effects": [
+            {
+              "op": "buff",
+              "stat": "atk",
+              "amount": 1,
+              "scope": "self",
+              "duration": "while"
+            }
+          ]
+        },
+        {
+          "trigger": "activated",
+          "cost": {
+            "kind": "sacrificeSelf"
+          },
+          "effects": [
+            {
+              "op": "bounce",
+              "target": "anyConstruct"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "1a321d9b",
+      "name": "Displacement",
+      "level": 1,
+      "type": "Action",
+      "subtype": "Magic",
+      "rarity": "Common",
+      "class1": "Wizard",
+      "class2": "",
+      "attack": 0,
+      "hp": 0,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "Major",
+      "itemKind": "",
+      "keywords": [],
+      "text": "Return target companion to its owner's hand.",
+      "flavor": "",
+      "createdAt": "2026-05-16T19:02:21.324299Z",
+      "updatedAt": "2026-05-16T19:02:21.324300Z",
+      "effects": [
+        {
+          "trigger": "onPlay",
+          "effects": [
+            {
+              "op": "bounce",
+              "target": "anyCompanion"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "f54c6be5",
+      "name": "Patient Study",
+      "level": 2,
+      "type": "Action",
+      "subtype": "Magic",
+      "rarity": "Common",
+      "class1": "Wizard",
+      "class2": "",
+      "attack": 0,
+      "hp": 0,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "Minor",
+      "itemKind": "",
+      "keywords": [],
+      "text": "Look at the top three cards of your deck. Put one in your hand and the others on the bottom of your deck in any order.",
+      "flavor": "",
+      "createdAt": "2026-05-16T19:02:21.324306Z",
+      "updatedAt": "2026-05-16T19:02:21.324307Z",
+      "effects": [
+        {
+          "trigger": "onPlay",
+          "effects": [
+            {
+              "op": "deckPeek",
+              "look": 3,
+              "dests": [
+                "hand",
+                "bottom"
+              ],
+              "maxHand": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "780af100",
+      "name": "Sigil-Strike",
+      "level": 3,
+      "type": "Action",
+      "subtype": "Magic",
+      "rarity": "Uncommon",
+      "class1": "Wizard",
+      "class2": "",
+      "attack": 0,
+      "hp": 0,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "Major",
+      "itemKind": "",
+      "keywords": [],
+      "text": "Deal 3 damage to target character. If you control a Magical Construct, draw a card.",
+      "flavor": "",
+      "createdAt": "2026-05-16T19:02:21.324313Z",
+      "updatedAt": "2026-05-16T19:02:21.324314Z",
+      "effects": [
+        {
+          "trigger": "onPlay",
+          "effects": [
+            {
+              "op": "damage",
+              "amount": 3,
+              "target": "anyCharacter"
+            },
+            {
+              "op": "draw",
+              "count": 1,
+              "if": {
+                "kind": "controlsType",
+                "cardType": "Construct",
+                "subtype": "Incantation"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "05f513df",
+      "name": "Convergence of Wills",
+      "level": 4,
+      "type": "Action",
+      "subtype": "Magic",
+      "rarity": "Rare",
+      "class1": "Wizard",
+      "class2": "",
+      "attack": 0,
+      "hp": 0,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "Major",
+      "itemKind": "",
+      "keywords": [],
+      "text": "Each player returns all companions they control to their owner's hand.",
+      "flavor": "—Tomes of Urzal, scattered fragment",
+      "createdAt": "2026-05-16T19:02:21.324356Z",
+      "updatedAt": "2026-05-16T19:02:21.324359Z",
+      "effects": [
+        {
+          "trigger": "onPlay",
+          "effects": [
+            {
+              "op": "bounce",
+              "target": "ownCompanions"
+            },
+            {
+              "op": "bounce",
+              "target": "allEnemyCompanions"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "af5eb9fc",
+      "name": "Quarry Hand",
+      "level": 1,
+      "type": "Companion",
+      "subtype": "Human Laborer",
+      "rarity": "Common",
+      "class1": "Builder",
+      "class2": "",
+      "attack": 1,
+      "hp": 2,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "When this enters, add 1 Anchor counter to target Physical Construct.",
+      "flavor": "",
+      "createdAt": "2026-05-16T19:02:21.324369Z",
+      "updatedAt": "2026-05-16T19:02:21.324370Z",
+      "effects": [
+        {
+          "trigger": "onEnter",
+          "effects": [
+            {
+              "op": "anchor",
+              "delta": 1,
+              "target": "physicalConstruct"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "fc0e3faf",
+      "name": "Field Engineer",
+      "level": 2,
+      "type": "Companion",
+      "subtype": "Human Builder",
+      "rarity": "Common",
+      "class1": "Builder",
+      "class2": "",
+      "attack": 1,
+      "hp": 3,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "When this enters, you may move one Anchor counter from one Physical Construct to another.",
+      "flavor": "",
+      "createdAt": "2026-05-16T19:02:21.324377Z",
+      "updatedAt": "2026-05-16T19:02:21.324378Z",
+      "effects": [
+        {
+          "trigger": "onEnter",
+          "optional": true,
+          "effects": [
+            {
+              "op": "moveAnchor",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ec4ebd13",
+      "name": "Stonefern Mason",
+      "level": 2,
+      "type": "Companion",
+      "subtype": "Dwarf Builder",
+      "rarity": "Uncommon",
+      "class1": "Builder",
+      "class2": "",
+      "attack": 2,
+      "hp": 3,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [
+        "Reinforce 2"
+      ],
+      "text": "REINFORCE 2. When this enters play, add 2 Anchor counters to target Physical Construct.",
+      "flavor": "",
+      "createdAt": "2026-05-16T19:02:21.324384Z",
+      "updatedAt": "2026-05-16T19:02:21.324386Z"
+    },
+    {
+      "id": "2025e6a5",
+      "name": "Siege Engineer",
+      "level": 3,
+      "type": "Companion",
+      "subtype": "Dwarf Builder",
+      "rarity": "Uncommon",
+      "class1": "Builder",
+      "class2": "",
+      "attack": 2,
+      "hp": 3,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [
+        "Dismantle 2"
+      ],
+      "text": "DISMANTLE 2. When this enters play, remove up to 2 Anchor counters from target Physical Construct. If it has no Anchor counters remaining, sacrifice it.",
+      "flavor": "",
+      "createdAt": "2026-05-16T19:02:21.324417Z",
+      "updatedAt": "2026-05-16T19:02:21.324421Z"
+    },
+    {
+      "id": "774949cd",
+      "name": "Foreman of the Gate",
+      "level": 3,
+      "type": "Companion",
+      "subtype": "Human Builder",
+      "rarity": "Common",
+      "class1": "Builder",
+      "class2": "",
+      "attack": 3,
+      "hp": 3,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [
+        "Guardian"
+      ],
+      "text": "GUARDIAN. While this character is ready and a legal target, opponents must attack it before any other character.",
+      "flavor": "",
+      "createdAt": "2026-05-16T19:02:21.324432Z",
+      "updatedAt": "2026-05-16T19:02:21.324433Z"
+    },
+    {
+      "id": "a7fdf1b5",
+      "name": "Master of Foundations",
+      "level": 4,
+      "type": "Companion",
+      "subtype": "Dwarf Architect",
+      "rarity": "Rare",
+      "class1": "Builder",
+      "class2": "",
+      "attack": 3,
+      "hp": 4,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [
+        "Reinforce 3"
+      ],
+      "text": "REINFORCE 3. When this enters play, add 3 Anchor counters to target Physical Construct. Your Physical Constructs do not lose Anchor counters at the start of your turn.",
+      "flavor": "",
+      "createdAt": "2026-05-16T19:02:21.324440Z",
+      "updatedAt": "2026-05-16T19:02:21.324441Z",
+      "effects": [
+        {
+          "trigger": "static",
+          "effects": [
+            {
+              "op": "preventAnchorDecay"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "433c2981",
+      "name": "Grudrik Stonebrace",
+      "level": 5,
+      "type": "Companion",
+      "subtype": "Legendary Dwarf Builder",
+      "rarity": "Legendary",
+      "class1": "Builder",
+      "class2": "",
+      "attack": 4,
+      "hp": 5,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [
+        "Guardian"
+      ],
+      "text": "GUARDIAN. When this enters, add 2 Anchor counters to each Physical Construct you control. Your Fortification constructs have +1 maximum Anchor counters.",
+      "flavor": "He laid the first stone and the last. Between them, everything stood.",
+      "createdAt": "2026-05-16T19:02:21.324447Z",
+      "updatedAt": "2026-05-16T19:02:21.324449Z",
+      "effects": [
+        {
+          "trigger": "onEnter",
+          "effects": [
+            {
+              "op": "anchor",
+              "delta": 2,
+              "target": "ownPhysicalConstructs"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "b3b4ca6c",
+      "name": "Tripwire Snare",
+      "level": 1,
+      "type": "Construct",
+      "subtype": "Trap",
+      "rarity": "Common",
+      "class1": "Builder",
+      "class2": "",
+      "attack": 0,
+      "hp": 0,
+      "anchor": 2,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "When an opposing companion enters the encounter, deal 1 damage to it. Sacrifice this construct.",
+      "flavor": "",
+      "createdAt": "2026-05-16T19:02:21.324479Z",
+      "updatedAt": "2026-05-16T19:02:21.324482Z"
+    },
+    {
+      "id": "ffa9ba63",
+      "name": "Pit Trap",
+      "level": 1,
+      "type": "Construct",
+      "subtype": "Trap",
+      "rarity": "Common",
+      "class1": "Builder",
+      "class2": "",
+      "attack": 0,
+      "hp": 0,
+      "anchor": 2,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "When an opposing companion moves into the front line, exhaust it and sacrifice this construct.",
+      "flavor": "",
+      "createdAt": "2026-05-16T19:02:21.324493Z",
+      "updatedAt": "2026-05-16T19:02:21.324495Z"
+    },
+    {
+      "id": "348b9285",
+      "name": "Stone Rampart",
+      "level": 2,
+      "type": "Construct",
+      "subtype": "Fortification",
+      "rarity": "Common",
+      "class1": "Builder",
+      "class2": "",
+      "attack": 0,
+      "hp": 0,
+      "anchor": 3,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "Your front-line companions have +1 HP.",
+      "flavor": "",
+      "createdAt": "2026-05-16T19:02:21.324501Z",
+      "updatedAt": "2026-05-16T19:02:21.324503Z",
+      "effects": [
+        {
+          "trigger": "static",
+          "effects": [
+            {
+              "op": "buff",
+              "stat": "hp",
+              "amount": 1,
+              "scope": "ownCompanions",
+              "duration": "while",
+              "where": {
+                "line": "front"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "bf652d56",
+      "name": "Watchtower",
+      "level": 2,
+      "type": "Construct",
+      "subtype": "Fortification",
+      "rarity": "Uncommon",
+      "class1": "Builder",
+      "class2": "",
+      "attack": 0,
+      "hp": 0,
+      "anchor": 3,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "Your back-line companions may attack as if they had Ranged.",
+      "flavor": "",
+      "createdAt": "2026-05-16T19:02:21.324509Z",
+      "updatedAt": "2026-05-16T19:02:21.324510Z"
+    },
+    {
+      "id": "98d038ff",
+      "name": "Iron Spikes",
+      "level": 2,
+      "type": "Construct",
+      "subtype": "Trap",
+      "rarity": "Common",
+      "class1": "Builder",
+      "class2": "",
+      "attack": 0,
+      "hp": 0,
+      "anchor": 2,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "Whenever an opposing companion attacks one of your companions, deal 1 damage to the attacker.",
+      "flavor": "",
+      "createdAt": "2026-05-16T19:02:21.324549Z",
+      "updatedAt": "2026-05-16T19:02:21.324552Z"
+    },
+    {
+      "id": "47c06500",
+      "name": "Bastion Wall",
+      "level": 3,
+      "type": "Construct",
+      "subtype": "Fortification",
+      "rarity": "Uncommon",
+      "class1": "Builder",
+      "class2": "",
+      "attack": 0,
+      "hp": 0,
+      "anchor": 4,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "Your front-line companions have GUARDIAN.",
+      "flavor": "Built once. Held forever, or so it was claimed.",
+      "createdAt": "2026-05-16T19:02:21.324564Z",
+      "updatedAt": "2026-05-16T19:02:21.324566Z"
+    },
+    {
+      "id": "c70954e4",
+      "name": "Reinforced Gate",
+      "level": 3,
+      "type": "Construct",
+      "subtype": "Fortification",
+      "rarity": "Common",
+      "class1": "Builder",
+      "class2": "",
+      "attack": 0,
+      "hp": 0,
+      "anchor": 3,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "Opposing companions cannot move between front and back lines.",
+      "flavor": "",
+      "createdAt": "2026-05-16T19:02:21.324573Z",
+      "updatedAt": "2026-05-16T19:02:21.324574Z"
+    },
+    {
+      "id": "78dd05de",
+      "name": "Collapsing Tunnel",
+      "level": 3,
+      "type": "Construct",
+      "subtype": "Trap",
+      "rarity": "Uncommon",
+      "class1": "Builder",
+      "class2": "",
+      "attack": 0,
+      "hp": 0,
+      "anchor": 2,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "As a Major Action, sacrifice this construct: deal 3 damage to all opposing back-line companions.",
+      "flavor": "",
+      "createdAt": "2026-05-16T19:02:21.324580Z",
+      "updatedAt": "2026-05-16T19:02:21.324581Z",
+      "effects": [
+        {
+          "trigger": "activated",
+          "cost": {
+            "kind": "sacrificeSelf"
+          },
+          "effects": [
+            {
+              "op": "damage",
+              "amount": 3,
+              "target": "backLineEnemy"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "e0188c24",
+      "name": "Siegeworks",
+      "level": 4,
+      "type": "Construct",
+      "subtype": "Fortification",
+      "rarity": "Rare",
+      "class1": "Builder",
+      "class2": "",
+      "attack": 0,
+      "hp": 0,
+      "anchor": 4,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "Your Physical Constructs have +1 maximum Anchor counters. When one of your Physical Constructs is sacrificed, draw a card.",
+      "flavor": "",
+      "createdAt": "2026-05-16T19:02:21.324587Z",
+      "updatedAt": "2026-05-16T19:02:21.324588Z"
+    },
+    {
+      "id": "598d3180",
+      "name": "The Long-Quiet Wall",
+      "level": 5,
+      "type": "Construct",
+      "subtype": "Fortification",
+      "rarity": "Rare",
+      "class1": "Builder",
+      "class2": "",
+      "attack": 0,
+      "hp": 0,
+      "anchor": 5,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "All companions you control have +1 attack and +1 HP. Opposing companions cannot attack characters on the line opposite this construct.",
+      "flavor": "",
+      "createdAt": "2026-05-16T19:02:21.324594Z",
+      "updatedAt": "2026-05-16T19:02:21.324595Z",
+      "effects": [
+        {
+          "trigger": "static",
+          "effects": [
+            {
+              "op": "buff",
+              "stat": "atk",
+              "amount": 1,
+              "scope": "ownCompanions",
+              "duration": "while"
+            },
+            {
+              "op": "buff",
+              "stat": "hp",
+              "amount": 1,
+              "scope": "ownCompanions",
+              "duration": "while"
+            },
+            {
+              "op": "lineWard"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "bdc4880e",
+      "name": "Mason's Hammer",
+      "level": 1,
+      "type": "Item",
+      "subtype": "Weapon - Hammer",
+      "rarity": "Common",
+      "class1": "Builder",
+      "class2": "",
+      "attack": 0,
+      "hp": 0,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "Weapon",
+      "keywords": [],
+      "text": "Equipped character has +1 attack. When equipped character destroys a Physical Construct, add 1 Anchor counter to a Physical Construct you control.",
+      "flavor": "",
+      "createdAt": "2026-05-16T19:02:21.324601Z",
+      "updatedAt": "2026-05-16T19:02:21.324602Z",
+      "effects": [
+        {
+          "trigger": "equipped",
+          "effects": [
+            {
+              "op": "buff",
+              "stat": "atk",
+              "amount": 1,
+              "scope": "self",
+              "duration": "while"
+            }
+          ]
+        },
+        {
+          "trigger": "onKill",
+          "if": {
+            "kind": "killedIsPhysicalConstruct"
+          },
+          "effects": [
+            {
+              "op": "anchor",
+              "delta": 1,
+              "target": "physicalConstruct"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "75290604",
+      "name": "Foreman's Plate",
+      "level": 2,
+      "type": "Item",
+      "subtype": "Armor",
+      "rarity": "Common",
+      "class1": "Builder",
+      "class2": "",
+      "attack": 0,
+      "hp": 0,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "Armor",
+      "keywords": [
+        "Armor 2"
+      ],
+      "text": "ARMOR 2. If the equipped character would be dealt damage, prevent all of that damage and put an armor counter on this item. When this item has 2 armor counters, sacrifice it.",
+      "flavor": "",
+      "createdAt": "2026-05-16T19:02:21.324608Z",
+      "updatedAt": "2026-05-16T19:02:21.324610Z"
+    },
+    {
+      "id": "46e94ea1",
+      "name": "Anchor Stone",
+      "level": 2,
+      "type": "Item",
+      "subtype": "Trinket",
+      "rarity": "Common",
+      "class1": "Builder",
+      "class2": "",
+      "attack": 0,
+      "hp": 0,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "Trinket",
+      "keywords": [],
+      "text": "Equipped character has +1 HP. As a Minor Action, exhaust this trinket: add 1 Anchor counter to target Physical Construct.",
+      "flavor": "",
+      "createdAt": "2026-05-16T19:02:21.324615Z",
+      "updatedAt": "2026-05-16T19:02:21.324617Z",
+      "effects": [
+        {
+          "trigger": "activated",
+          "oncePerTurn": true,
+          "effects": [
+            {
+              "op": "anchor",
+              "delta": 1,
+              "target": "physicalConstruct"
+            }
+          ]
+        },
+        {
+          "trigger": "equipped",
+          "effects": [
+            {
+              "op": "buff",
+              "stat": "hp",
+              "amount": 1,
+              "scope": "self",
+              "duration": "while"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "670c6bba",
+      "name": "Greatmaul of the Foundation",
+      "level": 3,
+      "type": "Item",
+      "subtype": "Two-Handed Weapon - Hammer",
+      "rarity": "Uncommon",
+      "class1": "Builder",
+      "class2": "",
+      "attack": 0,
+      "hp": 0,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "Weapon",
+      "keywords": [
+        "Cleave"
+      ],
+      "text": "Equipped character has +3 attack and CLEAVE. (Equipped character cannot use Magic Actions.)",
+      "flavor": "",
+      "createdAt": "2026-05-16T19:02:21.324622Z",
+      "updatedAt": "2026-05-16T19:02:21.324624Z",
+      "effects": [
+        {
+          "trigger": "equipped",
+          "effects": [
+            {
+              "op": "buff",
+              "stat": "atk",
+              "amount": 3,
+              "scope": "self",
+              "duration": "while"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "23895b68",
+      "name": "Engineer's Toolbelt",
+      "level": 2,
+      "type": "Item",
+      "subtype": "Trinket",
+      "rarity": "Uncommon",
+      "class1": "Builder",
+      "class2": "",
+      "attack": 0,
+      "hp": 0,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "Trinket",
+      "keywords": [
+        "Kit-Master"
+      ],
+      "text": "When this becomes equipped, you may move target item from one character you control to another character you control. Equipped character has +1 attack.",
+      "flavor": "",
+      "createdAt": "2026-05-16T19:02:21.324653Z",
+      "updatedAt": "2026-05-16T19:02:21.324656Z",
+      "effects": [
+        {
+          "trigger": "equipped",
+          "effects": [
+            {
+              "op": "buff",
+              "stat": "atk",
+              "amount": 1,
+              "scope": "self",
+              "duration": "while"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c1e821ce",
+      "name": "Shore Up",
+      "level": 1,
+      "type": "Action",
+      "subtype": "Physical",
+      "rarity": "Common",
+      "class1": "Builder",
+      "class2": "",
+      "attack": 0,
+      "hp": 0,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "Minor",
+      "itemKind": "",
+      "keywords": [],
+      "text": "Add 2 Anchor counters to target Physical Construct.",
+      "flavor": "",
+      "createdAt": "2026-05-16T19:02:21.324667Z",
+      "updatedAt": "2026-05-16T19:02:21.324668Z",
+      "effects": [
+        {
+          "trigger": "onPlay",
+          "effects": [
+            {
+              "op": "anchor",
+              "delta": 2,
+              "target": "physicalConstruct"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "a112bdf7",
+      "name": "Demolish",
+      "level": 2,
+      "type": "Action",
+      "subtype": "Physical",
+      "rarity": "Common",
+      "class1": "Builder",
+      "class2": "",
+      "attack": 0,
+      "hp": 0,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "Major",
+      "itemKind": "",
+      "keywords": [],
+      "text": "Remove up to 3 Anchor counters from target Construct. If it has no Anchor counters remaining, sacrifice it.",
+      "flavor": "",
+      "createdAt": "2026-05-16T19:02:21.324674Z",
+      "updatedAt": "2026-05-16T19:02:21.324676Z",
+      "effects": [
+        {
+          "trigger": "onPlay",
+          "effects": [
+            {
+              "op": "anchor",
+              "delta": -3,
+              "target": "anyConstruct"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "6b1f6469",
+      "name": "Last Stand at the Gate",
+      "level": 4,
+      "type": "Action",
+      "subtype": "Physical",
+      "rarity": "Rare",
+      "class1": "Builder",
+      "class2": "",
+      "attack": 0,
+      "hp": 0,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "Major",
+      "itemKind": "",
+      "keywords": [],
+      "text": "Until end of turn, your companions have GUARDIAN, +1 attack, and cannot be reduced below 1 HP by damage.",
+      "flavor": "Few who came against the wall returned.",
+      "effects": [
+        {
+          "trigger": "onPlay",
+          "effects": [
+            {
+              "op": "buff",
+              "stat": "atk",
+              "amount": 1,
+              "grant": [
+                "Guardian"
+              ],
+              "modifiers": [
+                "hpFloor1"
+              ],
+              "scope": "ownCompanions",
+              "duration": "endOfTurn"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-05-16T19:02:21.324681Z",
+      "updatedAt": "2026-05-16T19:02:21.324683Z"
+    }
+  ]
+}

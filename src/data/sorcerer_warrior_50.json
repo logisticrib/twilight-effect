@@ -1,0 +1,1667 @@
+[
+  {
+    "id": "1ef1239f",
+    "name": "Ember Adept",
+    "level": 1,
+    "type": "Companion",
+    "subtype": "Human Sorcerer",
+    "rarity": "Common",
+    "class1": "Sorcerer",
+    "class2": "",
+    "attack": 1,
+    "hp": 1,
+    "anchor": null,
+    "actionSub": "",
+    "actionPM": "",
+    "itemKind": "",
+    "keywords": [
+      "Zealous"
+    ],
+    "text": "ZEALOUS. This character may attack without needing to first pass a willpower check.",
+    "flavor": "",
+    "createdAt": "2026-05-16T19:05:55.110733Z",
+    "updatedAt": "2026-05-16T19:05:55.110791Z"
+  },
+  {
+    "id": "285748d0",
+    "name": "Storm-Touched",
+    "level": 2,
+    "type": "Companion",
+    "subtype": "Human Sorcerer",
+    "rarity": "Common",
+    "class1": "Sorcerer",
+    "class2": "",
+    "attack": 2,
+    "hp": 2,
+    "anchor": null,
+    "actionSub": "",
+    "actionPM": "",
+    "itemKind": "",
+    "keywords": [
+      "Zealous"
+    ],
+    "text": "ZEALOUS. When this enters, deal 1 damage to target character.",
+    "flavor": "",
+    "createdAt": "2026-05-16T19:05:55.110810Z",
+    "updatedAt": "2026-05-16T19:05:55.110812Z",
+    "effects": [
+      {
+        "trigger": "onEnter",
+        "effects": [
+          {
+            "op": "damage",
+            "amount": 1,
+            "target": "anyCharacter"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "b2905e06",
+    "name": "Wild-Eyed Pyromancer",
+    "level": 2,
+    "type": "Companion",
+    "subtype": "Human Sorcerer",
+    "rarity": "Uncommon",
+    "class1": "Sorcerer",
+    "class2": "",
+    "attack": 3,
+    "hp": 1,
+    "anchor": null,
+    "actionSub": "",
+    "actionPM": "",
+    "itemKind": "",
+    "keywords": [
+      "Zealous",
+      "Reckless"
+    ],
+    "text": "ZEALOUS, RECKLESS. When this character attacks, it deals 1 damage to itself.",
+    "flavor": "",
+    "createdAt": "2026-05-16T19:05:55.110820Z",
+    "updatedAt": "2026-05-16T19:05:55.110822Z"
+  },
+  {
+    "id": "8f6336a9",
+    "name": "Flame-Spinner",
+    "level": 2,
+    "type": "Companion",
+    "subtype": "Elf Sorcerer",
+    "rarity": "Common",
+    "class1": "Sorcerer",
+    "class2": "",
+    "attack": 2,
+    "hp": 2,
+    "anchor": null,
+    "actionSub": "",
+    "actionPM": "",
+    "itemKind": "",
+    "keywords": [],
+    "text": "When this enters, roll a six-sided die. On a 4 or higher, deal 2 damage to target opposing character. Otherwise, this character takes 2 damage.",
+    "flavor": "",
+    "createdAt": "2026-05-16T19:05:55.110829Z",
+    "updatedAt": "2026-05-16T19:05:55.110830Z",
+    "effects": [
+      {
+        "trigger": "onEnter",
+        "effects": [
+          {
+            "op": "dieCheck",
+            "threshold": 4,
+            "onPass": [
+              {
+                "op": "damage",
+                "amount": 2,
+                "target": "enemyCharacter"
+              }
+            ],
+            "onFail": [
+              {
+                "op": "damage",
+                "amount": 2,
+                "target": "self"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "eecf4abb",
+    "name": "Burning Heir",
+    "level": 3,
+    "type": "Companion",
+    "subtype": "Human Sorcerer",
+    "rarity": "Uncommon",
+    "class1": "Sorcerer",
+    "class2": "",
+    "attack": 3,
+    "hp": 3,
+    "anchor": null,
+    "actionSub": "",
+    "actionPM": "",
+    "itemKind": "",
+    "keywords": [
+      "Zealous"
+    ],
+    "text": "ZEALOUS. When this character deals damage to an opposing companion, deal 1 damage to that companion's controller.",
+    "flavor": "",
+    "createdAt": "2026-05-16T19:05:55.110836Z",
+    "updatedAt": "2026-05-16T19:05:55.110838Z",
+    "effects": [
+      {
+        "trigger": "onDealDamage",
+        "if": {
+          "kind": "damagedIsEnemyCompanion"
+        },
+        "effects": [
+          {
+            "op": "damage",
+            "amount": 1,
+            "target": "damagedController"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "543759de",
+    "name": "Tempest-Born",
+    "level": 3,
+    "type": "Companion",
+    "subtype": "Spirit Sorcerer",
+    "rarity": "Uncommon",
+    "class1": "Sorcerer",
+    "class2": "",
+    "attack": 2,
+    "hp": 4,
+    "anchor": null,
+    "actionSub": "",
+    "actionPM": "",
+    "itemKind": "",
+    "keywords": [
+      "Ranged"
+    ],
+    "text": "RANGED. When this enters, roll a six-sided die. Deal damage equal to half the result, rounded up, to target opposing character.",
+    "flavor": "",
+    "createdAt": "2026-05-16T19:05:55.110844Z",
+    "updatedAt": "2026-05-16T19:05:55.110845Z",
+    "effects": [
+      {
+        "trigger": "onEnter",
+        "effects": [
+          {
+            "op": "damage",
+            "amount": {
+              "halfDieUp": 6
+            },
+            "target": "enemyCharacter"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "43fb300b",
+    "name": "Conflagration Mage",
+    "level": 4,
+    "type": "Companion",
+    "subtype": "Human Sorcerer",
+    "rarity": "Rare",
+    "class1": "Sorcerer",
+    "class2": "",
+    "attack": 4,
+    "hp": 3,
+    "anchor": null,
+    "actionSub": "",
+    "actionPM": "",
+    "itemKind": "",
+    "keywords": [
+      "Zealous"
+    ],
+    "text": "ZEALOUS. At the start of your turn, deal 1 damage to each opposing character in the front line.",
+    "flavor": "He did not aim. The fire chose for him.",
+    "createdAt": "2026-05-16T19:05:55.110878Z",
+    "updatedAt": "2026-05-16T19:05:55.110882Z",
+    "effects": [
+      {
+        "trigger": "startOfTurn",
+        "effects": [
+          {
+            "op": "damage",
+            "amount": 1,
+            "target": "frontLineEnemy"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "0f9982ea",
+    "name": "Vael, the Unchecked",
+    "level": 5,
+    "type": "Companion",
+    "subtype": "Legendary Human Sorcerer",
+    "rarity": "Legendary",
+    "class1": "Sorcerer",
+    "class2": "",
+    "attack": 5,
+    "hp": 4,
+    "anchor": null,
+    "actionSub": "",
+    "actionPM": "",
+    "itemKind": "",
+    "keywords": [
+      "Zealous",
+      "Reckless"
+    ],
+    "text": "ZEALOUS, RECKLESS. Whenever this character attacks, after damage is dealt, roll a six-sided die. On a 6, deal 3 damage to each opposing character.",
+    "flavor": "—what was left of the second tower, after",
+    "createdAt": "2026-05-16T19:05:55.110890Z",
+    "updatedAt": "2026-05-16T19:05:55.110892Z",
+    "effects": [
+      {
+        "trigger": "onAttack",
+        "effects": [
+          {
+            "op": "dieCheck",
+            "threshold": 6,
+            "onPass": [
+              {
+                "op": "damage",
+                "amount": 3,
+                "target": "allEnemies"
+              }
+            ],
+            "onFail": []
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "88cf2f36",
+    "name": "Lingering Spark",
+    "level": 1,
+    "type": "Construct",
+    "subtype": "Incantation",
+    "rarity": "Common",
+    "class1": "Sorcerer",
+    "class2": "",
+    "attack": 0,
+    "hp": 0,
+    "anchor": 2,
+    "actionSub": "",
+    "actionPM": "",
+    "itemKind": "",
+    "keywords": [],
+    "text": "At the start of your turn, deal 1 damage to target opposing character.",
+    "flavor": "",
+    "createdAt": "2026-05-16T19:05:55.110898Z",
+    "updatedAt": "2026-05-16T19:05:55.110899Z",
+    "effects": [
+      {
+        "trigger": "startOfTurn",
+        "effects": [
+          {
+            "op": "damage",
+            "amount": 1,
+            "target": "enemyCharacter"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "48748c20",
+    "name": "Wildfire Sigil",
+    "level": 2,
+    "type": "Construct",
+    "subtype": "Incantation",
+    "rarity": "Uncommon",
+    "class1": "Sorcerer",
+    "class2": "",
+    "attack": 0,
+    "hp": 0,
+    "anchor": 2,
+    "actionSub": "",
+    "actionPM": "",
+    "itemKind": "",
+    "keywords": [],
+    "text": "Whenever you deal damage to an opposing character with a Magic Action, deal 1 additional damage.",
+    "flavor": "",
+    "createdAt": "2026-05-16T19:05:55.110905Z",
+    "updatedAt": "2026-05-16T19:05:55.110907Z",
+    "effects": [
+      {
+        "trigger": "static",
+        "effects": [
+          {
+            "op": "magicDamageBonus",
+            "amount": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "8cb9e76c",
+    "name": "Storm-Mark",
+    "level": 2,
+    "type": "Construct",
+    "subtype": "Incantation",
+    "rarity": "Common",
+    "class1": "Sorcerer",
+    "class2": "",
+    "attack": 0,
+    "hp": 0,
+    "anchor": 2,
+    "actionSub": "",
+    "actionPM": "",
+    "itemKind": "",
+    "keywords": [],
+    "text": "At the start of your turn, roll a six-sided die. On a 4 or higher, deal 2 damage to target opposing character.",
+    "flavor": "",
+    "createdAt": "2026-05-16T19:05:55.110912Z",
+    "updatedAt": "2026-05-16T19:05:55.110914Z",
+    "effects": [
+      {
+        "trigger": "startOfTurn",
+        "effects": [
+          {
+            "op": "dieCheck",
+            "threshold": 4,
+            "onPass": [
+              {
+                "op": "damage",
+                "amount": 2,
+                "target": "enemyCharacter"
+              }
+            ],
+            "onFail": []
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "57068ca5",
+    "name": "Burning Eye",
+    "level": 3,
+    "type": "Construct",
+    "subtype": "Incantation",
+    "rarity": "Uncommon",
+    "class1": "Sorcerer",
+    "class2": "",
+    "attack": 0,
+    "hp": 0,
+    "anchor": 3,
+    "actionSub": "",
+    "actionPM": "",
+    "itemKind": "",
+    "keywords": [],
+    "text": "Whenever you play a Magic Action, that action deals 1 additional damage to each character it would damage.",
+    "flavor": "An open flame that never closes.",
+    "createdAt": "2026-05-16T19:05:55.110920Z",
+    "updatedAt": "2026-05-16T19:05:55.110921Z",
+    "effects": [
+      {
+        "trigger": "static",
+        "effects": [
+          {
+            "op": "magicDamageBonus",
+            "amount": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "c4d87c5f",
+    "name": "Pyre of the Unbound",
+    "level": 4,
+    "type": "Construct",
+    "subtype": "Incantation",
+    "rarity": "Rare",
+    "class1": "Sorcerer",
+    "class2": "",
+    "attack": 0,
+    "hp": 0,
+    "anchor": 3,
+    "actionSub": "",
+    "actionPM": "",
+    "itemKind": "",
+    "keywords": [],
+    "text": "At the start of your turn, you may sacrifice this construct: deal 4 damage to target character or 2 damage to each opposing character.",
+    "flavor": "",
+    "createdAt": "2026-05-16T19:05:55.110927Z",
+    "updatedAt": "2026-05-16T19:05:55.110928Z"
+  },
+  {
+    "id": "8bdc5976",
+    "name": "Embercast Wand",
+    "level": 1,
+    "type": "Item",
+    "subtype": "Weapon - Wand",
+    "rarity": "Common",
+    "class1": "Sorcerer",
+    "class2": "",
+    "attack": 0,
+    "hp": 0,
+    "anchor": null,
+    "actionSub": "",
+    "actionPM": "",
+    "itemKind": "Weapon",
+    "keywords": [],
+    "text": "Equipped character has +1 attack. Once per turn, when equipped character plays a Magic Action, draw a card.",
+    "flavor": "",
+    "createdAt": "2026-05-16T19:05:55.110992Z",
+    "updatedAt": "2026-05-16T19:05:55.110996Z",
+    "effects": [
+      {
+        "trigger": "equipped",
+        "effects": [
+          {
+            "op": "buff",
+            "stat": "atk",
+            "amount": 1,
+            "scope": "self",
+            "duration": "while"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "55cf25ec",
+    "name": "Scorching Brand",
+    "level": 2,
+    "type": "Item",
+    "subtype": "Weapon - Wand",
+    "rarity": "Uncommon",
+    "class1": "Sorcerer",
+    "class2": "",
+    "attack": 0,
+    "hp": 0,
+    "anchor": null,
+    "actionSub": "",
+    "actionPM": "",
+    "itemKind": "Weapon",
+    "keywords": [],
+    "text": "Equipped character has +2 attack. When equipped character attacks, deal 1 additional damage if you control a Magical Construct.",
+    "flavor": "",
+    "createdAt": "2026-05-16T19:05:55.111004Z",
+    "updatedAt": "2026-05-16T19:05:55.111006Z",
+    "effects": [
+      {
+        "trigger": "equipped",
+        "effects": [
+          {
+            "op": "buff",
+            "stat": "atk",
+            "amount": 2,
+            "scope": "self",
+            "duration": "while"
+          }
+        ]
+      },
+      {
+        "trigger": "onAttack",
+        "if": {
+          "kind": "controlsType",
+          "cardType": "Construct",
+          "subtype": "Incantation"
+        },
+        "effects": [
+          {
+            "op": "attackBonus",
+            "amount": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "c80f8d77",
+    "name": "Ashforged Pendant",
+    "level": 1,
+    "type": "Item",
+    "subtype": "Trinket",
+    "rarity": "Common",
+    "class1": "Sorcerer",
+    "class2": "",
+    "attack": 0,
+    "hp": 0,
+    "anchor": null,
+    "actionSub": "",
+    "actionPM": "",
+    "itemKind": "Trinket",
+    "keywords": [],
+    "text": "Equipped character has +1 attack. The first Magic Action equipped character plays each turn cannot be countered.",
+    "flavor": "",
+    "createdAt": "2026-05-16T19:05:55.111012Z",
+    "updatedAt": "2026-05-16T19:05:55.111014Z",
+    "effects": [
+      {
+        "trigger": "equipped",
+        "effects": [
+          {
+            "op": "buff",
+            "stat": "atk",
+            "amount": 1,
+            "scope": "self",
+            "duration": "while"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "7a0b3177",
+    "name": "Storm-Caller's Mantle",
+    "level": 2,
+    "type": "Item",
+    "subtype": "Armor",
+    "rarity": "Common",
+    "class1": "Sorcerer",
+    "class2": "",
+    "attack": 0,
+    "hp": 0,
+    "anchor": null,
+    "actionSub": "",
+    "actionPM": "",
+    "itemKind": "Armor",
+    "keywords": [
+      "Armor 1"
+    ],
+    "text": "ARMOR 1. If the equipped character would be dealt damage, prevent all of that damage and put an armor counter on this item. When this item has 1 armor counter, sacrifice it. Equipped character has +1 attack.",
+    "flavor": "",
+    "createdAt": "2026-05-16T19:05:55.111041Z",
+    "updatedAt": "2026-05-16T19:05:55.111045Z",
+    "effects": [
+      {
+        "trigger": "equipped",
+        "effects": [
+          {
+            "op": "buff",
+            "stat": "atk",
+            "amount": 1,
+            "scope": "self",
+            "duration": "while"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "62f77b38",
+    "name": "Heart of the Convergence",
+    "level": 4,
+    "type": "Item",
+    "subtype": "Trinket",
+    "rarity": "Rare",
+    "class1": "Sorcerer",
+    "class2": "",
+    "attack": 0,
+    "hp": 0,
+    "anchor": null,
+    "actionSub": "",
+    "actionPM": "",
+    "itemKind": "Trinket",
+    "keywords": [
+      "Reckless"
+    ],
+    "text": "When equipped character plays a Magic Action that deals damage, that action deals 2 additional damage. Equipped character has RECKLESS.",
+    "flavor": "",
+    "createdAt": "2026-05-16T19:05:55.111057Z",
+    "updatedAt": "2026-05-16T19:05:55.111059Z",
+    "effects": [
+      {
+        "trigger": "static",
+        "effects": [
+          {
+            "op": "magicDamageBonus",
+            "amount": 2
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "fea2ccf2",
+    "name": "Sparkflare",
+    "level": 1,
+    "type": "Action",
+    "subtype": "Magic",
+    "rarity": "Common",
+    "class1": "Sorcerer",
+    "class2": "",
+    "attack": 0,
+    "hp": 0,
+    "anchor": null,
+    "actionSub": "",
+    "actionPM": "Major",
+    "itemKind": "",
+    "keywords": [],
+    "text": "Deal 2 damage to target character.",
+    "flavor": "",
+    "createdAt": "2026-05-16T19:05:55.111066Z",
+    "updatedAt": "2026-05-16T19:05:55.111068Z",
+    "effects": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          {
+            "op": "damage",
+            "amount": 2,
+            "target": "anyCharacter"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "1fad3bff",
+    "name": "Crackling Bolt",
+    "level": 2,
+    "type": "Action",
+    "subtype": "Magic",
+    "rarity": "Common",
+    "class1": "Sorcerer",
+    "class2": "",
+    "attack": 0,
+    "hp": 0,
+    "anchor": null,
+    "actionSub": "",
+    "actionPM": "Major",
+    "itemKind": "",
+    "keywords": [],
+    "text": "Deal 3 damage to target character. This action cannot be countered.",
+    "flavor": "",
+    "createdAt": "2026-05-16T19:05:55.111074Z",
+    "updatedAt": "2026-05-16T19:05:55.111075Z",
+    "effects": [
+      {
+        "trigger": "onPlay",
+        "uncounterable": true,
+        "effects": [
+          {
+            "op": "damage",
+            "amount": 3,
+            "target": "anyCharacter"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "edcd253b",
+    "name": "Wild Surge",
+    "level": 2,
+    "type": "Action",
+    "subtype": "Magic",
+    "rarity": "Uncommon",
+    "class1": "Sorcerer",
+    "class2": "",
+    "attack": 0,
+    "hp": 0,
+    "anchor": null,
+    "actionSub": "",
+    "actionPM": "Major",
+    "itemKind": "",
+    "keywords": [],
+    "text": "Roll a six-sided die. Deal damage equal to the result to target opposing character.",
+    "flavor": "",
+    "createdAt": "2026-05-16T19:05:55.111081Z",
+    "updatedAt": "2026-05-16T19:05:55.111082Z",
+    "effects": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          {
+            "op": "damage",
+            "amount": {
+              "die": 6
+            },
+            "target": "enemyCharacter"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "f264043c",
+    "name": "Burning Hands",
+    "level": 3,
+    "type": "Action",
+    "subtype": "Magic",
+    "rarity": "Common",
+    "class1": "Sorcerer",
+    "class2": "",
+    "attack": 0,
+    "hp": 0,
+    "anchor": null,
+    "actionSub": "",
+    "actionPM": "Major",
+    "itemKind": "",
+    "keywords": [],
+    "text": "Deal 2 damage to each opposing character on the same line as target character.",
+    "flavor": "",
+    "createdAt": "2026-05-16T19:05:55.111088Z",
+    "updatedAt": "2026-05-16T19:05:55.111089Z",
+    "effects": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          {
+            "op": "damage",
+            "amount": 2,
+            "target": "anyCharacter",
+            "splash": "line"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "1c10e5c3",
+    "name": "Conflagration",
+    "level": 4,
+    "type": "Action",
+    "subtype": "Magic",
+    "rarity": "Uncommon",
+    "class1": "Sorcerer",
+    "class2": "",
+    "attack": 0,
+    "hp": 0,
+    "anchor": null,
+    "actionSub": "",
+    "actionPM": "Major",
+    "itemKind": "",
+    "keywords": [],
+    "text": "Deal 5 damage to target character. This character takes 1 damage.",
+    "flavor": "",
+    "createdAt": "2026-05-16T19:05:55.111095Z",
+    "updatedAt": "2026-05-16T19:05:55.111096Z",
+    "effects": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          {
+            "op": "damage",
+            "amount": 5,
+            "target": "anyCharacter"
+          },
+          {
+            "op": "damageSelfPC",
+            "amount": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "de05224a",
+    "name": "Wrath of the Untamed Sky",
+    "level": 5,
+    "type": "Action",
+    "subtype": "Magic",
+    "rarity": "Rare",
+    "class1": "Sorcerer",
+    "class2": "",
+    "attack": 0,
+    "hp": 0,
+    "anchor": null,
+    "actionSub": "",
+    "actionPM": "Major",
+    "itemKind": "",
+    "keywords": [],
+    "text": "Roll a six-sided die. Deal damage equal to the result to each opposing character. Then deal half that result, rounded down, to your own player character.",
+    "flavor": "The storm does not know whose side it is on.",
+    "createdAt": "2026-05-16T19:05:55.111102Z",
+    "updatedAt": "2026-05-16T19:05:55.111104Z",
+    "effects": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          {
+            "op": "damage",
+            "amount": {
+              "die": 6
+            },
+            "target": "allEnemies",
+            "splash": "board"
+          },
+          {
+            "op": "damageSelfPC",
+            "amount": {
+              "halfDie": 6
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "3a52a57c",
+    "name": "Spark from Nothing",
+    "level": 1,
+    "type": "Action",
+    "subtype": "Magic",
+    "rarity": "Common",
+    "class1": "Sorcerer",
+    "class2": "",
+    "attack": 0,
+    "hp": 0,
+    "anchor": null,
+    "actionSub": "",
+    "actionPM": "Minor",
+    "itemKind": "",
+    "keywords": [],
+    "text": "Deal 1 damage to target character. Draw a card.",
+    "flavor": "",
+    "createdAt": "2026-05-16T19:05:55.111109Z",
+    "updatedAt": "2026-05-16T19:05:55.111111Z",
+    "effects": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          {
+            "op": "damage",
+            "amount": 1,
+            "target": "anyCharacter"
+          },
+          {
+            "op": "draw",
+            "count": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "3a561723",
+    "name": "Conscript",
+    "level": 1,
+    "type": "Companion",
+    "subtype": "Human Soldier",
+    "rarity": "Common",
+    "class1": "Warrior",
+    "class2": "",
+    "attack": 2,
+    "hp": 1,
+    "anchor": null,
+    "actionSub": "",
+    "actionPM": "",
+    "itemKind": "",
+    "keywords": [
+      "Zealous"
+    ],
+    "text": "ZEALOUS. This character may attack without needing to first pass a willpower check.",
+    "flavor": "",
+    "createdAt": "2026-05-16T19:05:55.111143Z",
+    "updatedAt": "2026-05-16T19:05:55.111147Z"
+  },
+  {
+    "id": "fd0a72f4",
+    "name": "Frontline Veteran",
+    "level": 2,
+    "type": "Companion",
+    "subtype": "Human Soldier",
+    "rarity": "Common",
+    "class1": "Warrior",
+    "class2": "",
+    "attack": 2,
+    "hp": 3,
+    "anchor": null,
+    "actionSub": "",
+    "actionPM": "",
+    "itemKind": "",
+    "keywords": [
+      "Zealous"
+    ],
+    "text": "ZEALOUS.",
+    "flavor": "",
+    "createdAt": "2026-05-16T19:05:55.111198Z",
+    "updatedAt": "2026-05-16T19:05:55.111202Z"
+  },
+  {
+    "id": "b1ac0a6d",
+    "name": "Quartermaster",
+    "level": 2,
+    "type": "Companion",
+    "subtype": "Dwarf Soldier",
+    "rarity": "Uncommon",
+    "class1": "Warrior",
+    "class2": "",
+    "attack": 2,
+    "hp": 2,
+    "anchor": null,
+    "actionSub": "",
+    "actionPM": "",
+    "itemKind": "",
+    "keywords": [
+      "Kit-Master"
+    ],
+    "text": "KIT-MASTER. When this companion enters the encounter, you may move target item from one character you control to another character you control.",
+    "flavor": "",
+    "createdAt": "2026-05-16T19:05:55.111215Z",
+    "updatedAt": "2026-05-16T19:05:55.111216Z"
+  },
+  {
+    "id": "7f52101a",
+    "name": "Berserker",
+    "level": 2,
+    "type": "Companion",
+    "subtype": "Human Warrior",
+    "rarity": "Common",
+    "class1": "Warrior",
+    "class2": "",
+    "attack": 3,
+    "hp": 2,
+    "anchor": null,
+    "actionSub": "",
+    "actionPM": "",
+    "itemKind": "",
+    "keywords": [
+      "Zealous",
+      "Reckless"
+    ],
+    "text": "ZEALOUS, RECKLESS.",
+    "flavor": "",
+    "createdAt": "2026-05-16T19:05:55.111224Z",
+    "updatedAt": "2026-05-16T19:05:55.111225Z"
+  },
+  {
+    "id": "3fdf6dd6",
+    "name": "Shieldbreaker",
+    "level": 3,
+    "type": "Companion",
+    "subtype": "Dwarf Warrior",
+    "rarity": "Uncommon",
+    "class1": "Warrior",
+    "class2": "",
+    "attack": 3,
+    "hp": 3,
+    "anchor": null,
+    "actionSub": "",
+    "actionPM": "",
+    "itemKind": "",
+    "keywords": [
+      "Cleave"
+    ],
+    "text": "CLEAVE. (When this character attacks, it deals damage equal to its attack to each character on the same line as the target. CLEAVE requires a two-handed weapon to function.)",
+    "flavor": "",
+    "createdAt": "2026-05-16T19:05:55.111231Z",
+    "updatedAt": "2026-05-16T19:05:55.111233Z"
+  },
+  {
+    "id": "14699d49",
+    "name": "Mara, the Sworn Sword",
+    "level": 3,
+    "type": "Companion",
+    "subtype": "Human Warrior",
+    "rarity": "Uncommon",
+    "class1": "Warrior",
+    "class2": "",
+    "attack": 3,
+    "hp": 4,
+    "anchor": null,
+    "actionSub": "",
+    "actionPM": "",
+    "itemKind": "",
+    "keywords": [
+      "Zealous"
+    ],
+    "text": "ZEALOUS. When this character attacks, you may pay 1 HP from your player character: deal 1 additional damage.",
+    "flavor": "",
+    "createdAt": "2026-05-16T19:05:55.111238Z",
+    "updatedAt": "2026-05-16T19:05:55.111240Z"
+  },
+  {
+    "id": "c1efc377",
+    "name": "Veteran of the Ashgrove",
+    "level": 3,
+    "type": "Companion",
+    "subtype": "Human Soldier",
+    "rarity": "Common",
+    "class1": "Warrior",
+    "class2": "",
+    "attack": 3,
+    "hp": 3,
+    "anchor": null,
+    "actionSub": "",
+    "actionPM": "",
+    "itemKind": "",
+    "keywords": [],
+    "text": "When this enters, you may equip an item from your hand to this character.",
+    "flavor": "",
+    "createdAt": "2026-05-16T19:05:55.111246Z",
+    "updatedAt": "2026-05-16T19:05:55.111247Z",
+    "effects": [
+      {
+        "trigger": "onEnter",
+        "optional": true,
+        "effects": [
+          {
+            "op": "equipFromHand",
+            "target": "self"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "261c6b49",
+    "name": "Warmaster",
+    "level": 4,
+    "type": "Companion",
+    "subtype": "Human Warrior",
+    "rarity": "Rare",
+    "class1": "Warrior",
+    "class2": "",
+    "attack": 4,
+    "hp": 4,
+    "anchor": null,
+    "actionSub": "",
+    "actionPM": "",
+    "itemKind": "",
+    "keywords": [
+      "Zealous",
+      "Cleave"
+    ],
+    "text": "ZEALOUS, CLEAVE. (CLEAVE requires a two-handed weapon to function.)",
+    "flavor": "He had been at every gate. He knew which fell first.",
+    "createdAt": "2026-05-16T19:05:55.111287Z",
+    "updatedAt": "2026-05-16T19:05:55.111292Z"
+  },
+  {
+    "id": "764adebe",
+    "name": "Karessa of the Stonefall",
+    "level": 5,
+    "type": "Companion",
+    "subtype": "Legendary Human Warrior",
+    "rarity": "Legendary",
+    "class1": "Warrior",
+    "class2": "",
+    "attack": 4,
+    "hp": 5,
+    "anchor": null,
+    "actionSub": "",
+    "actionPM": "",
+    "itemKind": "",
+    "keywords": [
+      "Zealous",
+      "Hit & Run"
+    ],
+    "text": "ZEALOUS, HIT & RUN. When this character destroys an opposing companion, draw a card.",
+    "flavor": "Few who came against her returned. Of those, none returned twice.",
+    "createdAt": "2026-05-16T19:05:55.111304Z",
+    "updatedAt": "2026-05-16T19:05:55.111306Z"
+  },
+  {
+    "id": "54b5bef3",
+    "name": "Iron Sword",
+    "level": 1,
+    "type": "Item",
+    "subtype": "Weapon - Sword",
+    "rarity": "Common",
+    "class1": "Warrior",
+    "class2": "",
+    "attack": 0,
+    "hp": 0,
+    "anchor": null,
+    "actionSub": "",
+    "actionPM": "",
+    "itemKind": "Weapon",
+    "keywords": [],
+    "text": "Equipped character has +1 attack.",
+    "flavor": "",
+    "effects": [
+      {
+        "trigger": "equipped",
+        "effects": [
+          {
+            "op": "buff",
+            "stat": "atk",
+            "amount": 1,
+            "scope": "self",
+            "duration": "while"
+          }
+        ]
+      }
+    ],
+    "createdAt": "2026-05-16T19:05:55.111312Z",
+    "updatedAt": "2026-05-16T19:05:55.111313Z"
+  },
+  {
+    "id": "06e59422",
+    "name": "Steel Sword",
+    "level": 2,
+    "type": "Item",
+    "subtype": "Weapon - Sword",
+    "rarity": "Common",
+    "class1": "Warrior",
+    "class2": "",
+    "attack": 0,
+    "hp": 0,
+    "anchor": null,
+    "actionSub": "",
+    "actionPM": "",
+    "itemKind": "Weapon",
+    "keywords": [],
+    "text": "Equipped character has +2 attack.",
+    "flavor": "",
+    "createdAt": "2026-05-16T19:05:55.111320Z",
+    "updatedAt": "2026-05-16T19:05:55.111321Z",
+    "effects": [
+      {
+        "trigger": "equipped",
+        "effects": [
+          {
+            "op": "buff",
+            "stat": "atk",
+            "amount": 2,
+            "scope": "self",
+            "duration": "while"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "cd151bd2",
+    "name": "Widow's Fang",
+    "level": 2,
+    "type": "Item",
+    "subtype": "Weapon - Dagger",
+    "rarity": "Uncommon",
+    "class1": "Warrior",
+    "class2": "",
+    "attack": 0,
+    "hp": 0,
+    "anchor": null,
+    "actionSub": "",
+    "actionPM": "",
+    "itemKind": "Weapon",
+    "keywords": [
+      "Hit & Run"
+    ],
+    "text": "Equipped character has +1 attack and HIT & RUN. (After this character attacks, it may take an extra move action.)",
+    "flavor": "",
+    "createdAt": "2026-05-16T19:05:55.111349Z",
+    "updatedAt": "2026-05-16T19:05:55.111353Z",
+    "effects": [
+      {
+        "trigger": "equipped",
+        "effects": [
+          {
+            "op": "buff",
+            "stat": "atk",
+            "amount": 1,
+            "scope": "self",
+            "duration": "while"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "9d083eb0",
+    "name": "Ashforged Cleaver",
+    "level": 3,
+    "type": "Item",
+    "subtype": "Two-Handed Weapon - Axe",
+    "rarity": "Uncommon",
+    "class1": "Warrior",
+    "class2": "",
+    "attack": 0,
+    "hp": 0,
+    "anchor": null,
+    "actionSub": "",
+    "actionPM": "",
+    "itemKind": "Weapon",
+    "keywords": [
+      "Cleave"
+    ],
+    "text": "Equipped character has +3 attack and CLEAVE. (Equipped character cannot use Magic Actions.)",
+    "flavor": "",
+    "createdAt": "2026-05-16T19:05:55.111365Z",
+    "updatedAt": "2026-05-16T19:05:55.111367Z",
+    "effects": [
+      {
+        "trigger": "equipped",
+        "effects": [
+          {
+            "op": "buff",
+            "stat": "atk",
+            "amount": 3,
+            "scope": "self",
+            "duration": "while"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "a64abc94",
+    "name": "Pikestaff",
+    "level": 2,
+    "type": "Item",
+    "subtype": "Two-Handed Weapon - Spear",
+    "rarity": "Common",
+    "class1": "Warrior",
+    "class2": "",
+    "attack": 0,
+    "hp": 0,
+    "anchor": null,
+    "actionSub": "",
+    "actionPM": "",
+    "itemKind": "Weapon",
+    "keywords": [
+      "Ranged"
+    ],
+    "text": "Equipped character has +2 attack and RANGED. (Equipped character cannot use Magic Actions.)",
+    "flavor": "",
+    "createdAt": "2026-05-16T19:05:55.111374Z",
+    "updatedAt": "2026-05-16T19:05:55.111375Z",
+    "effects": [
+      {
+        "trigger": "equipped",
+        "effects": [
+          {
+            "op": "buff",
+            "stat": "atk",
+            "amount": 2,
+            "scope": "self",
+            "duration": "while"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "717f26f2",
+    "name": "Greatsword of the Last Watch",
+    "level": 4,
+    "type": "Item",
+    "subtype": "Two-Handed Weapon - Sword",
+    "rarity": "Rare",
+    "class1": "Warrior",
+    "class2": "",
+    "attack": 0,
+    "hp": 0,
+    "anchor": null,
+    "actionSub": "",
+    "actionPM": "",
+    "itemKind": "Weapon",
+    "keywords": [
+      "Cleave"
+    ],
+    "text": "Equipped character has +4 attack and CLEAVE. When equipped character destroys a companion, draw a card. (Equipped character cannot use Magic Actions.)",
+    "flavor": "",
+    "createdAt": "2026-05-16T19:05:55.111381Z",
+    "updatedAt": "2026-05-16T19:05:55.111382Z",
+    "effects": [
+      {
+        "trigger": "equipped",
+        "effects": [
+          {
+            "op": "buff",
+            "stat": "atk",
+            "amount": 4,
+            "scope": "self",
+            "duration": "while"
+          }
+        ]
+      },
+      {
+        "trigger": "onKill",
+        "if": {
+          "kind": "killedIsCompanion"
+        },
+        "effects": [
+          {
+            "op": "draw",
+            "count": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "0b3f1626",
+    "name": "Mailed Hauberk",
+    "level": 2,
+    "type": "Item",
+    "subtype": "Armor",
+    "rarity": "Common",
+    "class1": "Warrior",
+    "class2": "",
+    "attack": 0,
+    "hp": 0,
+    "anchor": null,
+    "actionSub": "",
+    "actionPM": "",
+    "itemKind": "Armor",
+    "keywords": [
+      "Armor 2"
+    ],
+    "text": "ARMOR 2. If the equipped character would be dealt damage, prevent all of that damage and put an armor counter on this item. When this item has 2 armor counters, sacrifice it.",
+    "flavor": "",
+    "createdAt": "2026-05-16T19:05:55.111389Z",
+    "updatedAt": "2026-05-16T19:05:55.111390Z"
+  },
+  {
+    "id": "3cf13287",
+    "name": "Plate of the Standing Wall",
+    "level": 3,
+    "type": "Item",
+    "subtype": "Two-Handed Armor",
+    "rarity": "Uncommon",
+    "class1": "Warrior",
+    "class2": "",
+    "attack": 0,
+    "hp": 0,
+    "anchor": null,
+    "actionSub": "",
+    "actionPM": "",
+    "itemKind": "Armor",
+    "keywords": [
+      "Armor 4"
+    ],
+    "text": "ARMOR 4. If the equipped character would be dealt damage, prevent all of that damage and put an armor counter on this item. When this item has 4 armor counters, sacrifice it. (Equipped character cannot use Magic Actions.)",
+    "flavor": "",
+    "createdAt": "2026-05-16T19:05:55.111396Z",
+    "updatedAt": "2026-05-16T19:05:55.111398Z"
+  },
+  {
+    "id": "42db15dc",
+    "name": "Captain's Belt",
+    "level": 2,
+    "type": "Item",
+    "subtype": "Trinket",
+    "rarity": "Uncommon",
+    "class1": "Warrior",
+    "class2": "",
+    "attack": 0,
+    "hp": 0,
+    "anchor": null,
+    "actionSub": "",
+    "actionPM": "",
+    "itemKind": "Trinket",
+    "keywords": [
+      "Kit-Master"
+    ],
+    "text": "When this becomes equipped, you may move target item from one character you control to another character you control. Equipped character has +1 attack.",
+    "flavor": "",
+    "createdAt": "2026-05-16T19:05:55.111403Z",
+    "updatedAt": "2026-05-16T19:05:55.111405Z",
+    "effects": [
+      {
+        "trigger": "equipped",
+        "effects": [
+          {
+            "op": "buff",
+            "stat": "atk",
+            "amount": 1,
+            "scope": "self",
+            "duration": "while"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "6e0cc7fc",
+    "name": "Banner of the Stonefall",
+    "level": 3,
+    "type": "Item",
+    "subtype": "Trinket",
+    "rarity": "Rare",
+    "class1": "Warrior",
+    "class2": "",
+    "attack": 0,
+    "hp": 0,
+    "anchor": null,
+    "actionSub": "",
+    "actionPM": "",
+    "itemKind": "Trinket",
+    "keywords": [],
+    "text": "Your Warrior companions have +1 attack while in the front line.",
+    "flavor": "",
+    "createdAt": "2026-05-16T19:05:55.111410Z",
+    "updatedAt": "2026-05-16T19:05:55.111412Z",
+    "effects": [
+      {
+        "trigger": "static",
+        "effects": [
+          {
+            "op": "buff",
+            "stat": "atk",
+            "amount": 1,
+            "scope": "ownCompanions",
+            "duration": "while",
+            "where": {
+              "line": "front",
+              "cls": "Warrior"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "7511f031",
+    "name": "Swift Strike",
+    "level": 1,
+    "type": "Action",
+    "subtype": "Physical",
+    "rarity": "Common",
+    "class1": "Warrior",
+    "class2": "",
+    "attack": 0,
+    "hp": 0,
+    "anchor": null,
+    "actionSub": "",
+    "actionPM": "Major",
+    "itemKind": "",
+    "keywords": [],
+    "text": "Target character you control attacks an additional time this turn.",
+    "flavor": "",
+    "createdAt": "2026-05-16T19:05:55.111417Z",
+    "updatedAt": "2026-05-16T19:05:55.111419Z",
+    "effects": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          {
+            "op": "extraAttack",
+            "target": "ownCharacter"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "89c5de1e",
+    "name": "Tactical Reposition",
+    "level": 1,
+    "type": "Action",
+    "subtype": "Physical",
+    "rarity": "Common",
+    "class1": "Warrior",
+    "class2": "",
+    "attack": 0,
+    "hp": 0,
+    "anchor": null,
+    "actionSub": "",
+    "actionPM": "Minor",
+    "itemKind": "",
+    "keywords": [],
+    "text": "Move target character you control to any unoccupied slot. Draw a card.",
+    "flavor": "",
+    "createdAt": "2026-05-16T19:05:55.111452Z",
+    "updatedAt": "2026-05-16T19:05:55.111456Z",
+    "effects": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          {
+            "op": "move",
+            "target": "ownCharacter",
+            "to": "anySlot",
+            "forced": true
+          },
+          {
+            "op": "draw",
+            "count": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "224ff9a9",
+    "name": "Disarming Blow",
+    "level": 2,
+    "type": "Action",
+    "subtype": "Physical",
+    "rarity": "Common",
+    "class1": "Warrior",
+    "class2": "",
+    "attack": 0,
+    "hp": 0,
+    "anchor": null,
+    "actionSub": "",
+    "actionPM": "Major",
+    "itemKind": "",
+    "keywords": [],
+    "text": "Target character you control attacks target opposing character. After damage, sacrifice an item equipped to that opposing character.",
+    "flavor": "",
+    "createdAt": "2026-05-16T19:05:55.111485Z",
+    "updatedAt": "2026-05-16T19:05:55.111489Z",
+    "effects": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          {
+            "op": "attackDisarm",
+            "attacker": "ownCharacter",
+            "target": "enemyCharacter"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "978fa047",
+    "name": "Rally",
+    "level": 2,
+    "type": "Action",
+    "subtype": "Physical",
+    "rarity": "Common",
+    "class1": "Warrior",
+    "class2": "",
+    "attack": 0,
+    "hp": 0,
+    "anchor": null,
+    "actionSub": "",
+    "actionPM": "Major",
+    "itemKind": "",
+    "keywords": [],
+    "text": "Until end of turn, companions you control have +1 attack.",
+    "flavor": "",
+    "effects": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          {
+            "op": "buff",
+            "stat": "atk",
+            "amount": 1,
+            "scope": "ownCompanions",
+            "duration": "endOfTurn"
+          }
+        ]
+      }
+    ],
+    "createdAt": "2026-05-16T19:05:55.111501Z",
+    "updatedAt": "2026-05-16T19:05:55.111503Z"
+  },
+  {
+    "id": "b0da8b81",
+    "name": "Press the Line",
+    "level": 3,
+    "type": "Action",
+    "subtype": "Physical",
+    "rarity": "Uncommon",
+    "class1": "Warrior",
+    "class2": "",
+    "attack": 0,
+    "hp": 0,
+    "anchor": null,
+    "actionSub": "",
+    "actionPM": "Major",
+    "itemKind": "",
+    "keywords": [],
+    "text": "Each companion you control in the front line attacks target opposing character.",
+    "flavor": "",
+    "createdAt": "2026-05-16T19:05:55.111511Z",
+    "updatedAt": "2026-05-16T19:05:55.111513Z",
+    "effects": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          {
+            "op": "forceAttack",
+            "attackers": "frontLineOwn",
+            "target": "enemyCharacter"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "331dac94",
+    "name": "Hold the Pass",
+    "level": 4,
+    "type": "Action",
+    "subtype": "Physical",
+    "rarity": "Rare",
+    "class1": "Warrior",
+    "class2": "",
+    "attack": 0,
+    "hp": 0,
+    "anchor": null,
+    "actionSub": "",
+    "actionPM": "Major",
+    "itemKind": "",
+    "keywords": [],
+    "text": "Until end of turn, companions you control have GUARDIAN, +1 attack, and cannot be moved by opposing effects.",
+    "flavor": "—remembered words of Stonefall",
+    "effects": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          {
+            "op": "buff",
+            "stat": "atk",
+            "amount": 1,
+            "grant": [
+              "Guardian"
+            ],
+            "modifiers": [
+              "cannotBeMoved"
+            ],
+            "scope": "ownCompanions",
+            "duration": "endOfTurn"
+          }
+        ]
+      }
+    ],
+    "createdAt": "2026-05-16T19:05:55.111519Z",
+    "updatedAt": "2026-05-16T19:05:55.111521Z"
+  }
+]
