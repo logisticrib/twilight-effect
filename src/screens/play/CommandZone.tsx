@@ -99,8 +99,9 @@ export function CommandZone({ player, owner, flip, boardScale = DEFAULT_BOARD_SC
           resolveMove, resolveAttack, placeCard, placePc, equipItem, cancelPlay, resolveTrigger, resolveKit, resolveActionTarget, resolveActionSlot } = store;
   const oppPlayer: 'p1' | 'p2' = localPlayer === 'p1' ? 'p2' : 'p1';
 
-  // PC placement mode: show placement slots for any player that still has _pc unplaced
-  const awaitingPcPlacement = owner === (owner as 'p1' | 'p2') && !!game[owner]._pc;
+  // PC placement mode: show placement slots only for the player whose serialized
+  // place-pc step is current (and who still has an unplaced _pc).
+  const awaitingPcPlacement = !!game[owner]._pc && game.setupQueue[0] === `place-pc:${owner}`;
 
   const rows: [string, SlotId, SlotId, SlotId][] = flip
     ? [['B', 'b3', 'b2', 'b1'], ['F', 'f3', 'f2', 'f1']]

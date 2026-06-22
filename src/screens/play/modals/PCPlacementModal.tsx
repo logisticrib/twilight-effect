@@ -2,30 +2,29 @@ import { useEffect, type CSSProperties } from 'react';
 import { useGameStore } from '../../../store/gameStore';
 import { TBL } from '../../../tokens';
 
-interface Props { onClose: () => void; }
+interface Props { player?: 'p1' | 'p2'; onClose: () => void; }
 
 /**
  * Non-blocking floating banner — sits above the board so the player
- * can still click the Back Line slots highlighted in purple.
+ * can still click the Back Line slots highlighted in purple. Setup is serialized,
+ * so this handles ONE player at a time (the current `place-pc:<player>` step).
  */
-export function PCPlacementModal({ onClose }: Props) {
+export function PCPlacementModal({ player = 'p1', onClose }: Props) {
   const { game } = useGameStore();
 
-  const p1Done = !game.p1._pc;
-  const p2Done = !game.p2._pc;
-  const allPlaced = p1Done && p2Done;
+  const done = !game[player]._pc;
 
   // Must be a useEffect — calling onClose inside render (even via setTimeout)
-  // fires twice in React StrictMode and corrupts the modal queue.
+  // fires twice in React StrictMode and corrupts the queue.
   useEffect(() => {
-    if (allPlaced) onClose();
-  }, [allPlaced, onClose]);
+    if (done) onClose();
+  }, [done, onClose]);
 
-  if (allPlaced) return null;
+  if (done) return null;
 
-  const current: 'p1' | 'p2' = !p1Done ? 'p1' : 'p2';
+  const current = player;
   const playerName = game[current].name;
-  const step = !p1Done ? '1 of 2' : '2 of 2';
+  const step = current === 'p1' ? '1 of 2' : '2 of 2';
 
   const banner: CSSProperties = {
     position: 'fixed',
@@ -73,7 +72,7 @@ export function PCPlacementModal({ onClose }: Props) {
             {playerName} — click a <span style={{ color: TBL.violet }}>Back Line ★ slot</span> to place your Player Character
           </div>
         </div>
-        {!p1Done && (
+        {current === 'p1' && (
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: TBL.ink3, letterSpacing: '0.08em' }}>
             P2 places next
           </div>

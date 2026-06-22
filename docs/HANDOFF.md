@@ -2,6 +2,17 @@
 
 Self-contained context for continuing the card-effect engine work in a fresh session.
 
+## Repo / sharing (2026-06-07)
+- The app is on GitHub: **https://github.com/logisticrib/twilight-effect** (PRIVATE), scoped to
+  `twilight-app/` only (`main` branch). Push updates with `git add -A && git commit -m "…" && git push`
+  from `twilight-app/`. Owner mirrors it into their claude.ai Project knowledge.
+- Snapshots that DRIFT and must be refreshed before a push if the owner wants the Project current:
+  `twilight-app/docs/HANDOFF.md` + `docs/Game_Rules_Updated.md` + `docs/Card_Design_Parameters.md`
+  (copies of the canonical `tasks/HANDOFF.md` and the parent design docs), and
+  `twilight-app/CODE_BUNDLE.md` (a flattened single-file dump of `src/`, generated via a throwaway
+  Node script, used for direct Project-knowledge upload since the GitHub connector was erroring).
+  CODE_BUNDLE.md is git-untracked. When code changes, offer to regenerate these before the owner pushes.
+
 ## Project / run
 - App: `twilight-app/` (React 19 + Vite + Zustand + TS + Tailwind 4 + PeerJS).
 - Start server (npm not on PATH): from `twilight-app/`, run
@@ -85,6 +96,37 @@ w.cards.forEach(c=>{if(E[c.name])c.effects=E[c.name];});fs.writeFileSync(p,JSON.
   (`useMultiplayer.ts` subscribes to `s.game`, broadcasts on local change; receiver applies,
   preserving local `game.selected`). **Game-over screen** (`GameOverScreen.tsx`).
   ⚠️ STILL NEEDS A LIVE TWO-PEER PLAYTEST (armored hit, cleave, reckless, placement, PC kill).
+- **MP prompt routing (2026-06-22)** — only `game` syncs, so cross-client prompts that armed on the
+  wrong peer are now part of `game`: `pendingPeek`/`pendingPeekQueue`/`pendingDeadPick`/
+  `pendingDeadPickQueue` moved from store-local into `GameState`; modals render gated by
+  `isSolo || prompt.lp === localPlayer` (sandbox bypasses). Fixes start-of-turn deck-peeks (High
+  Reader/Lens), Library of Memory, and Memory Stone arming on the wrong client. **Poison** routed via
+  new `GameState.pendingPoison` (set for the *starting* player in `endTurn`, no longer `modalQueue`);
+  `PoisonModal` parameterized by `player` (was hardcoded `game.p1`) + new `PoisonHost` gate.
+  Active-player-only prompts (action-target/trigger/kit/equip) stay store-local. Verified single-client;
+  see todo.md Review + KNOWN REMAINING MP ITEMS (reactive-pick race, dead ACTION path, the live
+  two-peer playtest itself).
+- **MP setup serialization (2026-06-22)** — parallel setup clobbered under wholesale sync and dropped
+  cross-half class bonuses; `startMultiplayer` also seeded setup modals hardcoded `:p1` (guest ran the
+  wrong half). FIX: serialized setup via synced `GameState.setupQueue` (one player acts at a time →
+  wholesale sync correct). `makeNewGame` seeds the 6-step sequence; `advanceSetup` shifts it; `placePc`
+  gates+advances; `ModalHost` drives setup gated `isSolo || player===localPlayer` with a `SetupWaiting`
+  overlay for the other peer; `PCPlacementModal` now single-player; `CommandZone`/`CZExchangePanel`
+  re-keyed off `setupQueue`. Verified the full sandbox setup→CZ flow through the real UI. todo.md Review
+  has detail; live two-peer handoff still wants the playtest.
+- **Reactive Memory-Stone race hold (2026-06-22)** — the defender's onDestroy pick (armed by the
+  attacker's kill, owned by the defender) could be clobbered by the attacker's continued wholesale
+  broadcasts. FIX: `reactiveHold(game,localPlayer)` (opponent-owned `pendingDeadPick`) no-ops the 8
+  action-phase mutators (move/attack/equip/ability/play/place/markAction/endTurn) until the owner
+  resolves (`resolveDeadPick`/`cancelDeadPick` unguarded — the escape hatch). `ReactiveHoldBanner`
+  (MP-only) tells the held player to wait. Verified in preview; sandbox safe (modal already blocks).
+  Last flagged MP item closed.
+- **Dead action-replay path removed (2026-06-22)** — multiplayer is authoritative state-sync, so the old
+  per-action replay protocol was deleted: `GameAction` union, `{type:'ACTION'}` message, `sendAction`,
+  and `receiveAction` (≈60-line dead reducer) are gone; the 7 no-op `_broadcast?.({kind:…})` emissions
+  removed. `_broadcast` KEPT purely as the "in multiplayer?" flag (no-op set by useMultiplayer, checked
+  in backToLobby); real sync stays the store→`sendStateSync` subscription. Typecheck clean; app renders.
+  **All flagged MP items closed — only the live two-peer playtest remains.**
 - **All keywords**: Cleave, Reckless, Armor, Guardian, Zealous, Ranged, Hit & Run, Reinforce,
   Dismantle, Kit-Master, Dismay/Dismayed, Acrobatics. (Earlier keyword-engine slices.)
 - **All 20 Action cards** (damage/AoE/die/draw/buffs/move/bounce/extra-attack/force-attack/
@@ -201,13 +243,17 @@ the owner-ruling flags in OPEN QUESTIONS.
    (Evasive doesn't bypass).
 
 ## OPEN QUESTIONS / FLAGS for the owner
-- **Conflagration** text "This character takes 1 damage" is ambiguous (an Action has no
-  character) — interpreted as caster's PC self-damage. Confirm or revise.
-- **Translocation Circle** is a *construct* with a Minor-Action activated ability, but
-  Card_Design_Parameters §11 says constructs CANNOT have activated abilities. Deferred —
-  needs a ruling (strip the ability or allow it).
-- **State-based HP**: when a +HP aura drops, current code CAPS hp to effectiveMaxHp rather
-  than removing the unit (rules say remove-if-damaged-beyond). Confirm the gentler behaviour is OK.
+- ~~**Conflagration** "This character takes 1 damage"~~ — RESOLVED 2026-06-22: ruled to mean the
+  character *performing the action*. Re-authored to `damage target:'self'` with the acting character
+  threaded as `sourceId`. (Wrath of the Untamed Sky keeps `damageSelfPC` — its text says "your own PC".)
+- ~~**Translocation Circle** activated ability vs §11~~ — RESOLVED 2026-06-22: ruled ALLOW as an
+  exception. Authored `activated`/`oncePerTurn` bounce `target:'ownCompanion'` (oncePerTurn guards abuse
+  since constructs have no action budget). FLAG: this is a sanctioned §11 exception.
+- ~~**State-based HP** (+HP aura cap-vs-remove)~~ — RESOLVED 2026-06-22: owner clarified there should be
+  NO HP buffs at all (max HP fixed, only healing — Card_Design_Parameters §8). Stripped +HP from all 4
+  offending cards (Memory Stone, Anchor Stone, Long-Quiet Wall kept +atk/lineWard; **Stone Rampart**
+  converted to `onEnter heal ownParty 1` — FLAG: confirm the heal re-theme). `effectiveMaxHp` now always
+  == printed, so no over-damaged SBA is needed; the hp-aura machinery is left dormant.
 - ~~**Action-economy not enforced**~~ — DONE 2026-06-07 (character-centric model). Playing an
   Action card now requires a selected own character and spends its action by the card's type
   (`actionSub`, default Major): Major→exhaust, Minor→tap, Special→PC-only + flip a Class-Zone card.
@@ -223,10 +269,15 @@ the owner-ruling flags in OPEN QUESTIONS.
 - **Grudrik Stonebrace** "+1 maximum Anchor counters" is a NO-OP — no anchor-cap system exists.
 - **The Long-Quiet Wall** "line opposite this construct" read as the controller's other line
   (front↔back); restriction is companion-only and absolute (Evasive does NOT bypass).
-- **Memory Stone** auto-picks the most-recent Dead-Zone card instead of a "target card" choice.
-  A generic Dead-Zone picker modal NOW EXISTS (Library of Memory uses it), but Memory Stone's
-  onDestroy fires deep inside `applyDamage`, so wiring it to the picker needs deferral plumbing out
-  of combat resolution (follow-up). Same picker would unblock Scavenger.
+- ~~**Memory Stone** auto-picks the most-recent Dead-Zone card~~ — RESOLVED 2026-06-22: built the
+  interactive picker. Additive `sink?: PendingDeadPick[]` threads through
+  `applyDamage`/`resolveRemovalTriggers`/`resolveActionEffects`; the `returnFromDead` op defers to the
+  picker when a sink is passed (auto-pick fallback otherwise). Combat (`resolveAttack`, incl. Cleave) +
+  action paths (`resolveActionTarget` single/disarm, `playAction` immediate) collect a sink and arm
+  `pendingDeadPick` + new `pendingDeadPickQueue` (chains multi-bearer kills). Reuses `DeadPickModal`
+  (forced pick). MP CAVEAT: `pendingDeadPick` is local (unsynced) — arms on the kill-running client, so
+  a defender's Memory Stone would prompt the attacker in true MP; fine in sandbox. **Scavenger still
+  unwired — no card carries it; would need an item-equip variant of the picker.**
 - **Field Engineer** "move one Anchor counter from one Physical Construct to another" read as your
   OWN Physical Constructs (source→dest).
 

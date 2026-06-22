@@ -1,7 +1,6 @@
 import type { CSSProperties } from 'react';
 import { useGameStore } from '../../store/gameStore';
 import { TBL, PHASES } from '../../tokens';
-import { ModalLauncher } from './modals/ModalLauncher';
 
 export function PhaseRail() {
   const { game, endTurn, endTurnToEndPhase, advancePhase, backToLobby, conn, localPlayer, switchSides } = useGameStore();
@@ -111,7 +110,6 @@ export function PhaseRail() {
         </button>
       )}
 
-      <ModalLauncher />
       <div style={connBadge}>
         {conn.mode === 'solo' ? '◐ SANDBOX' : `◉ ${conn.code} · ${conn.latency}ms`}
       </div>

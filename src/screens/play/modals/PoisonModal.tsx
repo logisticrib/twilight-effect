@@ -15,20 +15,20 @@ interface PoisonChar {
   done: boolean;
 }
 
-interface Props { onClose: () => void; }
+interface Props { player?: 'p1' | 'p2'; onClose: () => void; }
 
-export function PoisonModal({ onClose }: Props) {
+export function PoisonModal({ player = 'p1', onClose }: Props) {
   const { game, setGame } = useGameStore();
-  const willpower = Math.max(game.p1.willpower, 1);
+  const willpower = Math.max(game[player].willpower, 1);
 
   const initial = useMemo<PoisonChar[]>(() => {
     const out: PoisonChar[] = [];
-    for (const ent of Object.values(game.p1.board)) {
+    for (const ent of Object.values(game[player].board)) {
       if (ent && (ent.poison ?? 0) > 0) {
         out.push({ id: ent.id, name: ent.name, cls: ent.cls, counters: ent.poison!, roll: null, cleansed: null, dmg: 0, done: false });
       }
     }
-    // Demo fallback
+    // Demo fallback (dev modal-launcher preview only — the real flow always has poisoned units)
     if (out.length === 0) {
       out.push({ id: 'demo-1', name: 'Demo Companion', cls: 'Druid', counters: 2, roll: null, cleansed: null, dmg: 0, done: false });
     }
@@ -36,7 +36,7 @@ export function PoisonModal({ onClose }: Props) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [chars, setChars] = useState<PoisonChar[]>(initial);
-  const [playerHp, setPlayerHp] = useState(game.p1.hp);
+  const [playerHp, setPlayerHp] = useState(game[player].hp);
   const allDone = chars.every(c => c.done);
 
   const rollFor = (i: number) => {
@@ -56,7 +56,7 @@ export function PoisonModal({ onClose }: Props) {
 
   const commit = () => {
     setGame(g => {
-      const board = { ...g.p1.board };
+      const board = { ...g[player].board };
       for (const ch of chars) {
         const slotKey = Object.keys(board).find(k => {
           const ent = board[k as keyof typeof board] as BoardEntity | undefined;
@@ -68,7 +68,7 @@ export function PoisonModal({ onClose }: Props) {
           ? { ...ent, poison: 0, statuses: ent.statuses.filter(s => s !== 'Poisoned'), exhausted: false, tapped: 'none' as const }
           : ent;
       }
-      return { ...g, p1: { ...g.p1, board, hp: playerHp } };
+      return { ...g, [player]: { ...g[player], board, hp: playerHp }, pendingPoison: null };
     });
     onClose();
   };

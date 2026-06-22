@@ -1,19 +1,11 @@
 import Peer, { type DataConnection } from 'peerjs';
-import type { GameState, SlotId } from '../store/gameStore';
+import type { GameState } from '../store/gameStore';
 
 // ─── Message protocol ─────────────────────────────────────────────────────────
-export type GameAction =
-  | { kind: 'MOVE';          entityId: string; toSlot: SlotId }
-  | { kind: 'ATTACK';        attackerId: string; targetId: string }
-  | { kind: 'PLACE_CARD';    cardId: string; slot: SlotId }
-  | { kind: 'MARK_ACTION';   entityId: string; actionType: 'move' | 'minor' | 'major' }
-  | { kind: 'RESET_ACTIONS'; entityId: string }
-  | { kind: 'ADJUST_HP';     entityId: string; delta: number }
-  | { kind: 'END_TURN' };
-
+// Multiplayer is authoritative state-sync: the mutating peer broadcasts its full
+// `game`, the receiver applies it. (The old per-action replay protocol was removed.)
 export type NetworkMessage =
   | { type: 'STATE_SYNC'; state: GameState }
-  | { type: 'ACTION';     action: GameAction }
   | { type: 'READY';      name: string; avatar: string }
   | { type: 'PING';       ts: number }
   | { type: 'PONG';       ts: number; origTs: number };
@@ -121,10 +113,6 @@ export class MultiplayerSession {
     if (this.conn?.open) {
       this.conn.send(JSON.stringify(msg));
     }
-  }
-
-  sendAction(action: GameAction) {
-    this.send({ type: 'ACTION', action });
   }
 
   sendStateSync(state: GameState) {

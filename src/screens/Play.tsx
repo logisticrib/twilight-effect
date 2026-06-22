@@ -9,6 +9,7 @@ import { Playmat } from './play/Playmat';
 import { PileViewer } from './play/PileViewer';
 import { GameOverScreen } from './play/GameOverScreen';
 import { ModalHost } from './play/modals/ModalHost';
+import { PoisonModal } from './play/modals/PoisonModal';
 
 function GameView() {
   const store = useGameStore();
@@ -55,6 +56,8 @@ function GameView() {
       <ActionPrompt />
       <PeekModal />
       <DeadPickModal />
+      <PoisonHost />
+      <ReactiveHoldBanner />
       <EquipPickModal />
       <ModalHost />
       <PileViewer />
@@ -119,16 +122,21 @@ function ActionPrompt() {
 
 /** Deck-peek (scry) modal: assign each looked-at card a destination. */
 function PeekModal() {
-  const pk = useGameStore(s => s.pendingPeek);
+  const pk = useGameStore(s => s.game.pendingPeek);
+  const localPlayer = useGameStore(s => s.localPlayer);
+  const isSolo = useGameStore(s => s.conn.mode === 'solo');
   const resolvePeek = useGameStore(s => s.resolvePeek);
   const cancelPeek = useGameStore(s => s.cancelPeek);
   const [assign, setAssign] = useState<('hand' | 'top' | 'bottom')[]>([]);
+
+  // Only the player doing the scry sees it (in multiplayer); sandbox shows all.
+  const owned = pk != null && (isSolo || pk.lp === localPlayer);
 
   useEffect(() => {
     if (pk) setAssign(pk.cards.map(() => (pk.dests.includes('top') ? 'top' : pk.dests[0])));
   }, [pk]);
 
-  if (!pk) return null;
+  if (!pk || !owned) return null;
   const handCount = assign.filter(a => a === 'hand').length;
   const overHand = pk.maxHand != null && handCount > pk.maxHand;
   const DEST_LABEL: Record<string, string> = { hand: 'Hand', top: 'Top', bottom: 'Bottom' };
@@ -179,13 +187,53 @@ function PeekModal() {
   );
 }
 
+/** Start-of-turn Poison check, routed via game.pendingPoison to the affected player's
+ *  client (multiplayer); sandbox shows it regardless of which side is being controlled. */
+function PoisonHost() {
+  const pendingPoison = useGameStore(s => s.game.pendingPoison);
+  const localPlayer = useGameStore(s => s.localPlayer);
+  const isSolo = useGameStore(s => s.conn.mode === 'solo');
+  const setGame = useGameStore(s => s.setGame);
+  if (!pendingPoison || (!isSolo && pendingPoison !== localPlayer)) return null;
+  return <PoisonModal player={pendingPoison} onClose={() => setGame(g => ({ ...g, pendingPoison: null }))} />;
+}
+
+/** Multiplayer: the active player is held while the opponent resolves a reactive
+ *  Dead-Zone prompt (e.g. their Memory Stone, fired by our kill). Sandbox needs no
+ *  banner — the picker modal already covers the board for the single controller. */
+function ReactiveHoldBanner() {
+  const dp = useGameStore(s => s.game.pendingDeadPick);
+  const localPlayer = useGameStore(s => s.localPlayer);
+  const isSolo = useGameStore(s => s.conn.mode === 'solo');
+  const game = useGameStore(s => s.game);
+  if (isSolo || !dp || dp.lp === localPlayer) return null;
+  const oppName = game[dp.lp].name;
+  return (
+    <div style={{
+      position: 'fixed', top: 52, left: '50%', transform: 'translateX(-50%)', zIndex: 210,
+      background: 'rgba(18,14,10,0.96)', border: `1px solid ${TBL.amber}`, borderRadius: 10,
+      padding: '10px 20px', boxShadow: `0 4px 24px rgba(0,0,0,0.6), 0 0 0 1px ${TBL.amber}33`,
+      fontFamily: "'Newsreader', serif", fontSize: 15, color: TBL.ink, whiteSpace: 'nowrap',
+    }}>
+      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: TBL.amber2, letterSpacing: '0.18em', textTransform: 'uppercase', marginRight: 10 }}>
+        Hold
+      </span>
+      Waiting for {oppName} to resolve {dp.source}…
+    </div>
+  );
+}
+
 /** Dead-Zone recovery picker (Library of Memory): pick a card to return to hand. */
 function DeadPickModal() {
-  const dp = useGameStore(s => s.pendingDeadPick);
-  const pendingPeek = useGameStore(s => s.pendingPeek);
+  const dp = useGameStore(s => s.game.pendingDeadPick);
+  const pendingPeek = useGameStore(s => s.game.pendingPeek);
+  const localPlayer = useGameStore(s => s.localPlayer);
+  const isSolo = useGameStore(s => s.conn.mode === 'solo');
   const resolveDeadPick = useGameStore(s => s.resolveDeadPick);
   const cancelDeadPick = useGameStore(s => s.cancelDeadPick);
-  if (!dp || pendingPeek) return null; // let any start-of-turn peek resolve first
+  // Only the owning player resolves the recovery (in multiplayer); sandbox shows all.
+  const owned = dp != null && (isSolo || dp.lp === localPlayer);
+  if (!dp || !owned || pendingPeek) return null; // let any start-of-turn peek resolve first
 
   return (
     <div style={{

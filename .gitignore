@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Flattened src/ dump for claude.ai Project upload — regenerated, not source-of-truth
+CODE_BUNDLE.md

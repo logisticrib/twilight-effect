@@ -8,13 +8,13 @@ import { TBL, CLASSCLR, GLYPH } from '../../tokens';
  * before the Action phase begins. Any choice auto-advances.
  */
 export function CZExchangePanel() {
-  const { game, localPlayer, modalQueue, czToHand, handToCz, completeCzPhase } = useGameStore();
+  const { game, localPlayer, czToHand, handToCz, completeCzPhase } = useGameStore();
   // Must be before any early return — Rules of Hooks
   const [mode, setMode] = useState<'choose' | 'cz-to-hand' | 'hand-to-cz'>('choose');
 
   const isMyTurn = game.activePlayer === localPlayer;
-  // Don't show while setup modals (mulligan / classbonus / place-pc) are still running
-  if (game.currentPhase !== 'cz' || !isMyTurn || modalQueue.length > 0) return null;
+  // Don't show while the serialized setup sequence (mulligan / classbonus / place-pc) is still running
+  if (game.currentPhase !== 'cz' || !isMyTurn || game.setupQueue.length > 0) return null;
 
   const ps = game[localPlayer];
 

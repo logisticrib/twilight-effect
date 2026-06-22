@@ -404,7 +404,19 @@
       "text": "As a Minor Action, return a companion you control to its owner's hand.",
       "flavor": "",
       "createdAt": "2026-05-16T19:02:21.324234Z",
-      "updatedAt": "2026-05-16T19:02:21.324236Z"
+      "updatedAt": "2026-05-16T19:02:21.324236Z",
+      "effects": [
+        {
+          "trigger": "activated",
+          "oncePerTurn": true,
+          "effects": [
+            {
+              "op": "bounce",
+              "target": "ownCompanion"
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "0fa95215",
@@ -579,23 +591,11 @@
       "actionPM": "",
       "itemKind": "Trinket",
       "keywords": [],
-      "text": "Equipped character has +1 HP. When equipped character is destroyed, return target card from your Dead Zone to your hand.",
+      "text": "When equipped character is destroyed, return target card from your Dead Zone to your hand.",
       "flavor": "",
       "createdAt": "2026-05-16T19:02:21.324285Z",
       "updatedAt": "2026-05-16T19:02:21.324287Z",
       "effects": [
-        {
-          "trigger": "equipped",
-          "effects": [
-            {
-              "op": "buff",
-              "stat": "hp",
-              "amount": 1,
-              "scope": "self",
-              "duration": "while"
-            }
-          ]
-        },
         {
           "trigger": "onDestroy",
           "effects": [
@@ -1062,23 +1062,18 @@
       "actionPM": "",
       "itemKind": "",
       "keywords": [],
-      "text": "Your front-line companions have +1 HP.",
+      "text": "When this enters play, restore 1 HP to each companion you control.",
       "flavor": "",
       "createdAt": "2026-05-16T19:02:21.324501Z",
       "updatedAt": "2026-05-16T19:02:21.324503Z",
       "effects": [
         {
-          "trigger": "static",
+          "trigger": "onEnter",
           "effects": [
             {
-              "op": "buff",
-              "stat": "hp",
+              "op": "heal",
               "amount": 1,
-              "scope": "ownCompanions",
-              "duration": "while",
-              "where": {
-                "line": "front"
-              }
+              "target": "ownParty"
             }
           ]
         }
@@ -1241,7 +1236,7 @@
       "actionPM": "",
       "itemKind": "",
       "keywords": [],
-      "text": "All companions you control have +1 attack and +1 HP. Opposing companions cannot attack characters on the line opposite this construct.",
+      "text": "All companions you control have +1 attack. Opposing companions cannot attack characters on the line opposite this construct.",
       "flavor": "",
       "createdAt": "2026-05-16T19:02:21.324594Z",
       "updatedAt": "2026-05-16T19:02:21.324595Z",
@@ -1252,13 +1247,6 @@
             {
               "op": "buff",
               "stat": "atk",
-              "amount": 1,
-              "scope": "ownCompanions",
-              "duration": "while"
-            },
-            {
-              "op": "buff",
-              "stat": "hp",
               "amount": 1,
               "scope": "ownCompanions",
               "duration": "while"
@@ -1357,7 +1345,7 @@
       "actionPM": "",
       "itemKind": "Trinket",
       "keywords": [],
-      "text": "Equipped character has +1 HP. As a Minor Action, exhaust this trinket: add 1 Anchor counter to target Physical Construct.",
+      "text": "As a Minor Action, exhaust this trinket: add 1 Anchor counter to target Physical Construct.",
       "flavor": "",
       "createdAt": "2026-05-16T19:02:21.324615Z",
       "updatedAt": "2026-05-16T19:02:21.324617Z",
@@ -1370,18 +1358,6 @@
               "op": "anchor",
               "delta": 1,
               "target": "physicalConstruct"
-            }
-          ]
-        },
-        {
-          "trigger": "equipped",
-          "effects": [
-            {
-              "op": "buff",
-              "stat": "hp",
-              "amount": 1,
-              "scope": "self",
-              "duration": "while"
             }
           ]
         }

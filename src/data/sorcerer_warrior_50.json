@@ -794,8 +794,9 @@
             "target": "anyCharacter"
           },
           {
-            "op": "damageSelfPC",
-            "amount": 1
+            "op": "damage",
+            "amount": 1,
+            "target": "self"
           }
         ]
       }

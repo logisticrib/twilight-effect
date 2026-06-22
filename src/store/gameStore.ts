@@ -3,7 +3,6 @@ import { persist, subscribeWithSelector } from 'zustand/middleware';
 import type { BoardEntity, Card, TapState, Acts, EquippedItem } from '../types/card';
 import type { Effect, Amount, Condition, TargetSpec, Trigger, Cost } from '../types/effects';
 import { CATALOG, SORCERER_WARRIOR_CARDS, WIZARD_BUILDER_CARDS } from '../data/catalog';
-import type { GameAction } from '../lib/multiplayer';
 import { recomputeStatics, isImmuneToSplash, grantHitRun, HIT_RUN_STATUS,
          isPhysicalConstruct, parseEnterTrigger, type EnterTriggerKind,
          isCharacter, firstItemOf, effectiveAttack, effectiveKeywords, hasModifier, effectiveMaxHp, wardedLines,
@@ -62,7 +61,35 @@ export interface GameState {
   finishedActors: string[];
   /** Set to the winner's name when the game ends; null while the game is ongoing. */
   gameOver: string | null;
+  // ── Cross-client prompts (live in `game` so they sync over multiplayer and route
+  //    to the owning player). Active-player-only prompts (targeting/trigger/kit/equip)
+  //    stay store-local. Each modal renders only when `localPlayer === <prompt>.lp`
+  //    (the gate is bypassed in solo/sandbox). ───────────────────────────────────
+  /** Deck-peek (scry) prompt — Patient Study, Tower Apprentice, start-of-turn scryers. */
+  pendingPeek: PendingPeek | null;
+  /** Further start-of-turn peeks queued behind the active one. */
+  pendingPeekQueue: PeekRequest[];
+  /** Dead-Zone recovery prompt — Library of Memory, Memory Stone. */
+  pendingDeadPick: PendingDeadPick | null;
+  /** Further Dead-Zone prompts queued behind the active one (e.g. a Cleave that
+   *  destroys two Memory-Stone bearers at once). */
+  pendingDeadPickQueue: PendingDeadPick[];
+  /** The player who must resolve a start-of-turn Poison check, or null. Routed to
+   *  that player's client (the modal renders only when localPlayer === pendingPoison). */
+  pendingPoison: 'p1' | 'p2' | null;
+  /** Remaining setup steps as `"<step>:<player>"`, e.g. "mulligan:p1". Synced so MP
+   *  setup is SERIALIZED — only the head step's owner acts (turn-like, so the wholesale
+   *  state-sync stays correct even for cross-half class bonuses); the other peer waits.
+   *  Empty once setup is complete. */
+  setupQueue: string[];
 }
+
+/** The ordered setup sequence both players walk through before turn 1. */
+const SETUP_SEQUENCE = [
+  'mulligan:p1', 'mulligan:p2',
+  'classbonus:p1', 'classbonus:p2',
+  'place-pc:p1', 'place-pc:p2',
+];
 
 export interface ConnState {
   mode: 'solo' | 'host' | 'join';
@@ -254,7 +281,7 @@ function removeEntity(game: GameState, entityId: string): GameState {
  * game and log lines. Reused by resolveAttack and Action-card damage so the rules
  * live in one place.
  */
-function applyDamage(game: GameState, entityId: string, dmg: number, sourceName: string, sourcePlayer: 'p1' | 'p2'): { game: GameState; msgs: string[] } {
+function applyDamage(game: GameState, entityId: string, dmg: number, sourceName: string, sourcePlayer: 'p1' | 'p2', sink?: PendingDeadPick[]): { game: GameState; msgs: string[] } {
   const loc = findEntityAnywhere(game, entityId);
   if (!loc) return { game, msgs: [] };
   const ent = loc.ent;
@@ -293,7 +320,7 @@ function applyDamage(game: GameState, entityId: string, dmg: number, sourceName:
     msgs.push(`${sourceName} destroys ${ent.name}!`);
     let g = removeEntity(game, entityId);
     if (hasRemovalTrigger(ent)) {
-      const rt = resolveRemovalTriggers(g, ent, loc.player);
+      const rt = resolveRemovalTriggers(g, ent, loc.player, sink);
       g = rt.game; msgs.push(...rt.msgs);
     }
     return { game: g, msgs };
@@ -386,7 +413,7 @@ function conditionMet(game: GameState, lp: 'p1' | 'p2', cond: Condition): boolea
  * interactive target. A single d6 is rolled per card and shared across die/halfDie
  * effects (e.g. Wrath of the Untamed Sky). Returns the new game + log lines.
  */
-function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceName: string, effects: Effect[], targetId?: string, sourceId?: string, ctx?: EffectCtx): { game: GameState; msgs: string[] } {
+function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceName: string, effects: Effect[], targetId?: string, sourceId?: string, ctx?: EffectCtx, sink?: PendingDeadPick[]): { game: GameState; msgs: string[] } {
   const opp: 'p1' | 'p2' = lp === 'p1' ? 'p2' : 'p1';
   const die = rollD6();
   const usesDie = effects.some(e => (e.op === 'damage' || e.op === 'damageSelfPC') && typeof e.amount === 'object' && ('die' in e.amount || 'halfDie' in e.amount));
@@ -437,7 +464,7 @@ function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceName: stri
           if (slot) targets = charsOf(g, opp, isFront(slot) ? 'front' : 'back');
         } else if (targetId) targets = [targetId];
         for (const tid of targets) {
-          const r = applyDamage(g, tid, amt, sourceName, lp);
+          const r = applyDamage(g, tid, amt, sourceName, lp, sink);
           g = r.game; msgs.push(...r.msgs);
         }
         break;
@@ -445,7 +472,7 @@ function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceName: stri
       case 'damageSelfPC': {
         const amt = amountValue(e.amount, die, controlledCompanions);
         const pcId = pcIdOf(g, lp);
-        if (pcId && amt > 0) { const r = applyDamage(g, pcId, amt, sourceName, opp); g = r.game; msgs.push(...r.msgs); }
+        if (pcId && amt > 0) { const r = applyDamage(g, pcId, amt, sourceName, opp, sink); g = r.game; msgs.push(...r.msgs); }
         break;
       }
       case 'heal': {
@@ -525,7 +552,7 @@ function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceName: stri
           const aloc = findEntityAnywhere(g, aid);
           if (!aloc) continue;
           const dmg = effectiveAttack(aloc.ent, g);
-          const r = applyDamage(g, targetId, dmg, aloc.ent.name, lp);
+          const r = applyDamage(g, targetId, dmg, aloc.ent.name, lp, sink);
           g = r.game; msgs.push(...r.msgs);
           g = updateEntity(g, aid, { acts: { ...aloc.ent.acts, major: true }, exhausted: true, tapped: 'major' });
         }
@@ -575,19 +602,24 @@ function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceName: stri
         const roll = rollD6();
         const pass = roll >= e.threshold;
         msgs.push(`Rolled ${roll} — ${pass ? 'success' : 'fail'}`);
-        const r = resolveActionEffects(g, lp, sourceName, pass ? e.onPass : e.onFail, targetId, sourceId, ctx);
+        const r = resolveActionEffects(g, lp, sourceName, pass ? e.onPass : e.onFail, targetId, sourceId, ctx, sink);
         g = r.game; msgs.push(...r.msgs);
         break;
       }
       case 'returnFromDead': {
-        // Recover a card from the controller's Dead Zone. Player-choice picker is
-        // deferred (same simplification as Armor/Kit-Master): auto-pick the most
-        // recently added matching card. 'encounter' (re-summon) not yet supported.
+        // Recover a card from the controller's Dead Zone (Memory Stone onDestroy). If a
+        // `sink` was supplied, defer to a player-facing picker (the calling reducer arms
+        // `pendingDeadPick`); otherwise auto-pick the most-recent eligible card.
         if (e.to !== 'hand') break;
         const dead = g[lp].dead;
-        let pick = -1;
-        for (let i = dead.length - 1; i >= 0; i--) { if (!e.cardType || dead[i].type === e.cardType) { pick = i; break; } }
-        if (pick < 0) { msgs.push('Dead Zone has no eligible card'); break; }
+        const options = dead.map((card, idx) => ({ card, idx })).filter(o => !e.cardType || o.card.type === e.cardType);
+        if (options.length === 0) { msgs.push('Dead Zone has no eligible card'); break; }
+        if (sink) {
+          sink.push({ source: sourceName, lp, sourceId, options, postEffects: [], optional: false });
+          msgs.push('Choose a card to return from the Dead Zone');
+          break;
+        }
+        const pick = options[options.length - 1].idx;
         const card = dead[pick];
         g = { ...g, [lp]: { ...g[lp], dead: dead.filter((_, i) => i !== pick), hand: [...g[lp].hand, card] } };
         msgs.push(`Returned ${card.name} from the Dead Zone to hand`);
@@ -708,7 +740,7 @@ function resolveCombatTriggers(game: GameState, attacker: BoardEntity, attackerO
  * targets auto-pick the first own-side eligible. Called from applyDamage's destroy
  * branch (other removal paths — bounce/sacrifice — are not yet hooked).
  */
-function resolveRemovalTriggers(game: GameState, ent: BoardEntity, controller: 'p1' | 'p2'): { game: GameState; msgs: string[] } {
+function resolveRemovalTriggers(game: GameState, ent: BoardEntity, controller: 'p1' | 'p2', sink?: PendingDeadPick[]): { game: GameState; msgs: string[] } {
   let g = game;
   const msgs: string[] = [];
   for (const trig of ['onDestroy', 'onLeave'] as const) {
@@ -721,7 +753,7 @@ function resolveRemovalTriggers(game: GameState, ent: BoardEntity, controller: '
         if (elig.length === 0) continue;
         targetId = elig[0];
       }
-      const r = resolveActionEffects(g, controller, clause.sourceName, clause.effects, targetId, ent.id);
+      const r = resolveActionEffects(g, controller, clause.sourceName, clause.effects, targetId, ent.id, undefined, sink);
       g = r.game;
       if (r.msgs.length) msgs.push(`${clause.sourceName}: ${r.msgs.join(' | ')}`);
     }
@@ -732,6 +764,24 @@ function resolveRemovalTriggers(game: GameState, ent: BoardEntity, controller: '
 /** Does this entity have any removal trigger (onDestroy/onLeave) on its card or items? */
 function hasRemovalTrigger(ent: BoardEntity): boolean {
   return combatTriggerEffects(ent, 'onDestroy').length > 0 || combatTriggerEffects(ent, 'onLeave').length > 0;
+}
+
+/** Turn a sink of deferred Dead-Zone picks into a store patch: arm the first, queue the
+ *  rest. Returns `{}` when empty so spreading it never clobbers an existing prompt. */
+function armDeadPicks(sink: PendingDeadPick[]): { pendingDeadPick?: PendingDeadPick; pendingDeadPickQueue?: PendingDeadPick[] } {
+  return sink.length ? { pendingDeadPick: sink[0], pendingDeadPickQueue: sink.slice(1) } : {};
+}
+
+/**
+ * A reactive Dead-Zone prompt owned by the OTHER player (e.g. the defender's Memory
+ * Stone, fired by the attacker's kill) HOLDS the active player until it resolves —
+ * otherwise the active player's continued actions would broadcast wholesale and clobber
+ * the owner's resolution (the owner's modal already serializes their own side).
+ * Returns the blocking source name, or null. The owner is never held by their own pick.
+ */
+function reactiveHold(game: GameState, localPlayer: 'p1' | 'p2'): string | null {
+  const dp = game.pendingDeadPick;
+  return dp && dp.lp !== localPlayer ? dp.source : null;
 }
 
 // ─── Damage modifiers (passive, consulted by the damage pipeline) ──────────────
@@ -1055,6 +1105,12 @@ export function makeNewGame(
     currentActor: null,
     finishedActors: [],
     gameOver: null,
+    pendingPeek: null,
+    pendingPeekQueue: [],
+    pendingDeadPick: null,
+    pendingDeadPickQueue: [],
+    pendingPoison: null,
+    setupQueue: [...SETUP_SEQUENCE],
     p1: dealPlayer(p1Name, p1Cards, 'pc-p1'),
     p2: dealPlayer(p2Name, p2Cards, 'pc-p2'),
   };
@@ -1077,12 +1133,8 @@ interface GameStoreState {
   pendingKit: PendingKit | null;
   /** Action card awaiting a board target before its effects resolve, or null. */
   pendingActionTarget: PendingActionTarget | null;
-  /** Deck-peek awaiting card-destination assignment, or null. */
-  pendingPeek: PendingPeek | null;
-  /** Further start-of-turn peeks waiting behind the active one (re-sliced when armed). */
-  pendingPeekQueue: PeekRequest[];
-  /** Dead-Zone recovery prompt (Library of Memory), or null. */
-  pendingDeadPick: PendingDeadPick | null;
+  // NOTE: pendingPeek/pendingPeekQueue/pendingDeadPick/pendingDeadPickQueue moved INTO
+  // `game` (see GameState) so they sync over multiplayer and route to the owning player.
   /** Equip-from-hand prompt (Veteran of the Ashgrove), or null. */
   pendingEquipPick: PendingEquipPick | null;
   toasts: { id: number; msg: string }[];
@@ -1091,8 +1143,9 @@ interface GameStoreState {
   oathContext: OathContext | null;
   /** Saved in-progress game for resume. */
   savedGame: GameState | null;
-  /** Broadcast function injected by the multiplayer hook. */
-  _broadcast: ((action: GameAction) => void) | null;
+  /** Set by the multiplayer hook to a no-op while connected; used purely as an
+   *  "am I in multiplayer?" flag (the real sync is a store subscription → STATE_SYNC). */
+  _broadcast: (() => void) | null;
 
   // Lobby / setup
   startSolo: (p1Cards: Card[], p2Cards: Card[], p1Name?: string, p2Name?: string) => void;
@@ -1128,13 +1181,14 @@ interface GameStoreState {
   // Modals
   pushModal: (id: string) => void;
   advanceModal: () => void;
+  /** Advance the serialized setup cursor (synced via game.setupQueue). */
+  advanceSetup: () => void;
   setOathContext: (ctx: OathContext | null) => void;
   setGame: (updater: (g: GameState) => GameState) => void;
 
   // Multiplayer wiring
-  setBroadcast: (fn: (action: GameAction) => void) => void;
+  setBroadcast: (fn: () => void) => void;
   clearBroadcast: () => void;
-  receiveAction: (action: GameAction) => void;
 
   // Persistence
   saveGame: () => void;
@@ -1228,9 +1282,6 @@ export const useGameStore = create<GameStoreState>()(
   pendingTrigger: null,
   pendingKit: null,
   pendingActionTarget: null,
-  pendingPeek: null,
-  pendingPeekQueue: [],
-  pendingDeadPick: null,
   pendingEquipPick: null,
   toasts: [],
   modalQueue: [],
@@ -1245,8 +1296,9 @@ export const useGameStore = create<GameStoreState>()(
     game: makeNewGame(p1Name, p1Cards, p2Name, p2Cards),
     localPlayer: 'p1',
     pending: null, pendingPlay: null,
-    // Full setup — both players: P1 mulligan → P2 mulligan → P1 class bonuses → P2 class bonuses → both place PC
-    modalQueue: ['mulligan:p1', 'mulligan:p2', 'classbonus:p1', 'classbonus:p2', 'place-pc'],
+    // Setup is driven by the synced game.setupQueue (seeded in makeNewGame); modalQueue
+    // is only for mid-game modals (oathsworn).
+    modalQueue: [],
     oathContext: null, _broadcast: null,
   }),
 
@@ -1257,21 +1309,25 @@ export const useGameStore = create<GameStoreState>()(
       game: makeNewGame('You', p1Cards, 'Opponent', p2Cards),
       localPlayer,
       pending: null, pendingPlay: null,
-      // Multiplayer: each player only does their own setup
-      modalQueue: ['mulligan:p1', 'classbonus:p1', 'place-pc'],
+      // Setup is serialized via the synced game.setupQueue (seeded in makeNewGame); each
+      // peer acts only on the steps it owns. modalQueue is for mid-game modals only.
+      modalQueue: [],
       oathContext: null,
     });
   },
 
   placePc: (slot, targetPlayer) => set(s => {
     const tp = targetPlayer ?? s.localPlayer;
+    // Serialized setup: only the player whose place-pc step is current may place.
+    if (s.game.setupQueue[0] !== `place-pc:${tp}`) return s;
     const pc = s.game[tp]._pc;
     if (!pc) return s;
     if (!['b1','b2','b3'].includes(slot)) return s;
     if (s.game[tp].board[slot]) return s;
     const newBoard = { ...s.game[tp].board, [slot]: pc };
     const newPlayer = { ...s.game[tp], board: newBoard, _pc: undefined };
-    return { game: recomputeStatics({ ...s.game, [tp]: newPlayer }) };
+    // Advance the setup cursor past this place-pc step.
+    return { game: recomputeStatics({ ...s.game, [tp]: newPlayer, setupQueue: s.game.setupQueue.slice(1) }) };
   }),
 
   backToLobby: () => {
@@ -1290,73 +1346,13 @@ export const useGameStore = create<GameStoreState>()(
   // ── Modals ─────────────────────────────────────────────────────────────────
   pushModal: (id) => set(s => ({ modalQueue: [...s.modalQueue, id] })),
   advanceModal: () => set(s => ({ modalQueue: s.modalQueue.slice(1) })),
+  advanceSetup: () => set(s => ({ game: { ...s.game, setupQueue: s.game.setupQueue.slice(1) } })),
   setOathContext: (ctx) => set({ oathContext: ctx }),
   setGame: (updater) => set(s => ({ game: updater(s.game) })),
 
   // ── Multiplayer wiring ─────────────────────────────────────────────────────
   setBroadcast: (fn) => set({ _broadcast: fn }),
   clearBroadcast: () => set({ _broadcast: null }),
-
-  receiveAction: (action) => {
-    // Apply a remote action without re-broadcasting.
-    // The action comes from the opponent, entity IDs are globally unique.
-    const s = get();
-    switch (action.kind) {
-      case 'MOVE': {
-        const src = findEntityAnywhere(s.game, action.entityId);
-        if (!src) break;
-        const board = { ...s.game[src.player].board };
-        const ent = { ...src.ent, acts: { ...src.ent.acts, move: true } };
-        delete board[src.slot];
-        board[action.toSlot] = ent;
-        set({ game: { ...s.game, [src.player]: { ...s.game[src.player], board } } });
-        break;
-      }
-      case 'ATTACK': {
-        const attLoc = findEntityAnywhere(s.game, action.attackerId);
-        const tgtLoc = findEntityAnywhere(s.game, action.targetId);
-        if (!attLoc || !tgtLoc) break;
-        const dmg = attLoc.ent.atk ?? 0;
-        const newHp = Math.max(0, tgtLoc.ent.hp - dmg);
-        let g2 = updateEntity(s.game, action.attackerId, { tapped: 'major', exhausted: true, acts: { ...attLoc.ent.acts, major: true } });
-        g2 = newHp <= 0 ? removeEntity(g2, action.targetId) : updateEntity(g2, action.targetId, { hp: newHp });
-        const msg = newHp <= 0 ? `${attLoc.ent.name} destroys ${tgtLoc.ent.name}!` : `${attLoc.ent.name} hits ${tgtLoc.ent.name} for ${dmg}`;
-        const id = ++toastId;
-        setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 3000);
-        set({ game: g2, toasts: [...s.toasts, { id, msg }] });
-        break;
-      }
-      case 'PLACE_CARD': {
-        // The opponent placed a card — we receive the full entity via STATE_SYNC after placement
-        // Just end turn / sync is sufficient. Skip here.
-        break;
-      }
-      case 'MARK_ACTION': {
-        const loc = findEntityAnywhere(s.game, action.entityId);
-        if (!loc) break;
-        const newActs = { ...loc.ent.acts, [action.actionType]: true };
-        const newTap: TapState = newActs.major ? 'major' : newActs.minor ? 'minor' : 'none';
-        set({ game: updateEntity(s.game, action.entityId, { acts: newActs, tapped: newTap, exhausted: newActs.major }) });
-        break;
-      }
-      case 'RESET_ACTIONS': {
-        set({ game: updateEntity(s.game, action.entityId, { acts: freshActs(), tapped: 'none', exhausted: false }) });
-        break;
-      }
-      case 'ADJUST_HP': {
-        const loc = findEntityAnywhere(s.game, action.entityId);
-        if (!loc) break;
-        const newHp = Math.max(0, Math.min(loc.ent.maxHp, loc.ent.hp + action.delta));
-        set({ game: updateEntity(s.game, action.entityId, { hp: newHp }) });
-        break;
-      }
-      case 'END_TURN': {
-        // Trigger the same ready-phase logic as local endTurn
-        get().endTurn();
-        break;
-      }
-    }
-  },
 
   // ── Draw card ──────────────────────────────────────────────────────────────
   drawCard: (player) => set(s => {
@@ -1374,10 +1370,8 @@ export const useGameStore = create<GameStoreState>()(
     pendingTrigger: null,
     pendingKit: null,
     pendingActionTarget: null,
-    pendingPeek: null,
-    pendingPeekQueue: [],
-    pendingDeadPick: null,
     pendingEquipPick: null,
+    // Cross-client prompts live in `game` and persist across a sandbox side-switch.
     game: { ...s.game, selected: null },
   })),
 
@@ -1403,6 +1397,7 @@ export const useGameStore = create<GameStoreState>()(
 
   // ── Equip item ─────────────────────────────────────────────────────────────
   equipItem: (entityId, handCardId) => set(s => {
+    if (reactiveHold(s.game, s.localPlayer)) return s;
     const lp = s.localPlayer;
     const card = s.game[lp].hand.find(c => c.id === handCardId);
     if (!card || card.type !== 'Item') return s;
@@ -1436,6 +1431,7 @@ export const useGameStore = create<GameStoreState>()(
   // target, arms pendingActionTarget and waits for a click; otherwise resolves
   // immediately. Either way the card ends up in the Dead Zone.
   playAction: (handCardId) => set(s => {
+    if (reactiveHold(s.game, s.localPlayer)) return s;
     const lp = s.localPlayer;
     const card = s.game[lp].hand.find(c => c.id === handCardId);
     if (!card || card.type !== 'Action') return s;
@@ -1521,9 +1517,9 @@ export const useGameStore = create<GameStoreState>()(
         return { game: { ...g0, [lp]: { ...g0[lp], hand: newHand, dead: [...g0[lp].dead, card] } }, pendingPlay: null, toasts: [...s.toasts, mkToast(`${card.name} — deck is empty.`)] };
       }
       return {
-        game: { ...g0, [lp]: { ...g0[lp], hand: newHand, dead: [...g0[lp].dead, card] } },
+        game: { ...g0, [lp]: { ...g0[lp], hand: newHand, dead: [...g0[lp].dead, card] },
+          pendingPeek: { source: card.name, lp, deckSide: lp, cards, dests: peek.dests, maxHand: peek.maxHand } },
         pendingPlay: null,
-        pendingPeek: { source: card.name, lp, deckSide: lp, cards, dests: peek.dests, maxHand: peek.maxHand },
       };
     }
 
@@ -1541,18 +1537,21 @@ export const useGameStore = create<GameStoreState>()(
         };
       }
       // Card goes on the "stack" (out of hand); resolves when a target is clicked.
+      // sourceId = the acting character, so `target:'self'` ops (e.g. Conflagration's
+      // "this character takes 1 damage") hit whoever played the card.
       return {
         game: { ...g0, [lp]: { ...g0[lp], hand: newHand } },
         pendingPlay: null,
-        pendingActionTarget: { source: 'action', sourceName: card.name, lp, effects: onPlay, eligibleIds, card },
+        pendingActionTarget: { source: 'action', sourceName: card.name, lp, effects: onPlay, eligibleIds, card, sourceId: actLoc.ent.id },
       };
     }
 
     // No target needed — resolve now (buffs, board AoE, self-damage, draw).
-    const { game, msgs } = resolveActionEffects(g0, lp, card.name, onPlay, undefined, undefined, magicCtx(g0, lp, card));
+    const deadSink: PendingDeadPick[] = [];
+    const { game, msgs } = resolveActionEffects(g0, lp, card.name, onPlay, undefined, actLoc.ent.id, magicCtx(g0, lp, card), deadSink);
     const newHand = game[lp].hand.filter(c => c.id !== handCardId);
     return {
-      game: { ...game, [lp]: { ...game[lp], hand: newHand, dead: [...game[lp].dead, card] } },
+      game: { ...game, [lp]: { ...game[lp], hand: newHand, dead: [...game[lp].dead, card] }, ...armDeadPicks(deadSink) },
       pendingPlay: null,
       toasts: [...s.toasts, mkToast(msgs.length ? `${card.name}: ${msgs.join(' | ')}` : `Played: ${card.name}`)],
     };
@@ -1599,10 +1598,10 @@ export const useGameStore = create<GameStoreState>()(
     if (pa.twoStep === 'disarm' && pa.firstId) {
       // Step 2: attacker (firstId) attacks the chosen enemy, then sacrifice an item on it.
       const attLoc = findEntityAnywhere(s.game, pa.firstId);
-      let g = s.game; const msgs: string[] = [];
+      let g = s.game; const msgs: string[] = []; const deadSink: PendingDeadPick[] = [];
       if (attLoc) {
         const dmg = effectiveAttack(attLoc.ent, g);
-        const r = applyDamage(g, targetId, dmg, attLoc.ent.name, pa.lp); g = r.game; msgs.push(...r.msgs);
+        const r = applyDamage(g, targetId, dmg, attLoc.ent.name, pa.lp, deadSink); g = r.game; msgs.push(...r.msgs);
         const a2 = findEntityAnywhere(g, pa.firstId);
         if (a2) g = updateEntity(g, pa.firstId, { exhausted: true, tapped: 'major', acts: { ...a2.ent.acts, major: true } });
         const tLoc = findEntityAnywhere(g, targetId);
@@ -1619,18 +1618,19 @@ export const useGameStore = create<GameStoreState>()(
       const finalGame = pa.card ? { ...g, [pa.lp]: { ...g[pa.lp], dead: [...g[pa.lp].dead, pa.card] } } : g;
       const id = ++toastId;
       setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 4000);
-      return { game: finalGame, pendingActionTarget: null, toasts: [...s.toasts, { id, msg: `${pa.sourceName}: ${msgs.join(' | ')}` }] };
+      return { game: { ...finalGame, ...armDeadPicks(deadSink) }, pendingActionTarget: null, toasts: [...s.toasts, { id, msg: `${pa.sourceName}: ${msgs.join(' | ')}` }] };
     }
 
     // ── Single-step ───────────────────────────────────────────────────────────
-    const { game, msgs } = resolveActionEffects(s.game, pa.lp, pa.sourceName, pa.effects, targetId, pa.sourceId, magicCtx(s.game, pa.lp, pa.card));
+    const deadSink: PendingDeadPick[] = [];
+    const { game, msgs } = resolveActionEffects(s.game, pa.lp, pa.sourceName, pa.effects, targetId, pa.sourceId, magicCtx(s.game, pa.lp, pa.card), deadSink);
     const finalGame = pa.source === 'action' && pa.card
       ? { ...game, [pa.lp]: { ...game[pa.lp], dead: [...game[pa.lp].dead, pa.card] } }
       : game;
     const id = ++toastId;
     setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 4000);
     return {
-      game: finalGame,
+      game: { ...finalGame, ...armDeadPicks(deadSink) },
       pendingActionTarget: null,
       toasts: [...s.toasts, { id, msg: msgs.length ? `${pa.sourceName}: ${msgs.join(' | ')}` : pa.sourceName }],
     };
@@ -1658,6 +1658,7 @@ export const useGameStore = create<GameStoreState>()(
   }),
 
   activateAbility: (entityId, idx) => set(s => {
+    if (reactiveHold(s.game, s.localPlayer)) return s;
     const loc = findEntityAnywhere(s.game, entityId);
     if (!loc) return s;
     const ability = gatherActivated(loc.ent)[idx];
@@ -1764,7 +1765,7 @@ export const useGameStore = create<GameStoreState>()(
 
   // ── Deck-peek (scry): apply the player's per-card destinations ─────────────
   resolvePeek: (assignments) => set(s => {
-    const pk = s.pendingPeek;
+    const pk = s.game.pendingPeek;
     if (!pk) return s;
     const side = pk.deckSide;
     const ps = s.game[side];
@@ -1783,22 +1784,21 @@ export const useGameStore = create<GameStoreState>()(
     if (toBottom.length) parts.push(`${toBottom.length} to bottom`);
     if (toTop.length) parts.push(`${toTop.length} kept on top`);
     const newGame = { ...s.game, [side]: { ...ps, deck: newDeck, hand: pk.lp === side ? [...s.game[pk.lp].hand, ...toHand] : ps.hand } };
-    const { peek, rest } = nextPeek(newGame, s.pendingPeekQueue); // advance any queued start-of-turn peeks
+    const { peek, rest } = nextPeek(newGame, s.game.pendingPeekQueue); // advance any queued start-of-turn peeks
     return {
-      pendingPeek: peek, pendingPeekQueue: rest,
-      game: newGame,
+      game: { ...newGame, pendingPeek: peek, pendingPeekQueue: rest },
       toasts: [...s.toasts, { id, msg: `${pk.source}: ${parts.join(', ')}` }],
     };
   }),
 
   cancelPeek: () => set(s => {
-    const { peek, rest } = nextPeek(s.game, s.pendingPeekQueue);
-    return { pendingPeek: peek, pendingPeekQueue: rest };
+    const { peek, rest } = nextPeek(s.game, s.game.pendingPeekQueue);
+    return { game: { ...s.game, pendingPeek: peek, pendingPeekQueue: rest } };
   }),
 
   // ── Dead-Zone recovery (Library of Memory) ────────────────────────────────
   resolveDeadPick: (idx) => set(s => {
-    const dp = s.pendingDeadPick;
+    const dp = s.game.pendingDeadPick;
     if (!dp) return s;
     const ps = s.game[dp.lp];
     const card = ps.dead[idx];
@@ -1809,10 +1809,15 @@ export const useGameStore = create<GameStoreState>()(
     if (dp.postEffects.length) { const r = resolveActionEffects(g, dp.lp, dp.source, dp.postEffects, undefined, dp.sourceId); g = r.game; msgs.push(...r.msgs); }
     const id = ++toastId;
     setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 4000);
-    return { pendingDeadPick: null, game: g, toasts: [...s.toasts, { id, msg: `${dp.source}: ${msgs.join(' | ')}` }] };
+    // Advance to the next queued prompt, if any (e.g. a Cleave that killed two bearers).
+    const [next, ...rest] = s.game.pendingDeadPickQueue;
+    return { game: { ...g, pendingDeadPick: next ?? null, pendingDeadPickQueue: rest }, toasts: [...s.toasts, { id, msg: `${dp.source}: ${msgs.join(' | ')}` }] };
   }),
 
-  cancelDeadPick: () => set({ pendingDeadPick: null }),
+  cancelDeadPick: () => set(s => {
+    const [next, ...rest] = s.game.pendingDeadPickQueue;
+    return { game: { ...s.game, pendingDeadPick: next ?? null, pendingDeadPickQueue: rest } };
+  }),
 
   // ── Equip from hand (Veteran of the Ashgrove on-enter) ────────────────────
   resolveEquipPick: (handCardId) => set(s => {
@@ -1871,9 +1876,15 @@ export const useGameStore = create<GameStoreState>()(
   saveGame: () => set(s => ({ savedGame: s.game })),
   resumeGame: () => set(s => {
     if (!s.savedGame) return s;
-    // Backfill activation-lock fields for saves made before they existed.
-    const sg = s.savedGame as GameState & { currentActor?: string | null; finishedActors?: string[] };
-    const game: GameState = { ...sg, currentActor: sg.currentActor ?? null, finishedActors: sg.finishedActors ?? [] };
+    // Backfill activation-lock fields for saves made before they existed, and clear any
+    // transient prompts (a save shouldn't resume mid-scry / mid-recovery).
+    const sg = s.savedGame as Partial<GameState> & GameState;
+    const game: GameState = {
+      ...sg,
+      currentActor: sg.currentActor ?? null, finishedActors: sg.finishedActors ?? [],
+      setupQueue: sg.setupQueue ?? [],
+      pendingPeek: null, pendingPeekQueue: [], pendingDeadPick: null, pendingDeadPickQueue: [], pendingPoison: null,
+    };
     return { game, playPhase: 'game', conn: { ...EMPTY_CONN, mode: 'solo', code: 'RESUMED' }, localPlayer: 'p1' as const };
   }),
   clearSavedGame: () => set({ savedGame: null }),
@@ -1895,7 +1906,8 @@ export const useGameStore = create<GameStoreState>()(
   beginMove: (charId) => set({ pending: { action: 'move', charId } }),
 
   resolveMove: (targetSlot) => set(s => {
-    const { pending, game, _broadcast } = s;
+    if (reactiveHold(s.game, s.localPlayer)) return s;
+    const { pending, game } = s;
     if (!pending || pending.action !== 'move') return s;
     const src = findEntityAnywhere(game, pending.charId);
     if (!src) return s;
@@ -1939,8 +1951,6 @@ export const useGameStore = create<GameStoreState>()(
     };
     delete board[src.slot];
     board[targetSlot] = ent;
-
-    _broadcast?.({ kind: 'MOVE', entityId: pending.charId, toSlot: targetSlot });
 
     return {
       pending: null,
@@ -1990,6 +2000,7 @@ export const useGameStore = create<GameStoreState>()(
   }),
 
   resolveAttack: (targetEntityId) => set(s => {
+    if (reactiveHold(s.game, s.localPlayer)) return s;
     const { pending, game } = s;
     if (!pending || pending.action !== 'attack') return s;
 
@@ -2055,9 +2066,12 @@ export const useGameStore = create<GameStoreState>()(
     // Damage goes through the shared applyDamage (Armor, hpFloor1, PC-defeat). Each
     // call records a DamageEvent (skipping fully-blocked hits) for combat triggers.
     const events: DamageEvent[] = [];
+    // Collects deferred Dead-Zone prompts (Memory Stone onDestroy) from any kill this
+    // combat — armed after resolution so the modal opens once the dust settles.
+    const deadSink: PendingDeadPick[] = [];
     const applyDamageToEntity = (g: GameState, entityId: string, dmg: number): { g: GameState } => {
       const before = findEntityAnywhere(g, entityId);
-      const r = applyDamage(g, entityId, dmg, attacker.name, attLoc.player);
+      const r = applyDamage(g, entityId, dmg, attacker.name, attLoc.player, deadSink);
       msgs.push(...r.msgs);
       if (before && dmg > 0) {
         const after = findEntityAnywhere(r.game, entityId);
@@ -2120,13 +2134,11 @@ export const useGameStore = create<GameStoreState>()(
       msgs.push(`${attacker.name} may move again (Hit & Run)`);
     }
 
-    s._broadcast?.({ kind: 'ATTACK', attackerId: pending.charId, targetId: targetEntityId });
-
     const t = pushToast(msgs.join(' | '));
     return {
       pending: null,
       // Recompute static auras — a destroyed Dismay source changes the state.
-      game: recomputeStatics({ ...newGame, ...activationPatch(game, pending.charId), selected: null }),
+      game: recomputeStatics({ ...newGame, ...activationPatch(game, pending.charId), selected: null, ...armDeadPicks(deadSink) }),
       toasts: [...s.toasts, t],
     };
   }),
@@ -2227,7 +2239,8 @@ export const useGameStore = create<GameStoreState>()(
   cancelKit: () => set({ pendingKit: null }),
 
   placeCard: (slot) => set(s => {
-    const { pendingPlay, game, localPlayer, _broadcast } = s;
+    if (reactiveHold(s.game, s.localPlayer)) return s;
+    const { pendingPlay, game, localPlayer } = s;
     if (!pendingPlay) return s;
 
     const lp = localPlayer;
@@ -2286,7 +2299,6 @@ export const useGameStore = create<GameStoreState>()(
     };
 
     const newHand = game[lp].hand.filter(c => c.id !== pendingPlay.cardId);
-    _broadcast?.({ kind: 'PLACE_CARD', cardId: pendingPlay.cardId, slot });
 
     const id = ++toastId;
     setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 3000);
@@ -2387,8 +2399,8 @@ export const useGameStore = create<GameStoreState>()(
         const cards = placedGame[lp].deck.slice(0, enterPeek.look);
         if (cards.length > 0) {
           return {
-            pendingPlay: null, oathContext: newOathCtx, modalQueue: newModals, game: placedGame,
-            pendingPeek: { source: card.name, lp, deckSide: lp, cards, dests: enterPeek.dests, maxHand: enterPeek.maxHand },
+            pendingPlay: null, oathContext: newOathCtx, modalQueue: newModals,
+            game: { ...placedGame, pendingPeek: { source: card.name, lp, deckSide: lp, cards, dests: enterPeek.dests, maxHand: enterPeek.maxHand } },
             toasts: [...s.toasts, { id, msg: `${card.name} enters — look at your deck.` }],
           };
         }
@@ -2427,6 +2439,7 @@ export const useGameStore = create<GameStoreState>()(
 
   // ── Action bookkeeping ─────────────────────────────────────────────────────
   markAction: (entityId, type) => set(s => {
+    if (reactiveHold(s.game, s.localPlayer)) return s;
     const loc = findEntityAnywhere(s.game, entityId);
     if (!loc) return s;
     const ent = loc.ent;
@@ -2438,7 +2451,6 @@ export const useGameStore = create<GameStoreState>()(
     }
     const newActs = { ...ent.acts, [type]: true };
     const newTap: TapState = newActs.major ? 'major' : newActs.minor ? 'minor' : 'none';
-    s._broadcast?.({ kind: 'MARK_ACTION', entityId, actionType: type });
     const patch = isCharacter(ent) ? activationPatch(s.game, entityId) : {};
     return {
       game: { ...updateEntity(s.game, entityId, { acts: newActs, tapped: newTap, exhausted: newActs.major }), ...patch },
@@ -2446,7 +2458,6 @@ export const useGameStore = create<GameStoreState>()(
   }),
 
   resetActions: (entityId) => set(s => {
-    s._broadcast?.({ kind: 'RESET_ACTIONS', entityId });
     // Playtest helper: also lift the activation lock for this character.
     const finishedActors = s.game.finishedActors.filter(x => x !== entityId);
     const currentActor = s.game.currentActor === entityId ? null : s.game.currentActor;
@@ -2458,7 +2469,6 @@ export const useGameStore = create<GameStoreState>()(
     const loc = findEntityAnywhere(s.game, entityId);
     if (!loc) return s;
     const newHp = Math.max(0, Math.min(effectiveMaxHp(loc.ent, s.game), loc.ent.hp + delta));
-    s._broadcast?.({ kind: 'ADJUST_HP', entityId, delta });
     let newGame = updateEntity(s.game, entityId, { hp: newHp });
     // Mirror the PC's HP onto the PlayerState headline (stats pane).
     if (loc.ent.kind === 'pc') newGame = { ...newGame, [loc.player]: { ...newGame[loc.player], hp: newHp } };
@@ -2475,6 +2485,7 @@ export const useGameStore = create<GameStoreState>()(
 
   // ── Turn end / ready phase ────────────────────────────────────────────────
   endTurn: () => set(s => {
+    if (reactiveHold(s.game, s.localPlayer)) return s;
     const g = s.game;
     const nextPlayer: 'p1' | 'p2' = g.activePlayer === 'p1' ? 'p2' : 'p1';
     const nextTurn = nextPlayer === 'p1' ? g.turn + 1 : g.turn;
@@ -2570,24 +2581,26 @@ export const useGameStore = create<GameStoreState>()(
       return { id: tid, msg };
     });
 
-    const { localPlayer } = get();
-    const poisonedCount = nextPlayer === localPlayer
-      ? Object.values(newGame[localPlayer].board).filter(e => e && (e.poison ?? 0) > 0).length
-      : 0;
-    const newModals = poisonedCount > 0 ? [...s.modalQueue, 'poison'] : s.modalQueue;
+    // Start-of-turn Poison check belongs to the player whose turn is beginning. Route it
+    // via a game-level flag (synced) so it resolves on THAT player's client, not whoever
+    // happened to end the turn (the old `nextPlayer === localPlayer` gate never fired the
+    // modal for the starting peer in multiplayer).
+    const poisonedCount = Object.values(newGame[nextPlayer].board).filter(e => e && (e.poison ?? 0) > 0).length;
+    const pendingPoison: 'p1' | 'p2' | null = poisonedCount > 0 ? nextPlayer : null;
 
     // Queue any start-of-turn deck-peeks as an interactive modal (re-sliced when armed).
     const { peek: firstPeek, rest: peekQueue } = nextPeek(newGame, sot.peeks);
     // Dead-Zone recovery (Library of Memory) — arm the first; it shows after peeks resolve.
-    const firstDeadPick = sot.deadPicks[0] ?? null;
+    const [firstDeadPick, ...deadPickQueue] = sot.deadPicks;
 
-    s._broadcast?.({ kind: 'END_TURN' });
     setTimeout(() => get().saveGame(), 0);
     return {
       pending: null, pendingPlay: null,
-      game: newGame, modalQueue: newModals,
-      pendingPeek: firstPeek, pendingPeekQueue: peekQueue,
-      pendingDeadPick: firstDeadPick,
+      game: { ...newGame,
+        pendingPeek: firstPeek, pendingPeekQueue: peekQueue,
+        pendingDeadPick: firstDeadPick ?? null, pendingDeadPickQueue: deadPickQueue,
+        pendingPoison },
+      modalQueue: s.modalQueue,
       toasts: [...s.toasts, { id: drawId, msg: drawToast }, ...sotToasts],
     };
   }),
