@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { useMultiplayer } from '../lib/useMultiplayer';
 import { CardFace } from '../components/CardFace';
+import { CATALOG } from '../data/catalog';
 import { TBL } from '../tokens';
 import { Lobby } from './play/Lobby';
 import { Matching } from './play/Matching';
@@ -54,9 +55,11 @@ function GameView() {
       <Playmat />
       <TriggerPrompt />
       <KitPrompt />
+      <KitItemModal />
       <ActionPrompt />
       <PeekModal />
       <DeadPickModal />
+      <ArmorModal />
       <PoisonHost />
       <ReactiveHoldBanner />
       <EquipPickModal />
@@ -102,11 +105,55 @@ function TriggerPrompt() {
 function KitPrompt() {
   const pk = useGameStore(s => s.pendingKit);
   const cancelKit = useGameStore(s => s.cancelKit);
-  if (!pk) return null;
+  if (!pk || pk.step === 'item') return null; // 'item' step is the KitItemModal
   const text = pk.step === 'source'
     ? `${pk.sourceName} — click a character to take an item from.`
     : `Move ${pk.itemName} — click the character to give it to.`;
   return <PromptBanner tag="Kit-Master" text={text} onCancel={cancelKit} />;
+}
+
+/** Kit-Master item picker: shown when the source character holds 2+ items. */
+function KitItemModal() {
+  const pk = useGameStore(s => s.pendingKit);
+  const pickKitItem = useGameStore(s => s.pickKitItem);
+  const cancelKit = useGameStore(s => s.cancelKit);
+  if (!pk || pk.step !== 'item' || !pk.items) return null;
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 360, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: 'radial-gradient(ellipse at center, rgba(10,8,5,0.8), rgba(5,4,2,0.93))',
+    }}>
+      <div style={{
+        background: 'linear-gradient(180deg, #221b12, #14100a)', border: `1px solid ${TBL.matLine2}`,
+        borderRadius: 14, padding: '22px 24px', maxWidth: '92vw', maxHeight: '86vh', overflowY: 'auto', boxShadow: '0 30px 80px rgba(0,0,0,0.7)',
+      }}>
+        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.2em', color: TBL.amber2, textTransform: 'uppercase', marginBottom: 4 }}>
+          {pk.sourceName} — Kit-Master: choose an item to move
+        </div>
+        <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 12, color: TBL.ink2, marginBottom: 14 }}>
+          Pick which item to move to another character.
+        </div>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center', maxWidth: 720 }}>
+          {pk.items.map(it => {
+            const card = CATALOG.find(c => c.name === it.name) ?? null;
+            return (
+              <button key={it.id} onClick={() => pickKitItem(it.id)}
+                style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer', borderRadius: 8 }}
+                title={`Move ${it.name}`}>
+                {card
+                  ? <CardFace data={card} scale={0.62} />
+                  : <span style={{ display: 'inline-block', padding: '14px 18px', border: `1px solid ${TBL.matLine2}`, borderRadius: 8, color: TBL.ink, fontFamily: "'Inter', sans-serif", fontSize: 13 }}>{it.name}</span>}
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 18 }}>
+          <button onClick={cancelKit} style={{ padding: '9px 16px', borderRadius: 7, cursor: 'pointer', fontSize: 13, fontWeight: 600, background: 'rgba(255,255,255,0.05)', color: TBL.ink2, border: `1px solid ${TBL.matLine2}`, fontFamily: "'Inter', sans-serif" }}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 /** Banner shown while an Action card awaits its target. */
@@ -204,11 +251,18 @@ function PoisonHost() {
  *  banner — the picker modal already covers the board for the single controller. */
 function ReactiveHoldBanner() {
   const dp = useGameStore(s => s.game.pendingDeadPick);
+  const pa = useGameStore(s => s.game.pendingArmor);
   const localPlayer = useGameStore(s => s.localPlayer);
   const isSolo = useGameStore(s => s.conn.mode === 'solo');
   const game = useGameStore(s => s.game);
-  if (isSolo || !dp || dp.lp === localPlayer) return null;
-  const oppName = game[dp.lp].name;
+  if (isSolo) return null;
+  // Hold for an opponent-owned reactive prompt: Dead-Zone recovery, or an Armor choice.
+  const held = (dp && dp.lp !== localPlayer) ? { owner: dp.lp, source: dp.source }
+             : (pa && pa.defender !== localPlayer) ? { owner: pa.defender, source: `${pa.entityName}'s armor` }
+             : null;
+  if (!held) return null;
+  const oppName = game[held.owner].name;
+  const source = held.source;
   return (
     <div style={{
       position: 'fixed', top: 52, left: '50%', transform: 'translateX(-50%)', zIndex: 210,
@@ -219,7 +273,7 @@ function ReactiveHoldBanner() {
       <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: TBL.amber2, letterSpacing: '0.18em', textTransform: 'uppercase', marginRight: 10 }}>
         Hold
       </span>
-      Waiting for {oppName} to resolve {dp.source}…
+      Waiting for {oppName} to resolve {source}…
     </div>
   );
 }
@@ -265,6 +319,58 @@ function DeadPickModal() {
             <button onClick={cancelDeadPick} style={{ padding: '9px 16px', borderRadius: 7, cursor: 'pointer', fontSize: 13, fontWeight: 600, background: 'rgba(255,255,255,0.05)', color: TBL.ink2, border: `1px solid ${TBL.matLine2}`, fontFamily: "'Inter', sans-serif" }}>Skip</button>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+/** Mid-combat Armor picker: the defender chooses which armor piece absorbs a hit
+ *  when the struck character has 2+ pieces (rules: controlling player chooses).
+ *  Forced — armor always absorbs, so there is no skip. */
+function ArmorModal() {
+  const pa = useGameStore(s => s.game.pendingArmor);
+  const localPlayer = useGameStore(s => s.localPlayer);
+  const isSolo = useGameStore(s => s.conn.mode === 'solo');
+  const resolveArmor = useGameStore(s => s.resolveArmor);
+  // Only the defender (the hit character's controller) chooses; sandbox shows all.
+  if (!pa || (!isSolo && pa.defender !== localPlayer)) return null;
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 360, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: 'radial-gradient(ellipse at center, rgba(10,8,5,0.8), rgba(5,4,2,0.93))',
+    }}>
+      <div style={{
+        background: 'linear-gradient(180deg, #221b12, #14100a)', border: `1px solid ${TBL.matLine2}`,
+        borderRadius: 14, padding: '22px 24px', maxWidth: '92vw', maxHeight: '86vh', overflowY: 'auto', boxShadow: '0 30px 80px rgba(0,0,0,0.7)',
+      }}>
+        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.2em', color: TBL.amber2, textTransform: 'uppercase', marginBottom: 4 }}>
+          {pa.entityName} is hit — choose which armor absorbs it
+        </div>
+        <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 12, color: TBL.ink2, marginBottom: 14 }}>
+          The chosen armor prevents the damage and takes a counter (sacrificed at its limit).
+        </div>
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center', maxWidth: 720 }}>
+          {pa.candidates.map(c => {
+            const card = CATALOG.find(x => x.name === c.name) ?? null;
+            const next = c.counters + 1;
+            const willBreak = next >= c.armor;
+            return (
+              <div key={c.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                <button onClick={() => resolveArmor(c.id)}
+                  style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer', borderRadius: 8 }}
+                  title={`${c.name} absorbs the hit`}>
+                  {card
+                    ? <CardFace data={card} scale={0.62} />
+                    : <span style={{ display: 'inline-block', padding: '14px 18px', border: `1px solid ${TBL.matLine2}`, borderRadius: 8, color: TBL.ink, fontFamily: "'Inter', sans-serif", fontSize: 13 }}>{c.name}</span>}
+                </button>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: willBreak ? TBL.amber : TBL.ink2 }}>
+                  {next}/{c.armor} counters{willBreak ? ' — breaks!' : ''}
+                </span>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

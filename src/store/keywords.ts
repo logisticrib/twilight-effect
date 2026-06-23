@@ -298,9 +298,9 @@ export function isCharacter(ent: BoardEntity): boolean {
 }
 
 /**
- * The item Kit-Master will move from a source character: weapon first, else the
- * first occupied gear slot. (Player item-choice when multiple exist is future
- * work — the same simplification the Armor auto-select makes today.)
+ * A character's lead item: weapon first, else the first occupied gear slot.
+ * Used where a single item is taken without a choice (e.g. Disarming Blow's
+ * sacrifice). Kit-Master uses {@link allItemsOf} so the player picks when 2+.
  */
 export function firstItemOf(ent: BoardEntity): { item: EquippedItem; isWeapon: boolean } | null {
   const lo = ent.loadout;
@@ -308,6 +308,33 @@ export function firstItemOf(ent: BoardEntity): { item: EquippedItem; isWeapon: b
   if (lo.weapon) return { item: lo.weapon, isWeapon: true };
   const g = lo.gear.find((x): x is EquippedItem => !!x);
   return g ? { item: g, isWeapon: false } : null;
+}
+
+/** Every equipped item on a character (weapon first, then occupied gear slots),
+ *  deduplicated by id so a `heavy` item — stored in both gear slots — appears once.
+ *  Drives the Kit-Master player-choice picker when a source holds 2+ items. */
+export function allItemsOf(ent: BoardEntity): { item: EquippedItem; isWeapon: boolean }[] {
+  const lo = ent.loadout;
+  if (!lo) return [];
+  const out: { item: EquippedItem; isWeapon: boolean }[] = [];
+  const seen = new Set<string>();
+  if (lo.weapon) { out.push({ item: lo.weapon, isWeapon: true }); seen.add(lo.weapon.id); }
+  for (const g of lo.gear) if (g && !seen.has(g.id)) { out.push({ item: g, isWeapon: false }); seen.add(g.id); }
+  return out;
+}
+
+/** A character carries one weapon and up to two gear (a `heavy` item takes both
+ *  gear slots). These mirror the placement rules in `equipOnto`. */
+export const GEAR_CAP = 2;
+export function gearFreeSlots(ent: BoardEntity): number {
+  const gear = ent.loadout?.gear ?? [];
+  const occ = gear.filter((g): g is EquippedItem => !!g).length;
+  return Math.max(0, GEAR_CAP - occ);
+}
+/** Can `ent` receive an item of the given kind without exceeding its slot capacity? */
+export function canHoldItem(ent: BoardEntity, isWeapon: boolean, heavy: boolean): boolean {
+  if (isWeapon) return !ent.loadout?.weapon;        // one weapon slot, no swap on transfer
+  return gearFreeSlots(ent) >= (heavy ? 2 : 1);
 }
 
 // ─── Action economy ───────────────────────────────────────────────────────────

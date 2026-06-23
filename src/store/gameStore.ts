@@ -5,7 +5,7 @@ import type { Effect, Amount, Condition, TargetSpec, Trigger, Cost } from '../ty
 import { CATALOG, SORCERER_WARRIOR_CARDS, WIZARD_BUILDER_CARDS } from '../data/catalog';
 import { recomputeStatics, isImmuneToSplash, grantHitRun, HIT_RUN_STATUS,
          isPhysicalConstruct, parseEnterTrigger, type EnterTriggerKind,
-         isCharacter, firstItemOf, effectiveAttack, effectiveKeywords, hasModifier, effectiveMaxHp, wardedLines,
+         isCharacter, firstItemOf, allItemsOf, canHoldItem, effectiveAttack, effectiveKeywords, hasModifier, effectiveMaxHp, wardedLines,
          canPlayActionCard, actionTypeOf, playWillpower } from './keywords';
 
 export type Phase = 'ready' | 'draw' | 'cz' | 'action' | 'end';
@@ -77,6 +77,12 @@ export interface GameState {
   /** The player who must resolve a start-of-turn Poison check, or null. Routed to
    *  that player's client (the modal renders only when localPlayer === pendingPoison). */
   pendingPoison: 'p1' | 'p2' | null;
+  /** Mid-combat Armor choice — when an attack hits a character with 2+ armor pieces,
+   *  combat PAUSES and the DEFENDER picks which piece absorbs the hit (rules: "the
+   *  controlling player chooses which armor prevents the damage"). Carries the
+   *  serializable resume state so combat continues after the pick. Routed to the
+   *  defender; the attacker is held (see `reactiveHold`) until it resolves. */
+  pendingArmor: PendingArmor | null;
   /** Remaining setup steps as `"<step>:<player>"`, e.g. "mulligan:p1". Synced so MP
    *  setup is SERIALIZED — only the head step's owner acts (turn-like, so the wholesale
    *  state-sync stays correct even for cross-half class bonuses); the other peer waits.
@@ -186,16 +192,47 @@ export interface PendingDeadPick {
   optional: boolean;
 }
 
-/** Kit-Master's two-step targeting: first pick a source character holding an
- *  item, then a different destination character to receive it. `eligibleIds`
- *  always lists the entities clickable in the current step. */
+/** Kit-Master's targeting: pick a source character holding an item; if it holds
+ *  2+ items, pick which one ('item' step, via KitItemModal); then pick a different
+ *  destination character to receive it. `eligibleIds` lists the entities clickable
+ *  in the current board step (empty during the modal-driven 'item' step). */
 export interface PendingKit {
   sourceName: string;          // the Kit-Master companion's name
-  step: 'source' | 'dest';
+  step: 'source' | 'item' | 'dest';
   eligibleIds: string[];
-  fromId?: string;             // chosen source character (set in 'dest' step)
+  fromId?: string;             // chosen source character (set from 'item'/'dest' step)
   itemId?: string;             // chosen item id (set in 'dest' step)
   itemName?: string;
+  items?: { id: string; name: string }[]; // candidate items to pick ('item' step)
+}
+
+/** Serializable resume state for a paused attack. An attack is a queue of damage
+ *  hits (primary target + Cleave line-mates) followed by an after-phase (combat
+ *  triggers, Reckless, Hit & Run). When a hit lands on a 2+armor character the
+ *  driver pauses; this captures everything needed to continue. No closures (so it
+ *  syncs over multiplayer and survives across reducer calls). */
+export interface AttackCtx {
+  charId: string;              // attacker entity (for Reckless / Hit & Run)
+  attackerName: string;
+  attackerPlayer: 'p1' | 'p2';
+  dmg: number;                 // per-hit damage (same for primary + every Cleave hit)
+  hitQueue: string[];          // entity ids still to be damaged (head = current)
+  phase: 'damage' | 'after';
+  reckless: boolean;
+  hitRun: boolean;
+  msgs: string[];
+  events: DamageEvent[];       // damage events for combat triggers (blocked hits excluded)
+  deadSink: PendingDeadPick[]; // deferred onDestroy Dead-Zone picks
+}
+
+/** Mid-combat Armor choice: the defender picks which of a hit character's armor
+ *  pieces absorbs the damage. `ctx` resumes the paused attack on resolution. */
+export interface PendingArmor {
+  defender: 'p1' | 'p2';       // who chooses (the hit character's controller)
+  entityId: string;            // the character being hit
+  entityName: string;
+  candidates: { id: string; name: string; counters: number; armor: number }[];
+  ctx: AttackCtx;
 }
 
 // ─── Adjacency map ────────────────────────────────────────────────────────────
@@ -276,18 +313,33 @@ function removeEntity(game: GameState, entityId: string): GameState {
 // ─── Damage + effect interpreter (shared by combat and Action cards) ───────────
 
 /**
- * Apply `dmg` to one entity: Armor first (auto-selects first armor piece), then
- * the hpFloor1 modifier, then HP reduction / removal / PC-defeat. Returns the new
- * game and log lines. Reused by resolveAttack and Action-card damage so the rules
- * live in one place.
+ * Apply `dmg` to one entity: Armor first, then the hpFloor1 modifier, then HP
+ * reduction / removal / PC-defeat. Returns the new game and log lines. Reused by
+ * resolveAttack and Action-card damage so the rules live in one place.
+ *
+ * Armor: a hit is fully prevented while any armor piece remains (one counter per
+ * hit, on one piece). When the character has 2+ pieces the controlling player
+ * chooses which absorbs — the combat driver pauses for that and replays this with
+ * `armorPieceId` set. Without a forced id (non-attack damage, or a single piece)
+ * the most-worn piece is consumed (spends nearly-sacrificed armor first).
  */
-function applyDamage(game: GameState, entityId: string, dmg: number, sourceName: string, sourcePlayer: 'p1' | 'p2', sink?: PendingDeadPick[]): { game: GameState; msgs: string[] } {
+function armorPiecesOf(ent: BoardEntity): EquippedItem[] {
+  return (ent.loadout?.gear.filter((gi): gi is EquippedItem => !!gi && gi.armor !== undefined)) ?? [];
+}
+/** Default armor choice when the player doesn't pick: the most-worn piece (highest counters). */
+function pickDefaultArmor(pieces: EquippedItem[]): EquippedItem {
+  return pieces.reduce((best, p) => ((p.counters ?? 0) > (best.counters ?? 0) ? p : best), pieces[0]);
+}
+function applyDamage(game: GameState, entityId: string, dmg: number, sourceName: string, sourcePlayer: 'p1' | 'p2', sink?: PendingDeadPick[], armorPieceId?: string): { game: GameState; msgs: string[] } {
   const loc = findEntityAnywhere(game, entityId);
   if (!loc) return { game, msgs: [] };
   const ent = loc.ent;
   const msgs: string[] = [];
 
-  const armorPiece = ent.loadout?.gear.find((gi): gi is EquippedItem => !!gi && gi.armor !== undefined) ?? null;
+  const armorPieces = armorPiecesOf(ent);
+  const armorPiece = armorPieces.length
+    ? (armorPieceId ? armorPieces.find(p => p.id === armorPieceId) ?? pickDefaultArmor(armorPieces) : pickDefaultArmor(armorPieces))
+    : null;
   if (armorPiece) {
     const newCounters = (armorPiece.counters ?? 0) + 1;
     msgs.push(`${armorPiece.name} blocks! (${newCounters}/${armorPiece.armor} counters)`);
@@ -327,6 +379,90 @@ function applyDamage(game: GameState, entityId: string, dmg: number, sourceName:
   }
   msgs.push(`${sourceName} hits ${ent.name} for ${dmg} (${newHp} HP left)`);
   return { game: updateEntity(game, entityId, { hp: newHp }), msgs };
+}
+
+/** Apply one queued combat hit to `ctx.hitQueue[0]`, recording a DamageEvent for
+ *  combat triggers (armor-blocked hits are excluded — they deal no HP damage). */
+function applyCombatHit(game: GameState, ctx: AttackCtx, armorPieceId?: string): GameState {
+  const entityId = ctx.hitQueue[0];
+  const beforeLoc = findEntityAnywhere(game, entityId);
+  if (!beforeLoc) { ctx.hitQueue.shift(); return game; }
+  const before = beforeLoc.ent;
+  const r = applyDamage(game, entityId, ctx.dmg, ctx.attackerName, ctx.attackerPlayer, ctx.deadSink, armorPieceId);
+  ctx.msgs.push(...r.msgs);
+  const after = findEntityAnywhere(r.game, entityId);
+  const tookDamage = !after || after.ent.hp < before.hp; // armor-blocked hits don't count
+  if (ctx.dmg > 0 && tookDamage) ctx.events.push({
+    id: entityId, kind: before.kind, owner: beforeLoc.player,
+    physical: before.kind === 'construct' && isPhysicalConstruct(before),
+    destroyed: !after,
+  });
+  ctx.hitQueue.shift();
+  return r.game;
+}
+
+/** Drive a (possibly resumed) attack to completion, or pause for an Armor choice.
+ *  `ctx` is mutated in place — callers pass a fresh/cloned ctx. Returns either the
+ *  finished game, or a `PendingArmor` to arm when a 2+armor character is hit. */
+function driveAttack(game: GameState, ctx: AttackCtx):
+  | { done: true; game: GameState; ctx: AttackCtx }
+  | { done: false; game: GameState; pendingArmor: PendingArmor } {
+  let g = game;
+
+  if (ctx.phase === 'damage') {
+    while (ctx.hitQueue.length > 0) {
+      const entityId = ctx.hitQueue[0];
+      const loc = findEntityAnywhere(g, entityId);
+      if (!loc) { ctx.hitQueue.shift(); continue; } // already removed by an earlier hit
+      const pieces = armorPiecesOf(loc.ent);
+      if (pieces.length >= 2) {
+        // Pause: the defender chooses which piece absorbs this hit. The head of the
+        // queue stays put so the choice resolves it.
+        return { done: false, game: g, pendingArmor: {
+          defender: loc.player, entityId, entityName: loc.ent.name,
+          candidates: pieces.map(p => ({ id: p.id, name: p.name, counters: p.counters ?? 0, armor: p.armor ?? 0 })),
+          ctx,
+        } };
+      }
+      g = applyCombatHit(g, ctx); // 0 or 1 armor → resolve immediately
+    }
+    ctx.phase = 'after';
+  }
+
+  // After-phase (runs once, never pauses): combat triggers, Reckless, Hit & Run.
+  const attLoc = findEntityAnywhere(g, ctx.charId);
+  if (attLoc) {
+    const attacker = attLoc.ent;
+    if (combatTriggerEffects(attacker, 'onAttack').length || combatTriggerEffects(attacker, 'onDealDamage').length || combatTriggerEffects(attacker, 'onKill').length) {
+      const ct = resolveCombatTriggers(g, attacker, ctx.attackerPlayer, ctx.events);
+      g = ct.game; ctx.msgs.push(...ct.msgs);
+    }
+  }
+  if (ctx.reckless) {
+    const aLoc = findEntityAnywhere(g, ctx.charId);
+    if (aLoc) {
+      const atkHp = Math.max(0, aLoc.ent.hp - 1);
+      ctx.msgs.push(`${ctx.attackerName} takes 1 damage (Reckless)`);
+      g = (atkHp <= 0 && aLoc.ent.kind !== 'pc') ? removeEntity(g, ctx.charId) : updateEntity(g, ctx.charId, { hp: atkHp });
+    }
+  }
+  if (ctx.hitRun) {
+    const aLoc = findEntityAnywhere(g, ctx.charId);
+    if (aLoc) { g = updateEntity(g, ctx.charId, { statuses: grantHitRun(aLoc.ent) }); ctx.msgs.push(`${ctx.attackerName} may move again (Hit & Run)`); }
+  }
+  return { done: true, game: g, ctx };
+}
+
+/** Commit a finished attack: seal activation, clear selection, arm any deferred
+ *  Dead-Zone picks, and clear the Armor prompt. */
+function finalizeAttack(game: GameState, ctx: AttackCtx): GameState {
+  return recomputeStatics({
+    ...game,
+    ...activationPatch(game, ctx.charId),
+    selected: null,
+    ...armDeadPicks(ctx.deadSink),
+    pendingArmor: null,
+  });
 }
 
 function rollD6(): number { return 1 + Math.floor(Math.random() * 6); }
@@ -781,7 +917,12 @@ function armDeadPicks(sink: PendingDeadPick[]): { pendingDeadPick?: PendingDeadP
  */
 function reactiveHold(game: GameState, localPlayer: 'p1' | 'p2'): string | null {
   const dp = game.pendingDeadPick;
-  return dp && dp.lp !== localPlayer ? dp.source : null;
+  if (dp && dp.lp !== localPlayer) return dp.source;
+  // A mid-combat Armor choice owned by the opponent (defender) holds the attacker
+  // until it resolves, so the attacker's broadcasts don't clobber the resolution.
+  const pa = game.pendingArmor;
+  if (pa && pa.defender !== localPlayer) return `${pa.entityName}'s armor`;
+  return null;
 }
 
 // ─── Damage modifiers (passive, consulted by the damage pipeline) ──────────────
@@ -1004,6 +1145,14 @@ function equipOnto(game: GameState, lp: 'p1' | 'p2', entityId: string, card: Car
   return { ...g, [lp]: { ...g[lp], hand: finalHand } };
 }
 
+/** Kit-Master: the controller's other characters that have slot capacity to
+ *  receive an item of the given kind (weapon vs gear, heavy needs both gear slots). */
+function kitDests(game: GameState, controller: 'p1' | 'p2', exceptId: string, isWeapon: boolean, heavy: boolean): string[] {
+  return (Object.values(game[controller].board) as (BoardEntity | undefined)[])
+    .filter((e): e is BoardEntity => !!e && isCharacter(e) && e.id !== exceptId && canHoldItem(e, isWeapon, heavy))
+    .map(e => e.id);
+}
+
 // ─── Game initialization ──────────────────────────────────────────────────────
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
@@ -1113,6 +1262,7 @@ export function makeNewGame(
     pendingDeadPick: null,
     pendingDeadPickQueue: [],
     pendingPoison: null,
+    pendingArmor: null,
     setupQueue: [...SETUP_SEQUENCE],
     p1: dealPlayer(p1Name, p1Cards, 'pc-p1'),
     p2: dealPlayer(p2Name, p2Cards, 'pc-p2'),
@@ -1214,6 +1364,8 @@ interface GameStoreState {
   // Attack
   beginAttack: (charId: string) => void;
   resolveAttack: (targetEntityId: string) => void;
+  /** Defender's mid-combat Armor pick — resolves `game.pendingArmor` and resumes the attack. */
+  resolveArmor: (pieceId: string) => void;
 
   // Cancel any pending action
   cancelPending: () => void;
@@ -1229,6 +1381,7 @@ interface GameStoreState {
 
   // Kit-Master two-step item move targeting
   resolveKit: (targetId: string) => void;
+  pickKitItem: (itemId: string) => void;
   cancelKit: () => void;
 
   // Action-card target selection
@@ -1900,7 +2053,7 @@ export const useGameStore = create<GameStoreState>()(
       ...sg,
       currentActor: sg.currentActor ?? null, finishedActors: sg.finishedActors ?? [],
       setupQueue: sg.setupQueue ?? [],
-      pendingPeek: null, pendingPeekQueue: [], pendingDeadPick: null, pendingDeadPickQueue: [], pendingPoison: null,
+      pendingPeek: null, pendingPeekQueue: [], pendingDeadPick: null, pendingDeadPickQueue: [], pendingPoison: null, pendingArmor: null,
     };
     return { game, playPhase: 'game', conn: { ...EMPTY_CONN, mode: 'solo', code: 'RESUMED' }, localPlayer: 'p1' as const };
   }),
@@ -2073,41 +2226,16 @@ export const useGameStore = create<GameStoreState>()(
     }
 
     // ── Tap attacker (major action) ────────────────────────────────────────────
-    let newGame = updateEntity(game, pending.charId, {
+    const newGame = updateEntity(game, pending.charId, {
       tapped: 'major', exhausted: true,
       acts: { ...attacker.acts, major: true },
     });
 
-    const msgs: string[] = [];
-
-    // Damage goes through the shared applyDamage (Armor, hpFloor1, PC-defeat). Each
-    // call records a DamageEvent (skipping fully-blocked hits) for combat triggers.
-    const events: DamageEvent[] = [];
-    // Collects deferred Dead-Zone prompts (Memory Stone onDestroy) from any kill this
-    // combat — armed after resolution so the modal opens once the dust settles.
-    const deadSink: PendingDeadPick[] = [];
-    const applyDamageToEntity = (g: GameState, entityId: string, dmg: number): { g: GameState } => {
-      const before = findEntityAnywhere(g, entityId);
-      const r = applyDamage(g, entityId, dmg, attacker.name, attLoc.player, deadSink);
-      msgs.push(...r.msgs);
-      if (before && dmg > 0) {
-        const after = findEntityAnywhere(r.game, entityId);
-        const tookDamage = !after || after.ent.hp < before.ent.hp; // armor-blocked hits don't count
-        if (tookDamage) events.push({
-          id: entityId, kind: before.ent.kind, owner: before.player,
-          physical: before.ent.kind === 'construct' && isPhysicalConstruct(before.ent),
-          destroyed: !after,
-        });
-      }
-      return { g: r.game };
-    };
-
-    // Effective attack + conditional attack-damage bonuses (Scorching Brand).
+    // Build the hit queue: primary target + (Cleave) the rest of its line. Acrobatics
+    // dodges Cleave splash. Damage is computed once from pre-combat state.
     const dmg = effectiveAttack(attacker, game) + attackDamageBonus(attacker, game, attLoc.player);
-    const primary = applyDamageToEntity(newGame, targetEntityId, dmg);
-    newGame = primary.g;
-
-    // ── Cleave: deal same damage to all other characters on target's line ──────
+    const hitQueue = [targetEntityId];
+    const acroMsgs: string[] = [];
     const hasCleave = effectiveKeywords(attacker, game).includes('Cleave');
     if (hasCleave && tgtLoc) {
       const tgtSlot = findSlot(game[oppPlayer].board, targetEntityId);
@@ -2116,48 +2244,46 @@ export const useGameStore = create<GameStoreState>()(
         for (const ls of lineSlots) {
           const lineEnt = newGame[oppPlayer].board[ls];
           if (!lineEnt || lineEnt.id === targetEntityId) continue;
-          // Acrobatics: immune to splash (anything not targeting it directly).
-          if (isImmuneToSplash(lineEnt)) {
-            msgs.push(`${lineEnt.name} evades the Cleave (Acrobatics)`);
-            continue;
-          }
-          const result = applyDamageToEntity(newGame, lineEnt.id, dmg);
-          newGame = result.g;
+          if (isImmuneToSplash(lineEnt)) { acroMsgs.push(`${lineEnt.name} evades the Cleave (Acrobatics)`); continue; }
+          hitQueue.push(lineEnt.id);
         }
       }
     }
 
-    // ── Combat triggers: onAttack / onDealDamage / onKill (own card + items) ────
-    if (combatTriggerEffects(attacker, 'onAttack').length || combatTriggerEffects(attacker, 'onDealDamage').length || combatTriggerEffects(attacker, 'onKill').length) {
-      const ct = resolveCombatTriggers(newGame, attacker, attLoc.player, events);
-      newGame = ct.game; msgs.push(...ct.msgs);
-    }
-
-    // ── Reckless: attacker takes 1 self-damage (printed OR item-granted) ────────
-    if (effectiveKeywords(attacker, game).includes('Reckless')) {
-      const atkHp = Math.max(0, (findEntityAnywhere(newGame, pending.charId)?.ent.hp ?? 0) - 1);
-      msgs.push(`${attacker.name} takes 1 damage (Reckless)`);
-      if (atkHp <= 0 && attacker.kind !== 'pc') {
-        newGame = removeEntity(newGame, pending.charId);
-      } else {
-        newGame = updateEntity(newGame, pending.charId, { hp: atkHp });
-      }
-    }
-
-    // ── Hit & Run: attacker may take one extra move action after attacking ──────
-    const attStillThere = findEntityAnywhere(newGame, pending.charId);
-    if (effectiveKeywords(attacker, game).includes('Hit & Run') && attStillThere) {
-      newGame = updateEntity(newGame, pending.charId, { statuses: grantHitRun(attStillThere.ent) });
-      msgs.push(`${attacker.name} may move again (Hit & Run)`);
-    }
-
-    const t = pushToast(msgs.join(' | '));
-    return {
-      pending: null,
-      // Recompute static auras — a destroyed Dismay source changes the state.
-      game: recomputeStatics({ ...newGame, ...activationPatch(game, pending.charId), selected: null, ...armDeadPicks(deadSink) }),
-      toasts: [...s.toasts, t],
+    // Drive the attack. It pauses (returns a PendingArmor) when a hit lands on a
+    // character with 2+ armor pieces — the defender then picks via resolveArmor.
+    const ctx: AttackCtx = {
+      charId: pending.charId, attackerName: attacker.name, attackerPlayer: attLoc.player,
+      dmg, hitQueue, phase: 'damage',
+      reckless: effectiveKeywords(attacker, game).includes('Reckless'),
+      hitRun: effectiveKeywords(attacker, game).includes('Hit & Run'),
+      msgs: acroMsgs, events: [], deadSink: [],
     };
+    const res = driveAttack(newGame, ctx);
+    if (!res.done) {
+      return { pending: null, game: { ...res.game, pendingArmor: res.pendingArmor } };
+    }
+    const t = pushToast(res.ctx.msgs.join(' | '));
+    return { pending: null, game: finalizeAttack(res.game, res.ctx), toasts: [...s.toasts, t] };
+  }),
+
+  // ── Armor choice (mid-combat): the defender picks which piece absorbs the hit ──
+  resolveArmor: (pieceId) => set(s => {
+    const pa = s.game.pendingArmor;
+    if (!pa) return s;
+    const chosen = pa.candidates.find(c => c.id === pieceId);
+    if (!chosen) return s; // must pick a real candidate
+    // Resume on a cloned ctx (the stored one is part of synced state).
+    const ctx: AttackCtx = { ...pa.ctx, hitQueue: [...pa.ctx.hitQueue], msgs: [...pa.ctx.msgs], events: [...pa.ctx.events], deadSink: [...pa.ctx.deadSink] };
+    let g: GameState = { ...s.game, pendingArmor: null };
+    g = applyCombatHit(g, ctx, chosen.id); // resolve the paused hit with the chosen piece
+    const res = driveAttack(g, ctx);
+    if (!res.done) {
+      return { game: { ...res.game, pendingArmor: res.pendingArmor } };
+    }
+    const id = ++toastId;
+    setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 3000);
+    return { game: finalizeAttack(res.game, res.ctx), toasts: [...s.toasts, { id, msg: res.ctx.msgs.join(' | ') }] };
   }),
 
   // ── Cancel ─────────────────────────────────────────────────────────────────
@@ -2210,21 +2336,30 @@ export const useGameStore = create<GameStoreState>()(
     const pk = s.pendingKit;
     if (!pk || !pk.eligibleIds.includes(targetId)) return s;
 
-    // Step 1 — pick the source character; advance to destination selection.
+    // Step 1 — pick the source character; advance to item choice (2+ placeable
+    // items) or straight to destination selection (exactly 1).
     if (pk.step === 'source') {
       const loc = findEntityAnywhere(s.game, targetId);
-      const picked = loc ? firstItemOf(loc.ent) : null;
-      if (!loc || !picked) return { pendingKit: null };
+      const items = loc ? allItemsOf(loc.ent) : [];
+      if (!loc || items.length === 0) return { pendingKit: null };
       const controller = loc.player;
-      const dests = (Object.values(s.game[controller].board) as (BoardEntity | undefined)[])
-        .filter((e): e is BoardEntity => !!e && isCharacter(e) && e.id !== targetId)
-        .map(e => e.id);
-      if (dests.length === 0) {
+      // Only items that have a capacity-eligible destination can be moved.
+      const placeable = items.filter(it =>
+        kitDests(s.game, controller, targetId, it.isWeapon, !!it.item.heavy).length > 0);
+      if (placeable.length === 0) {
         const id = ++toastId;
         setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 3000);
-        return { pendingKit: null, toasts: [...s.toasts, { id, msg: 'No other character to receive the item.' }] };
+        return { pendingKit: null, toasts: [...s.toasts, { id, msg: 'No character has room to receive an item from there.' }] };
       }
-      return { pendingKit: { ...pk, step: 'dest', fromId: targetId, itemId: picked.item.id, itemName: picked.item.name, eligibleIds: dests } };
+      // 2+ placeable items → let the player choose which (KitItemModal). No board
+      // click in that step, so eligibleIds is empty.
+      if (placeable.length > 1) {
+        return { pendingKit: { ...pk, step: 'item', fromId: targetId, eligibleIds: [],
+          items: placeable.map(i => ({ id: i.item.id, name: i.item.name })) } };
+      }
+      const only = placeable[0];
+      const dests = kitDests(s.game, controller, targetId, only.isWeapon, !!only.item.heavy);
+      return { pendingKit: { ...pk, step: 'dest', fromId: targetId, itemId: only.item.id, itemName: only.item.name, eligibleIds: dests } };
     }
 
     // Step 2 — move the chosen item from source to the destination character.
@@ -2236,15 +2371,28 @@ export const useGameStore = create<GameStoreState>()(
     const movedIsWeapon = fromLo.weapon?.id === pk.itemId;
     const moved = movedIsWeapon ? fromLo.weapon : fromLo.gear.find(g => g?.id === pk.itemId) ?? null;
     if (!moved) return { pendingKit: null };
+    const movedIsHeavy = !!moved.heavy;
 
+    // Capacity guard (eligibleIds is already capacity-filtered; this is defensive).
+    if (!canHoldItem(to.ent, movedIsWeapon, movedIsHeavy)) return { pendingKit: null };
+
+    // Remove from source. A heavy item lives in both gear slots, so null every match.
     const newFromLo = {
       weapon: movedIsWeapon ? null : fromLo.weapon,
       gear: movedIsWeapon ? fromLo.gear : fromLo.gear.map(g => (g?.id === pk.itemId ? null : g)),
     };
+    // Place on destination in the correct slot — never grow past capacity.
     const toLo = to.ent.loadout ?? { weapon: null, gear: [] };
-    const newToLo = movedIsWeapon && !toLo.weapon
-      ? { ...toLo, weapon: moved }
-      : { ...toLo, gear: [...toLo.gear, moved] };
+    let newToLo: typeof toLo;
+    if (movedIsWeapon) {
+      newToLo = { ...toLo, weapon: moved };
+    } else if (movedIsHeavy) {
+      newToLo = { ...toLo, gear: [moved, moved] };
+    } else {
+      const slots = [toLo.gear[0] ?? null, toLo.gear[1] ?? null];
+      slots[slots.findIndex(g => !g)] = moved; // findIndex ≥ 0 by the capacity guard
+      newToLo = { ...toLo, gear: slots };
+    }
 
     let game = updateEntity(s.game, from.ent.id, { loadout: newFromLo });
     game = updateEntity(game, targetId, { loadout: newToLo });
@@ -2254,6 +2402,22 @@ export const useGameStore = create<GameStoreState>()(
   }),
 
   cancelKit: () => set({ pendingKit: null }),
+
+  // Kit-Master: choose which item to move when the source holds 2+ (KitItemModal).
+  pickKitItem: (itemId) => set(s => {
+    const pk = s.pendingKit;
+    if (!pk || pk.step !== 'item' || !pk.fromId) return s;
+    const picked = pk.items?.find(i => i.id === itemId);
+    const from = findEntityAnywhere(s.game, pk.fromId);
+    if (!picked || !from || !from.ent.loadout) return { pendingKit: null };
+    const lo = from.ent.loadout;
+    const isWeapon = lo.weapon?.id === itemId;
+    const movedItem = isWeapon ? lo.weapon : lo.gear.find(g => g?.id === itemId) ?? null;
+    if (!movedItem) return { pendingKit: null };
+    const dests = kitDests(s.game, from.player, pk.fromId, isWeapon, !!movedItem.heavy);
+    if (dests.length === 0) return { pendingKit: null };
+    return { pendingKit: { ...pk, step: 'dest', itemId: picked.id, itemName: picked.name, eligibleIds: dests } };
+  }),
 
   placeCard: (slot) => set(s => {
     if (reactiveHold(s.game, s.localPlayer)) return s;
@@ -2356,10 +2520,15 @@ export const useGameStore = create<GameStoreState>()(
     let pendingKit: PendingKit | null = null;
     if (card.keywords.includes('Kit-Master')) {
       const boardAfter = { ...game[lp].board, [slot]: newEnt };
+      const gameAfter = { ...game, [lp]: { ...game[lp], board: boardAfter } };
       const chars = (Object.values(boardAfter) as (BoardEntity | undefined)[])
         .filter((e): e is BoardEntity => !!e && isCharacter(e));
-      const sources = chars.filter(e => firstItemOf(e) !== null).map(e => e.id);
-      if (sources.length > 0 && chars.length >= 2) {
+      // A source is eligible only if it holds an item that some OTHER character
+      // has slot capacity to receive (otherwise highlighting it would dead-end).
+      const sources = chars.filter(e =>
+        allItemsOf(e).some(it => kitDests(gameAfter, lp, e.id, it.isWeapon, !!it.item.heavy).length > 0)
+      ).map(e => e.id);
+      if (sources.length > 0) {
         pendingKit = { sourceName: card.name, step: 'source', eligibleIds: sources };
         enterMsg = `${card.name}: Kit-Master — choose a character to take an item from.`;
       } else {

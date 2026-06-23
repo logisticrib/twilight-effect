@@ -2,6 +2,28 @@
 
 Self-contained context for continuing the card-effect engine work in a fresh session.
 
+## Latest session (2026-06-23) — deferred player-choice pickers
+Three previously-deferred pickers were built + preview-verified (store + real UI), typecheck clean:
+- **Kit-Master multi-item picker** — when a source character holds 2+ items the player chooses which to
+  move (`allItemsOf`, `PendingKit.step:'item'`, `pickKitItem`, `KitItemModal`); 1 item still skips the
+  modal. `pendingKit` stays store-local (active-player-only) → no MP change.
+- **Kit-Master slot-capacity enforcement** — transfers now respect 1 weapon + 2 gear (heavy = both gear
+  slots): `canHoldItem`/`gearFreeSlots`/`GEAR_CAP` + `kitDests` gate the arm list, the placeable-item
+  filter, and the dest list; placement fills the correct slot and normalizes gear to length 2 (was
+  appending past the cap). `allItemsOf` dedups heavy items.
+- **Armor per-hit picker (resumable combat)** — the rule "controlling player chooses which armor prevents
+  the damage" now prompts the DEFENDER per hit when a struck character has 2+ armor pieces. The post-tap
+  damage section of `resolveAttack` was refactored into a serializable state machine (`AttackCtx`,
+  `driveAttack`/`applyCombatHit`/`finalizeAttack`) that PAUSES on a 2+armor hit and resumes via
+  `resolveArmor`. New synced `GameState.pendingArmor` routes the choice to the defender; `reactiveHold`
+  holds the attacker meanwhile; `ArmorModal` is the forced picker. `applyDamage` gained an optional forced
+  `armorPieceId` + a most-worn-first default. **SCOPE/FLAG**: interactive only for ATTACK damage
+  (primary + Cleave); Action-card / combat-trigger / start-of-turn damage still uses the synchronous
+  most-worn-first default (no prompt). Reckless self-damage still bypasses armor; companion-variant Armor
+  unimplemented.
+- **Deferred pickers still open**: Scavenger (unwired — no card carries it), Lens any-deck, Untamed keyword.
+  See `tasks/todo.md` Review sections (newest at the bottom) for full per-slice detail.
+
 ## Repo / sharing (2026-06-07)
 - The app is on GitHub: **https://github.com/logisticrib/twilight-effect** (PRIVATE), scoped to
   `twilight-app/` only (`main` branch). Push updates with `git add -A && git commit -m "…" && git push`
@@ -127,6 +149,26 @@ w.cards.forEach(c=>{if(E[c.name])c.effects=E[c.name];});fs.writeFileSync(p,JSON.
   removed. `_broadcast` KEPT purely as the "in multiplayer?" flag (no-op set by useMultiplayer, checked
   in backToLobby); real sync stays the store→`sendStateSync` subscription. Typecheck clean; app renders.
   **All flagged MP items closed — only the live two-peer playtest remains.**
+- **MP connection lifecycle bug FIXED (2026-06-22)** — first two-window playtest: both peers stuck on the
+  Matching screen; console showed the PeerJS WebSocket "closed before connection established" with
+  `destroy()` firing from `useMultiplayer` cleanup on unmount. CAUSE: `useMultiplayer()` was called in
+  **Lobby**/**Matching** (per-instance `useRef` session); Host/Join flips `playPhase`→`game`, Lobby
+  unmounts, its cleanup `destroy()`s the peer before it connects. FIX: hoisted `useMultiplayer()` into
+  `Play()` (stays mounted across lobby→matching→game); `host`/`join` passed to Lobby, `disconnect` to
+  Matching, as props. Verified render/typecheck; **owner still needs to retry the live connect** — if it
+  still fails, suspect the public `0.peerjs.com` server (→ run a local PeerServer).
+- **Playtest bugfixes (2026-06-22)** — live two-window play found: (1) **companions showed no atk/hp off
+  the board** — `CardFace` read `maxHp` (BoardEntity-only) for hand/library `Card`s → stat block hidden;
+  FIX falls back to printed `hp`. (2) **opponent's draw was revealed** — the draw toast in `endTurn`
+  (runs on the ender, draws for the next player) named the card; FIX redacts to "<name> draws a card"
+  unless solo or the local player is the drawer. (3) **Special Action lowers Willpower** — REAL bug per
+  owner correction (I initially mis-called it intended). FIXED: `computeWillpower` now = `classZone.length`
+  (TOTAL cards; was face-up only), so a spent/faded card still counts → Special Actions don't reduce the
+  WP stat. `playWillpower` reads that − Dismayed; special-action availability still gated on a face-up
+  card to flip (independent of WP). Rules doc corrected (parent + snapshot): WP = "number of cards in your
+  Class Zone", "temporarily reduces Willpower" removed, fleeing reworded. Verified WP stays 3 after 1–2
+  special actions. **Supersedes earlier "WP = face-up count" notes.** (All 3 fixes preview-verified;
+  typecheck clean.)
 - **All keywords**: Cleave, Reckless, Armor, Guardian, Zealous, Ranged, Hit & Run, Reinforce,
   Dismantle, Kit-Master, Dismay/Dismayed, Acrobatics. (Earlier keyword-engine slices.)
 - **All 20 Action cards** (damage/AoE/die/draw/buffs/move/bounce/extra-attack/force-attack/
@@ -195,9 +237,10 @@ w.cards.forEach(c=>{if(E[c.name])c.effects=E[c.name];});fs.writeFileSync(p,JSON.
 ## REMAINING — the rider tail ✅ COMPLETE (2026-06-05)
 All seven items below are DONE and preview-verified. The structured-effects engine now covers
 every card across both decks. The biggest open work is now the **live two-peer multiplayer
-playtest** of the state-sync rework (see DONE §Multiplayer). Deferred polish: player-choice pickers
-(Memory Stone mid-combat, Scavenger, Armor auto-select, Kit-Master multi-item, Lens any-deck) and
-the owner-ruling flags in OPEN QUESTIONS.
+playtest** of the state-sync rework (see DONE §Multiplayer). Deferred polish: player-choice pickers —
+DONE: Memory Stone mid-combat, Kit-Master multi-item (+slot-capacity), Armor per-hit (see 2026-06-23
+session at top); STILL DEFERRED: Scavenger (unwired), Lens any-deck, Untamed keyword — plus the
+owner-ruling flags in OPEN QUESTIONS.
 
 1. ~~**on-attack / on-kill triggers (attacker-side)**~~ — DONE 2026-06-05. `resolveCombatTriggers`
    in `resolveAttack` (after Cleave, before Reckless) fires onAttack/onDealDamage/onKill from the
