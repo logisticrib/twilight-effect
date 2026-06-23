@@ -245,6 +245,9 @@ export interface CardFaceProps {
   textboxRef?: Ref<HTMLDivElement>;
   /** Wheel handler on the card (source cards forward it to scroll the preview pane). */
   onWheel?: (e: WheelEvent<HTMLDivElement>) => void;
+  /** Render the card upright even if the entity is tapped/exhausted (used by the
+   *  hover preview pane — you're inspecting the card, not its board state). */
+  upright?: boolean;
   onClick?: () => void;
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
@@ -261,7 +264,7 @@ const TAP_DEG: Record<TapState, number> = { none: 0, minor: 45, major: 90 };
 
 // ─── Main CardFace ────────────────────────────────────────────────────────────
 export function CardFace({
-  data, scale = 1, selected = false, hoverable = false, scrollText = false, textboxRef, onWheel,
+  data, scale = 1, selected = false, hoverable = false, scrollText = false, textboxRef, onWheel, upright = false,
   onClick, onMouseEnter, onMouseLeave,
 }: CardFaceProps) {
   // Effective attack for a board companion (base + items + auras + buffs); null
@@ -297,7 +300,7 @@ export function CardFace({
   // Tap state (board entities only)
   const tapped: TapState = ('tapped' in data ? data.tapped : 'none') ?? 'none';
   const exhausted = 'exhausted' in data ? data.exhausted : false;
-  const rot = TAP_DEG[tapped] ?? (exhausted ? 90 : 0);
+  const rot = upright ? 0 : (TAP_DEG[tapped] ?? (exhausted ? 90 : 0));
 
   // Type resolution
   const rawType = ('type' in data ? data.type : '') as string;

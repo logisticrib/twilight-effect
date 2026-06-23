@@ -29,7 +29,7 @@ function PreviewPane() {
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
       {shown ? (
-        <CardFace data={shown.data} scale={0.97} scrollText textboxRef={setTextboxRef} />
+        <CardFace data={shown.data} scale={0.97} scrollText upright textboxRef={setTextboxRef} />
       ) : (
         <span style={{
           fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: TBL.ink4,

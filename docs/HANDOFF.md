@@ -17,10 +17,14 @@ Three previously-deferred pickers were built + preview-verified (store + real UI
   `driveAttack`/`applyCombatHit`/`finalizeAttack`) that PAUSES on a 2+armor hit and resumes via
   `resolveArmor`. New synced `GameState.pendingArmor` routes the choice to the defender; `reactiveHold`
   holds the attacker meanwhile; `ArmorModal` is the forced picker. `applyDamage` gained an optional forced
-  `armorPieceId` + a most-worn-first default. **SCOPE/FLAG**: interactive only for ATTACK damage
-  (primary + Cleave); Action-card / combat-trigger / start-of-turn damage still uses the synchronous
-  most-worn-first default (no prompt). Reckless self-damage still bypasses armor; companion-variant Armor
-  unimplemented.
+  `armorPieceId` + a most-worn-first default. **Now covers ALL damage** (2026-06-23 follow-up): non-attack
+  damage (Action cards, combat triggers, start-of-turn constructs, on-enter, abilities) DEFERS the choice
+  via an `armorSink` (threaded alongside `deadSink` through `resolveActionEffects`/`applyDamage`) and arms
+  it after the effect resolves (`armPrompts`/`armNextArmorChoice`; `PendingArmor.queue` chains multiple,
+  candidates re-derived per choice). Combat primary/Cleave still pauses immediately (necessary — a piece
+  sacrificed mid-combat changes later hits). FLAGS: Reckless self-damage still bypasses armor;
+  companion-variant Armor (printed on a card, not an item) unimplemented; a single non-combat effect that
+  hit the SAME character twice would defer with re-derived candidates (no current card does this).
 - **Deferred pickers still open**: Scavenger (unwired — no card carries it), Lens any-deck, Untamed keyword.
   See `tasks/todo.md` Review sections (newest at the bottom) for full per-slice detail.
 - **First-player handicap FLIPPED** (owner ruling, supersedes 2026-06-22): the first player now **skips their

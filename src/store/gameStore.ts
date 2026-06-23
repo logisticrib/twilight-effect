@@ -223,16 +223,24 @@ export interface AttackCtx {
   msgs: string[];
   events: DamageEvent[];       // damage events for combat triggers (blocked hits excluded)
   deadSink: PendingDeadPick[]; // deferred onDestroy Dead-Zone picks
+  armorSink: ArmorChoiceData[];// deferred Armor choices from combat triggers (armed at finalize)
 }
 
-/** Mid-combat Armor choice: the defender picks which of a hit character's armor
- *  pieces absorbs the damage. `ctx` resumes the paused attack on resolution. */
-export interface PendingArmor {
+/** One deferred Armor choice: a hit landed on a character with 2+ armor pieces and
+ *  the defender must pick which absorbs it. Used both for the active prompt and the
+ *  queue of pending ones (non-combat damage defers them; combat hits pause instead). */
+export interface ArmorChoiceData {
   defender: 'p1' | 'p2';       // who chooses (the hit character's controller)
   entityId: string;            // the character being hit
   entityName: string;
   candidates: { id: string; name: string; counters: number; armor: number }[];
-  ctx: AttackCtx;
+}
+
+/** Armor choice prompt. `ctx` present → a paused mid-combat hit (resume on resolve).
+ *  `queue` present → deferred non-combat choices resolved one after another. */
+export interface PendingArmor extends ArmorChoiceData {
+  ctx?: AttackCtx;
+  queue?: ArmorChoiceData[];
 }
 
 // ─── Adjacency map ────────────────────────────────────────────────────────────
@@ -338,25 +346,42 @@ function armorPiecesOf(ent: BoardEntity): EquippedItem[] {
 function pickDefaultArmor(pieces: EquippedItem[]): EquippedItem {
   return pieces.reduce((best, p) => ((p.counters ?? 0) > (best.counters ?? 0) ? p : best), pieces[0]);
 }
-function applyDamage(game: GameState, entityId: string, dmg: number, sourceName: string, sourcePlayer: 'p1' | 'p2', sink?: PendingDeadPick[], armorPieceId?: string): { game: GameState; msgs: string[] } {
+/** Put one armor counter on `pieceId` (sacrifice it at its limit). Shared by the
+ *  in-line block in applyDamage and the deferred non-combat choice in resolveArmor. */
+function applyArmorCounter(game: GameState, entityId: string, pieceId: string): { game: GameState; msgs: string[] } {
+  const loc = findEntityAnywhere(game, entityId);
+  const piece = loc?.ent.loadout?.gear.find(gi => gi?.id === pieceId);
+  if (!loc || !piece) return { game, msgs: [] };
+  const msgs: string[] = [];
+  const newCounters = (piece.counters ?? 0) + 1;
+  msgs.push(`${piece.name} blocks! (${newCounters}/${piece.armor} counters)`);
+  let gear = loc.ent.loadout!.gear.map(gi => gi?.id === pieceId ? { ...gi, counters: newCounters } : gi);
+  if (newCounters >= (piece.armor ?? 0)) {
+    gear = gear.map(gi => gi?.id === pieceId ? null : gi);
+    msgs.push(`${piece.name} is destroyed!`);
+  }
+  return { game: updateEntity(game, entityId, { loadout: { ...loc.ent.loadout!, gear } }), msgs };
+}
+function applyDamage(game: GameState, entityId: string, dmg: number, sourceName: string, sourcePlayer: 'p1' | 'p2', sink?: PendingDeadPick[], armorPieceId?: string, armorSink?: ArmorChoiceData[]): { game: GameState; msgs: string[] } {
   const loc = findEntityAnywhere(game, entityId);
   if (!loc) return { game, msgs: [] };
   const ent = loc.ent;
   const msgs: string[] = [];
 
   const armorPieces = armorPiecesOf(ent);
-  const armorPiece = armorPieces.length
-    ? (armorPieceId ? armorPieces.find(p => p.id === armorPieceId) ?? pickDefaultArmor(armorPieces) : pickDefaultArmor(armorPieces))
-    : null;
-  if (armorPiece) {
-    const newCounters = (armorPiece.counters ?? 0) + 1;
-    msgs.push(`${armorPiece.name} blocks! (${newCounters}/${armorPiece.armor} counters)`);
-    let gear = ent.loadout!.gear.map(gi => gi?.id === armorPiece.id ? { ...gi, counters: newCounters } : gi);
-    if (newCounters >= (armorPiece.armor ?? 0)) {
-      gear = gear.map(gi => gi?.id === armorPiece.id ? null : gi);
-      msgs.push(`${armorPiece.name} is destroyed!`);
+  if (armorPieces.length) {
+    // 2+ pieces with no forced choice and a sink to defer into → the defender picks
+    // which absorbs (armed after this resolution). Damage is fully prevented either way.
+    if (armorPieces.length >= 2 && armorSink && !armorPieceId) {
+      armorSink.push({ defender: loc.player, entityId, entityName: ent.name,
+        candidates: armorPieces.map(p => ({ id: p.id, name: p.name, counters: p.counters ?? 0, armor: p.armor ?? 0 })) });
+      msgs.push(`${ent.name}'s armor blocks! (choose which)`);
+      return { game, msgs };
     }
-    return { game: updateEntity(game, entityId, { loadout: { ...ent.loadout!, gear } }), msgs };
+    // Single piece, or a forced/auto choice → apply the counter now.
+    const piece = armorPieceId ? armorPieces.find(p => p.id === armorPieceId) ?? pickDefaultArmor(armorPieces) : pickDefaultArmor(armorPieces);
+    const r = applyArmorCounter(game, entityId, piece.id);
+    return { game: r.game, msgs: [...msgs, ...r.msgs] };
   }
 
   const floor = hasModifier(ent, 'hpFloor1') ? 1 : 0;
@@ -380,7 +405,7 @@ function applyDamage(game: GameState, entityId: string, dmg: number, sourceName:
     msgs.push(`${sourceName} destroys ${ent.name}!`);
     let g = removeEntity(game, entityId);
     if (hasRemovalTrigger(ent)) {
-      const rt = resolveRemovalTriggers(g, ent, loc.player, sink);
+      const rt = resolveRemovalTriggers(g, ent, loc.player, sink, armorSink);
       g = rt.game; msgs.push(...rt.msgs);
     }
     return { game: g, msgs };
@@ -442,7 +467,7 @@ function driveAttack(game: GameState, ctx: AttackCtx):
   if (attLoc) {
     const attacker = attLoc.ent;
     if (combatTriggerEffects(attacker, 'onAttack').length || combatTriggerEffects(attacker, 'onDealDamage').length || combatTriggerEffects(attacker, 'onKill').length) {
-      const ct = resolveCombatTriggers(g, attacker, ctx.attackerPlayer, ctx.events);
+      const ct = resolveCombatTriggers(g, attacker, ctx.attackerPlayer, ctx.events, ctx.armorSink);
       g = ct.game; ctx.msgs.push(...ct.msgs);
     }
   }
@@ -461,15 +486,13 @@ function driveAttack(game: GameState, ctx: AttackCtx):
   return { done: true, game: g, ctx };
 }
 
-/** Commit a finished attack: seal activation, clear selection, arm any deferred
- *  Dead-Zone picks, and clear the Armor prompt. */
+/** Commit a finished attack: seal activation, clear selection, and arm any deferred
+ *  Dead-Zone picks + Armor choices (the latter from combat triggers). */
 function finalizeAttack(game: GameState, ctx: AttackCtx): GameState {
   return recomputeStatics({
-    ...game,
+    ...armPrompts(game, ctx.deadSink, ctx.armorSink),
     ...activationPatch(game, ctx.charId),
     selected: null,
-    ...armDeadPicks(ctx.deadSink),
-    pendingArmor: null,
   });
 }
 
@@ -557,7 +580,7 @@ function conditionMet(game: GameState, lp: 'p1' | 'p2', cond: Condition): boolea
  * interactive target. A single d6 is rolled per card and shared across die/halfDie
  * effects (e.g. Wrath of the Untamed Sky). Returns the new game + log lines.
  */
-function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceName: string, effects: Effect[], targetId?: string, sourceId?: string, ctx?: EffectCtx, sink?: PendingDeadPick[]): { game: GameState; msgs: string[] } {
+function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceName: string, effects: Effect[], targetId?: string, sourceId?: string, ctx?: EffectCtx, sink?: PendingDeadPick[], armorSink?: ArmorChoiceData[]): { game: GameState; msgs: string[] } {
   const opp: 'p1' | 'p2' = lp === 'p1' ? 'p2' : 'p1';
   const die = rollD6();
   const usesDie = effects.some(e => (e.op === 'damage' || e.op === 'damageSelfPC') && typeof e.amount === 'object' && ('die' in e.amount || 'halfDie' in e.amount));
@@ -608,7 +631,7 @@ function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceName: stri
           if (slot) targets = charsOf(g, opp, isFront(slot) ? 'front' : 'back');
         } else if (targetId) targets = [targetId];
         for (const tid of targets) {
-          const r = applyDamage(g, tid, amt, sourceName, lp, sink);
+          const r = applyDamage(g, tid, amt, sourceName, lp, sink, undefined, armorSink);
           g = r.game; msgs.push(...r.msgs);
         }
         break;
@@ -616,7 +639,7 @@ function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceName: stri
       case 'damageSelfPC': {
         const amt = amountValue(e.amount, die, controlledCompanions);
         const pcId = pcIdOf(g, lp);
-        if (pcId && amt > 0) { const r = applyDamage(g, pcId, amt, sourceName, opp, sink); g = r.game; msgs.push(...r.msgs); }
+        if (pcId && amt > 0) { const r = applyDamage(g, pcId, amt, sourceName, opp, sink, undefined, armorSink); g = r.game; msgs.push(...r.msgs); }
         break;
       }
       case 'heal': {
@@ -696,7 +719,7 @@ function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceName: stri
           const aloc = findEntityAnywhere(g, aid);
           if (!aloc) continue;
           const dmg = effectiveAttack(aloc.ent, g);
-          const r = applyDamage(g, targetId, dmg, aloc.ent.name, lp, sink);
+          const r = applyDamage(g, targetId, dmg, aloc.ent.name, lp, sink, undefined, armorSink);
           g = r.game; msgs.push(...r.msgs);
           g = updateEntity(g, aid, { acts: { ...aloc.ent.acts, major: true }, exhausted: true, tapped: 'major' });
         }
@@ -746,7 +769,7 @@ function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceName: stri
         const roll = rollD6();
         const pass = roll >= e.threshold;
         msgs.push(`Rolled ${roll} — ${pass ? 'success' : 'fail'}`);
-        const r = resolveActionEffects(g, lp, sourceName, pass ? e.onPass : e.onFail, targetId, sourceId, ctx, sink);
+        const r = resolveActionEffects(g, lp, sourceName, pass ? e.onPass : e.onFail, targetId, sourceId, ctx, sink, armorSink);
         g = r.game; msgs.push(...r.msgs);
         break;
       }
@@ -852,7 +875,7 @@ function eventMatches(cond: Condition | undefined, ev: DamageEvent, attackerOwne
  * onAttack fires once; the per-target triggers fire once per matching damage event.
  * Interactive targets are auto-picked to the attacker's own side (no mid-combat prompt).
  */
-function resolveCombatTriggers(game: GameState, attacker: BoardEntity, attackerOwner: 'p1' | 'p2', events: DamageEvent[]): { game: GameState; msgs: string[] } {
+function resolveCombatTriggers(game: GameState, attacker: BoardEntity, attackerOwner: 'p1' | 'p2', events: DamageEvent[], armorSink?: ArmorChoiceData[]): { game: GameState; msgs: string[] } {
   let g = game;
   const msgs: string[] = [];
   const run = (clause: CombatClause, ctx?: EffectCtx) => {
@@ -863,7 +886,7 @@ function resolveCombatTriggers(game: GameState, attacker: BoardEntity, attackerO
       if (elig.length === 0) return; // no own target — fizzle
       targetId = elig[0];
     }
-    const r = resolveActionEffects(g, attackerOwner, clause.sourceName, clause.effects, targetId, attacker.id, ctx);
+    const r = resolveActionEffects(g, attackerOwner, clause.sourceName, clause.effects, targetId, attacker.id, ctx, undefined, armorSink);
     g = r.game;
     if (r.msgs.length) msgs.push(`${clause.sourceName}: ${r.msgs.join(' | ')}`);
   };
@@ -884,7 +907,7 @@ function resolveCombatTriggers(game: GameState, attacker: BoardEntity, attackerO
  * targets auto-pick the first own-side eligible. Called from applyDamage's destroy
  * branch (other removal paths — bounce/sacrifice — are not yet hooked).
  */
-function resolveRemovalTriggers(game: GameState, ent: BoardEntity, controller: 'p1' | 'p2', sink?: PendingDeadPick[]): { game: GameState; msgs: string[] } {
+function resolveRemovalTriggers(game: GameState, ent: BoardEntity, controller: 'p1' | 'p2', sink?: PendingDeadPick[], armorSink?: ArmorChoiceData[]): { game: GameState; msgs: string[] } {
   let g = game;
   const msgs: string[] = [];
   for (const trig of ['onDestroy', 'onLeave'] as const) {
@@ -897,7 +920,7 @@ function resolveRemovalTriggers(game: GameState, ent: BoardEntity, controller: '
         if (elig.length === 0) continue;
         targetId = elig[0];
       }
-      const r = resolveActionEffects(g, controller, clause.sourceName, clause.effects, targetId, ent.id, undefined, sink);
+      const r = resolveActionEffects(g, controller, clause.sourceName, clause.effects, targetId, ent.id, undefined, sink, armorSink);
       g = r.game;
       if (r.msgs.length) msgs.push(`${clause.sourceName}: ${r.msgs.join(' | ')}`);
     }
@@ -914,6 +937,37 @@ function hasRemovalTrigger(ent: BoardEntity): boolean {
  *  rest. Returns `{}` when empty so spreading it never clobbers an existing prompt. */
 function armDeadPicks(sink: PendingDeadPick[]): { pendingDeadPick?: PendingDeadPick; pendingDeadPickQueue?: PendingDeadPick[] } {
   return sink.length ? { pendingDeadPick: sink[0], pendingDeadPickQueue: sink.slice(1) } : {};
+}
+
+/** Arm the next deferred non-combat Armor choice, re-deriving candidates against the
+ *  current board (a piece sacrificed by an earlier choice drops out; a lone remaining
+ *  piece auto-absorbs with no prompt). Returns the updated game + the PendingArmor to
+ *  show, or null when the queue is exhausted. */
+function armNextArmorChoice(game: GameState, queue: ArmorChoiceData[]): { game: GameState; pendingArmor: PendingArmor | null } {
+  let g = game;
+  const rest = [...queue];
+  while (rest.length) {
+    const c = rest.shift()!;
+    const loc = findEntityAnywhere(g, c.entityId);
+    if (!loc) continue; // entity gone since
+    const pieces = armorPiecesOf(loc.ent);
+    if (pieces.length >= 2) {
+      return { game: g, pendingArmor: {
+        defender: c.defender, entityId: c.entityId, entityName: loc.ent.name,
+        candidates: pieces.map(p => ({ id: p.id, name: p.name, counters: p.counters ?? 0, armor: p.armor ?? 0 })),
+        queue: rest,
+      } };
+    }
+    if (pieces.length === 1) g = applyArmorCounter(g, c.entityId, pieces[0].id).game; // no choice left
+    // 0 pieces → nothing to absorb with; skip
+  }
+  return { game: g, pendingArmor: null };
+}
+
+/** End-of-resolution patch arming any deferred Dead-Zone + Armor prompts. */
+function armPrompts(game: GameState, deadSink: PendingDeadPick[], armorSink: ArmorChoiceData[]): GameState {
+  const a = armNextArmorChoice(game, armorSink);
+  return { ...a.game, ...armDeadPicks(deadSink), pendingArmor: a.pendingArmor };
 }
 
 /**
@@ -1044,11 +1098,12 @@ function nextPeek(game: GameState, queue: PeekRequest[]): { peek: PendingPeek | 
  * here — they are collected for interactive modals queued after endTurn finishes.
  * Sources are snapshotted since the board may change.
  */
-function resolveStartOfTurn(game: GameState, side: 'p1' | 'p2'): { game: GameState; msgs: string[]; peeks: PeekRequest[]; deadPicks: PendingDeadPick[] } {
+function resolveStartOfTurn(game: GameState, side: 'p1' | 'p2'): { game: GameState; msgs: string[]; peeks: PeekRequest[]; deadPicks: PendingDeadPick[]; armorChoices: ArmorChoiceData[] } {
   let g = game;
   const msgs: string[] = [];
   const peeks: PeekRequest[] = [];
   const deadPicks: PendingDeadPick[] = [];
+  const armorChoices: ArmorChoiceData[] = [];
   const ids = Object.values(g[side].board).filter((e): e is BoardEntity => !!e).map(e => e.id);
   for (const id of ids) {
     const loc = findEntityAnywhere(g, id);
@@ -1083,11 +1138,11 @@ function resolveStartOfTurn(game: GameState, side: 'p1' | 'p2'): { game: GameSta
       if (elig.length === 0) continue; // no legal target — fizzle this source
       targetId = elig[0];
     }
-    const r = resolveActionEffects(g, side, loc.ent.name, effs, targetId, id);
+    const r = resolveActionEffects(g, side, loc.ent.name, effs, targetId, id, undefined, undefined, armorChoices);
     g = r.game;
     if (r.msgs.length) msgs.push(`${loc.ent.name}: ${r.msgs.join(' | ')}`);
   }
-  return { game: g, msgs, peeks, deadPicks };
+  return { game: g, msgs, peeks, deadPicks, armorChoices };
 }
 
 /** Does this Action need an interactive target chosen on the board before resolving? */
@@ -1719,10 +1774,12 @@ export const useGameStore = create<GameStoreState>()(
 
     // No target needed — resolve now (buffs, board AoE, self-damage, draw).
     const deadSink: PendingDeadPick[] = [];
-    const { game, msgs } = resolveActionEffects(g0, lp, card.name, onPlay, undefined, actLoc.ent.id, magicCtx(g0, lp, card), deadSink);
+    const armorSink: ArmorChoiceData[] = [];
+    const { game, msgs } = resolveActionEffects(g0, lp, card.name, onPlay, undefined, actLoc.ent.id, magicCtx(g0, lp, card), deadSink, armorSink);
     const newHand = game[lp].hand.filter(c => c.id !== handCardId);
+    const finalG = { ...game, [lp]: { ...game[lp], hand: newHand, dead: [...game[lp].dead, card] } };
     return {
-      game: { ...game, [lp]: { ...game[lp], hand: newHand, dead: [...game[lp].dead, card] }, ...armDeadPicks(deadSink) },
+      game: armPrompts(finalG, deadSink, armorSink),
       pendingPlay: null,
       toasts: [...s.toasts, mkToast(msgs.length ? `${card.name}: ${msgs.join(' | ')}` : `Played: ${card.name}`)],
     };
@@ -1769,10 +1826,10 @@ export const useGameStore = create<GameStoreState>()(
     if (pa.twoStep === 'disarm' && pa.firstId) {
       // Step 2: attacker (firstId) attacks the chosen enemy, then sacrifice an item on it.
       const attLoc = findEntityAnywhere(s.game, pa.firstId);
-      let g = s.game; const msgs: string[] = []; const deadSink: PendingDeadPick[] = [];
+      let g = s.game; const msgs: string[] = []; const deadSink: PendingDeadPick[] = []; const armorSink: ArmorChoiceData[] = [];
       if (attLoc) {
         const dmg = effectiveAttack(attLoc.ent, g);
-        const r = applyDamage(g, targetId, dmg, attLoc.ent.name, pa.lp, deadSink); g = r.game; msgs.push(...r.msgs);
+        const r = applyDamage(g, targetId, dmg, attLoc.ent.name, pa.lp, deadSink, undefined, armorSink); g = r.game; msgs.push(...r.msgs);
         const a2 = findEntityAnywhere(g, pa.firstId);
         if (a2) g = updateEntity(g, pa.firstId, { exhausted: true, tapped: 'major', acts: { ...a2.ent.acts, major: true } });
         const tLoc = findEntityAnywhere(g, targetId);
@@ -1789,19 +1846,20 @@ export const useGameStore = create<GameStoreState>()(
       const finalGame = pa.card ? { ...g, [pa.lp]: { ...g[pa.lp], dead: [...g[pa.lp].dead, pa.card] } } : g;
       const id = ++toastId;
       setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 4000);
-      return { game: { ...finalGame, ...armDeadPicks(deadSink) }, pendingActionTarget: null, toasts: [...s.toasts, { id, msg: `${pa.sourceName}: ${msgs.join(' | ')}` }] };
+      return { game: armPrompts(finalGame, deadSink, armorSink), pendingActionTarget: null, toasts: [...s.toasts, { id, msg: `${pa.sourceName}: ${msgs.join(' | ')}` }] };
     }
 
     // ── Single-step ───────────────────────────────────────────────────────────
     const deadSink: PendingDeadPick[] = [];
-    const { game, msgs } = resolveActionEffects(s.game, pa.lp, pa.sourceName, pa.effects, targetId, pa.sourceId, magicCtx(s.game, pa.lp, pa.card), deadSink);
+    const armorSink: ArmorChoiceData[] = [];
+    const { game, msgs } = resolveActionEffects(s.game, pa.lp, pa.sourceName, pa.effects, targetId, pa.sourceId, magicCtx(s.game, pa.lp, pa.card), deadSink, armorSink);
     const finalGame = pa.source === 'action' && pa.card
       ? { ...game, [pa.lp]: { ...game[pa.lp], dead: [...game[pa.lp].dead, pa.card] } }
       : game;
     const id = ++toastId;
     setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 4000);
     return {
-      game: { ...finalGame, ...armDeadPicks(deadSink) },
+      game: armPrompts(finalGame, deadSink, armorSink),
       pendingActionTarget: null,
       toasts: [...s.toasts, { id, msg: msgs.length ? `${pa.sourceName}: ${msgs.join(' | ')}` : pa.sourceName }],
     };
@@ -1915,8 +1973,9 @@ export const useGameStore = create<GameStoreState>()(
         pendingActionTarget: { source: 'ability', sourceName: ability.sourceName, lp: player, effects: ability.effects, eligibleIds, sourceId: selfId },
       };
     }
-    const r = resolveActionEffects(g, player, ability.sourceName, ability.effects, undefined, selfId);
-    return { game: r.game, toasts: [...s.toasts, toast(r.msgs.length ? `${ability.sourceName}: ${r.msgs.join(' | ')}` : ability.sourceName)] };
+    const armorSink: ArmorChoiceData[] = [];
+    const r = resolveActionEffects(g, player, ability.sourceName, ability.effects, undefined, selfId, undefined, undefined, armorSink);
+    return { game: armPrompts(r.game, [], armorSink), toasts: [...s.toasts, toast(r.msgs.length ? `${ability.sourceName}: ${r.msgs.join(' | ')}` : ability.sourceName)] };
   }),
 
   // Cancel a pending target. Action cards return to hand; on-enter effects just fizzle.
@@ -2250,7 +2309,7 @@ export const useGameStore = create<GameStoreState>()(
       dmg, hitQueue, phase: 'damage',
       reckless: effectiveKeywords(attacker, game).includes('Reckless'),
       hitRun: effectiveKeywords(attacker, game).includes('Hit & Run'),
-      msgs: acroMsgs, events: [], deadSink: [],
+      msgs: acroMsgs, events: [], deadSink: [], armorSink: [],
     };
     const res = driveAttack(newGame, ctx);
     if (!res.done) {
@@ -2266,17 +2325,28 @@ export const useGameStore = create<GameStoreState>()(
     if (!pa) return s;
     const chosen = pa.candidates.find(c => c.id === pieceId);
     if (!chosen) return s; // must pick a real candidate
-    // Resume on a cloned ctx (the stored one is part of synced state).
-    const ctx: AttackCtx = { ...pa.ctx, hitQueue: [...pa.ctx.hitQueue], msgs: [...pa.ctx.msgs], events: [...pa.ctx.events], deadSink: [...pa.ctx.deadSink] };
+    const mkToast = (msg: string) => {
+      const id = ++toastId;
+      setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 3000);
+      return { id, msg };
+    };
+
+    // Non-combat deferred choice: apply the counter, then arm the next queued one.
+    if (!pa.ctx) {
+      const r = applyArmorCounter(s.game, pa.entityId, pieceId);
+      const next = armNextArmorChoice(r.game, pa.queue ?? []);
+      return { game: { ...next.game, pendingArmor: next.pendingArmor }, toasts: [...s.toasts, mkToast(r.msgs.join(' | '))] };
+    }
+
+    // Combat: resume the paused attack on a cloned ctx (the stored one is synced state).
+    const ctx: AttackCtx = { ...pa.ctx, hitQueue: [...pa.ctx.hitQueue], msgs: [...pa.ctx.msgs], events: [...pa.ctx.events], deadSink: [...pa.ctx.deadSink], armorSink: [...pa.ctx.armorSink] };
     let g: GameState = { ...s.game, pendingArmor: null };
     g = applyCombatHit(g, ctx, chosen.id); // resolve the paused hit with the chosen piece
     const res = driveAttack(g, ctx);
     if (!res.done) {
       return { game: { ...res.game, pendingArmor: res.pendingArmor } };
     }
-    const id = ++toastId;
-    setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 3000);
-    return { game: finalizeAttack(res.game, res.ctx), toasts: [...s.toasts, { id, msg: res.ctx.msgs.join(' | ') }] };
+    return { game: finalizeAttack(res.game, res.ctx), toasts: [...s.toasts, mkToast(res.ctx.msgs.join(' | '))] };
   }),
 
   // ── Cancel ─────────────────────────────────────────────────────────────────
@@ -2596,10 +2666,11 @@ export const useGameStore = create<GameStoreState>()(
         }
         // No legal target — fizzle (enter without the targeted effect).
       } else {
-        const r = resolveActionEffects(placedGame, lp, card.name, onEnter, undefined, newEnt.id);
+        const armorSink: ArmorChoiceData[] = [];
+        const r = resolveActionEffects(placedGame, lp, card.name, onEnter, undefined, newEnt.id, undefined, undefined, armorSink);
         return {
           pendingPlay: null, pendingTrigger, pendingKit, oathContext: newOathCtx, modalQueue: newModals,
-          game: r.game,
+          game: armPrompts(r.game, [], armorSink),
           toasts: [...s.toasts, { id, msg: r.msgs.length ? `${card.name} enters! ${r.msgs.join(' | ')}` : enterMsg }],
         };
       }
@@ -2778,6 +2849,9 @@ export const useGameStore = create<GameStoreState>()(
     const { peek: firstPeek, rest: peekQueue } = nextPeek(newGame, sot.peeks);
     // Dead-Zone recovery (Library of Memory) — arm the first; it shows after peeks resolve.
     const [firstDeadPick, ...deadPickQueue] = sot.deadPicks;
+    // Armor choices from start-of-turn construct damage (defender picks which piece absorbs).
+    const armorRes = armNextArmorChoice(newGame, sot.armorChoices);
+    newGame = armorRes.game;
 
     setTimeout(() => get().saveGame(), 0);
     return {
@@ -2785,6 +2859,7 @@ export const useGameStore = create<GameStoreState>()(
       game: { ...newGame,
         pendingPeek: firstPeek, pendingPeekQueue: peekQueue,
         pendingDeadPick: firstDeadPick ?? null, pendingDeadPickQueue: deadPickQueue,
+        pendingArmor: armorRes.pendingArmor,
         pendingPoison },
       modalQueue: s.modalQueue,
       toasts: [...s.toasts, { id: drawId, msg: drawToast }, ...sotToasts],
