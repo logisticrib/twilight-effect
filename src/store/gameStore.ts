@@ -1330,7 +1330,21 @@ export const useGameStore = create<GameStoreState>()(
     const newBoard = { ...s.game[tp].board, [slot]: pc };
     const newPlayer = { ...s.game[tp], board: newBoard, _pc: undefined };
     // Advance the setup cursor past this place-pc step.
-    return { game: recomputeStatics({ ...s.game, [tp]: newPlayer, setupQueue: s.game.setupQueue.slice(1) }) };
+    const newSetupQueue = s.game.setupQueue.slice(1);
+    let g = recomputeStatics({ ...s.game, [tp]: newPlayer, setupQueue: newSetupQueue });
+    // Setup just finished → the player going first takes their normal Turn-1 draw. (The
+    // first player otherwise never draws on turn 1, since their draw is bundled into the
+    // previous endTurn, which never ran. No first-player draw handicap — only the Turn-1
+    // no-Major-Actions restriction applies.)
+    if (newSetupQueue.length === 0) {
+      const ap = g.activePlayer;
+      const ps = g[ap];
+      if (ps.deck.length > 0) {
+        const [drawn, ...rest] = ps.deck;
+        g = { ...g, [ap]: { ...ps, deck: rest, hand: [...ps.hand, drawn] } };
+      }
+    }
+    return { game: g };
   }),
 
   backToLobby: () => {

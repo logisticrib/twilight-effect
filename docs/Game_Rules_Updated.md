@@ -83,9 +83,9 @@ Each item is always considered attached to a single character. There is no "free
 
 **CONSTRUCTS**
 
-Unlike items, constructs are not attached to charactersâ€”they occupy COMMAND ZONE slots and degrade over time.
+Unlike items, constructs are not attached to characters—they occupy COMMAND ZONE slots and degrade over time.
 
-- Constructs always enter the encounter with a number of Anchor counters, representing their connection to the fieldâ€”whether through magic, tactics, or voice
+- Constructs always enter the encounter with a number of Anchor counters, representing their connection to the field—whether through magic, tactics, or voice
 - Remove one counter at the beginning of each turn; sacrifice when last removed
 - Constructs can be targeted by card effects but cannot be attacked
 - Constructs occupy COMMAND ZONE slots (count toward 6-character limit per player)
@@ -178,7 +178,8 @@ The supertype determines whether a Two-Handed weapon prevents the action from be
 
 **Willpower:**
 - Number of cards in your Class Zone
-- Cards require Willpower equal to their Level to function at full power
+- Determines the number of Special Actions you may take per turn
+- You may only play a card from your hand if your Willpower is at least the card's Level
 - Spending a Special Action flips a Class Zone card face-down as a "used this turn" marker; this does NOT reduce your Willpower. The card flips back face-up at the start of your next turn.
 
 **Companion Fleeing:**
@@ -189,9 +190,15 @@ Companions whose Level exceeds your current Willpower flee at the start of your 
 - The Dismayed condition reduces effective Willpower by 1 for fleeing checks, as with all other Willpower checks
 
 **Exhaustion:**
-- Cards rotate 90Â° when exhausted
+- Cards rotate 90° when exhausted
 - Exhausted characters cannot attack or use activated abilities
 - Characters ready (rotate back to upright) at start of controller's turn
+
+**Health (HP):**
+- Companions have the HP printed on the card; the Player Character starts at 20 HP (modified by class bonuses)
+- Damage reduces current HP; at 0 HP the character is destroyed and moved to the Dead Zone
+- HP can be restored, but never above the character's maximum HP
+- HP does not heal automatically at the end of a turn
 
 **Attack Eligibility:**
 A character may only initiate an attack if it is in the Front Line, unless it has the Ranged keyword. A character with Ranged may initiate an attack from either the Front Line or the Back Line.
@@ -256,7 +263,7 @@ Movement does not exhaust the character and does not produce a visible state cha
    - Remove one Anchor counter from each Construct
 
 **2. Draw Phase**
-   - Draw one card
+   - Draw one card (all players draw on every turn, including the first player on Turn 1)
 
 **3. Class Zone Exchange** *(optional, once per turn)*
    - You may move one card from your hand to your Class Zone, **or** move one card from your Class Zone to your hand — not both.
@@ -292,10 +299,10 @@ Movement does not exhaust the character and does not produce a visible state cha
 
 **Guidelines for effective deck building:**
 - Stick to 1-2 classes unless you have strong class access tools
-- Include a variety of card typesâ€”Actions, Companions, Items, and Constructsâ€”to respond to different threats
+- Include a variety of card types—Actions, Companions, Items, and Constructs—to respond to different threats
 - Be aware of Willpower thresholds when including high-level cards
-- Remember: Cards in your Class Zone may scatter after gamesâ€”don't treat them as disposable
-- Expect your deck to evolveâ€”winning or losing temporarily scatters cards from your collection
+- Remember: Cards in your Class Zone may scatter after games—don't treat them as disposable
+- Expect your deck to evolve—winning or losing temporarily scatters cards from your collection
 
 ### SCATTERED CARDS SYSTEM
 
@@ -345,25 +352,24 @@ Once you have determined the starting hand and Class Zone for each player, a bon
 
 Class bonuses are applied in turn order. The player who will take the first turn applies all their bonuses in any order they choose, then the second player does the same.
 
-âš”ï¸ **Warrior**â€”"Gear Up!" You may choose a card from your hand. If you do, reveal it and swap it for a Weapon card in your Class Zone.
+⚔️ **Warrior**—"Gear Up!" You may choose a card from your hand. If you do, reveal it and swap it for a Weapon card in your Class Zone.
 
-ðŸ”¥ **Sorcerer**â€”"Elemental Fury" You may reduce your opponent's starting HP by 2.
+🔥 **Sorcerer**—"Elemental Fury" You may reduce your opponent's starting HP by 2.
 
-ðŸ“š **Wizard**â€”"Knowledge is Power" You may look at the top 2 cards of your deck. If you do, put any number of them on the bottom of your deck and the rest on top in any order.
+📚 **Wizard**—"Knowledge is Power" You may look at the top 2 cards of your deck. If you do, put any number of them on the bottom of your deck and the rest on top in any order.
+☠️ **Necromancer**—"Grave Intent" You may put the top 3 cards of your deck into your Dead Zone.
 
-â˜ ï¸ **Necromancer**â€”"Grave Intent" You may put the top 3 cards of your deck into your Dead Zone.
+✨ **Paladin**—"Divine Favor" You may add 5 HP to your starting health.
 
-âœ¨ **Paladin**â€”"Divine Favor" You may add 5 HP to your starting health.
+🌿 **Druid**—"Call the Wild" You may choose a card from your hand. If you do, reveal it and swap it for a Companion card in your Class Zone.
 
-ðŸŒ¿ **Druid**â€”"Call the Wild" You may choose a card from your hand. If you do, reveal it and swap it for a Companion card in your Class Zone.
+🎵 **Bard**—"Encore!" You may shuffle one card from your hand into your deck. If you do, draw a card.
 
-ðŸŽµ **Bard**â€”"Encore!" You may shuffle one card from your hand into your deck. If you do, draw a card.
+🗡️ **Rogue**—"Sleight of Hand" You may look at your Player Character card. If you do, you may swap that card with a card from your Class Zone.
 
-ðŸ—¡ï¸ **Rogue**â€”"Sleight of Hand" You may look at your Player Character card. If you do, you may swap that card with a card from your Class Zone.
+🕯️ **Doom-Whisperer**—"Seeds of Despair" You may look at the top 2 cards of your opponent's deck. If you do, put any number of them on the bottom of their deck and the rest on top.
 
-ðŸ•¯ï¸ **Doom-Whisperer**â€”"Seeds of Despair" You may look at the top 2 cards of your opponent's deck. If you do, put any number of them on the bottom of their deck and the rest on top.
-
-ðŸ§± **Builder**â€”"Lay the Foundation" You may choose a card from your hand. If you do, reveal it and swap it for a Construct card in your Class Zone.
+🧱 **Builder**—"Lay the Foundation" You may choose a card from your hand. If you do, reveal it and swap it for a Construct card in your Class Zone.
 
 ---
 
