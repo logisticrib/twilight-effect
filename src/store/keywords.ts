@@ -327,8 +327,9 @@ export function hasTwoHanded(ent: BoardEntity): boolean {
   return ent.loadout?.weapon?.hands === 2;
 }
 
-/** Effective Willpower for the play-from-hand level requirement: face-up Class Zone
- *  count minus Dismayed. (Temporary "play as if WP higher" boosts would add here.) */
+/** Effective Willpower for the play-from-hand level requirement: total Class Zone
+ *  card count (player.willpower) minus Dismayed. Spending a Special Action flips a card
+ *  face-down as a used-marker but does not lower this. */
 export function playWillpower(player: PlayerState): number {
   return Math.max(0, player.willpower - (player.dismayed ? 1 : 0));
 }

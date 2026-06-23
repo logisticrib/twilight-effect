@@ -177,14 +177,14 @@ The supertype determines whether a Two-Handed weapon prevents the action from be
 ### CORE MECHANICS
 
 **Willpower:**
-- Number of face-up cards in your Class Zone
+- Number of cards in your Class Zone
 - Cards require Willpower equal to their Level to function at full power
-- When flipped face-down for Special Actions, temporarily reduces Willpower
+- Spending a Special Action flips a Class Zone card face-down as a "used this turn" marker; this does NOT reduce your Willpower. The card flips back face-up at the start of your next turn.
 
 **Companion Fleeing:**
 Companions whose Level exceeds your current Willpower flee at the start of your turn. Fleeing sends the companion to your Dead Zone.
 - Fleeing is checked at the start of each of your turns, not mid-turn when Willpower changes
-- If you spend a Special Action mid-turn and your Willpower drops below a companion's Level as a result, that companion does not flee immediately — it flees at the start of your *next* turn
+- Spending Special Actions does not change your Willpower, so it never causes a companion to flee. If a Class Zone Exchange lowers your Willpower below a companion's Level, that companion flees at the start of your *next* turn, not immediately
 - Temporary Willpower boosts (granted by card effects) do not prevent fleeing — fleeing checks use your actual Willpower, not boosted Willpower
 - The Dismayed condition reduces effective Willpower by 1 for fleeing checks, as with all other Willpower checks
 

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useGameStore } from '../store/gameStore';
+import { useMultiplayer } from '../lib/useMultiplayer';
 import { CardFace } from '../components/CardFace';
 import { TBL } from '../tokens';
 import { Lobby } from './play/Lobby';
@@ -318,10 +319,15 @@ export function Play() {
   const playPhase = useGameStore(s => s.playPhase);
   const connMode  = useGameStore(s => s.conn.mode);
   const oppStatus = useGameStore(s => s.conn.opponentStatus);
+  // The PeerJS session lives HERE — Play() stays mounted across lobby→matching→game,
+  // so hosting/joining survives the view switch. (Calling useMultiplayer() inside Lobby
+  // tied the session to Lobby's lifecycle, so it was destroyed the instant we left the
+  // lobby, killing the connection before it could complete.)
+  const { host, join, disconnect } = useMultiplayer();
 
-  if (playPhase === 'lobby') return <Lobby />;
+  if (playPhase === 'lobby') return <Lobby host={host} join={join} />;
   if (playPhase === 'game' && (connMode === 'host' || connMode === 'join') && oppStatus !== 'ready') {
-    return <Matching />;
+    return <Matching disconnect={disconnect} />;
   }
   return <GameView />;
 }

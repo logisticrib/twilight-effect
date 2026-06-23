@@ -305,7 +305,9 @@ export function CardFace({
   const isConstruct = rawType === 'Construct'  || ('kind' in data && data.kind === 'construct');
 
   const hp    = 'hp'    in data ? (data as BoardEntity).hp    : null;
-  const maxHp = effMaxHp ?? ('maxHp' in data ? (data as BoardEntity).maxHp : null);
+  // Board entities carry `maxHp`; a raw hand/library Card does not — fall back to its
+  // printed `hp` so companion stats render off the board too (else the stat block hid).
+  const maxHp = effMaxHp ?? ('maxHp' in data ? (data as BoardEntity).maxHp : (data as Card).hp);
   const atk   = effAtk ?? ('atk'  in data ? (data as BoardEntity).atk   : (data as Card).attack);
   const anchors      = 'anchors'      in data ? (data as BoardEntity).anchors      : null;
   const anchorsStart = 'anchorsStart' in data ? (data as BoardEntity).anchorsStart : null;

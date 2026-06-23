@@ -1023,9 +1023,12 @@ function makePc(id: string, name: string, cls: string, text: string): BoardEntit
   };
 }
 
-/** Compute current willpower = number of face-up Class Zone cards. */
+/** Willpower = number of cards in your Class Zone. A card flipped face-down for a
+ *  Special Action is just a "used this turn" marker (rendered faded) — it still counts
+ *  toward Willpower, so spending a Special Action does NOT lower your Willpower stat.
+ *  (Face-down cards flip back face-up at the start of your turn.) */
 export function computeWillpower(classZone: ClassZoneCard[]): number {
-  return classZone.filter(c => !c.faceDown).length;
+  return classZone.length;
 }
 
 /** Effective willpower used for all checks (fleeing, level gating). Accounts for Dismayed. */
@@ -2534,7 +2537,11 @@ export const useGameStore = create<GameStoreState>()(
       const drawn = drawnDeck[0];
       drawnHand = [...readied.hand, drawn];
       drawnDeck = drawnDeck.slice(1);
-      drawToast = `${readied.name} draws: ${drawn.name}`;
+      // Only reveal the drawn card to its owner. endTurn runs on the player ENDING their
+      // turn, who draws for the NEXT player — in multiplayer that's the opponent, so naming
+      // the card here would leak it. Sandbox (one controller) sees everything.
+      const reveal = s.conn.mode === 'solo' || nextPlayer === s.localPlayer;
+      drawToast = reveal ? `${readied.name} draws: ${drawn.name}` : `${readied.name} draws a card`;
     } else {
       drawToast = `💀 ${readied.name} has no cards to draw — deck out!`;
       deckOutLoser = true;

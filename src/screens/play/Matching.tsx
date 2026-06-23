@@ -1,13 +1,16 @@
 import { useState, type CSSProperties } from 'react';
 import { useGameStore } from '../../store/gameStore';
 import { useSettingsStore } from '../../store/settingsStore';
-import { useMultiplayer } from '../../lib/useMultiplayer';
 import { TBL } from '../../tokens';
 
-export function Matching() {
+interface MatchingProps {
+  /** Tear down the PeerJS session (owned by Play()) and return to the lobby. */
+  disconnect: () => void;
+}
+
+export function Matching({ disconnect }: MatchingProps) {
   const conn = useGameStore(s => s.conn);
   const { playerName, avatarLetter } = useSettingsStore();
-  const { disconnect } = useMultiplayer();
   const [copied, setCopied] = useState(false);
 
   const seatStyle = (filled: boolean, color: string): CSSProperties => ({

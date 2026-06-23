@@ -2,10 +2,15 @@ import { useState, type CSSProperties } from 'react';
 import { useGameStore } from '../../store/gameStore';
 import { useDeckStore } from '../../store/deckStore';
 import { useSettingsStore } from '../../store/settingsStore';
-import { useMultiplayer } from '../../lib/useMultiplayer';
 import { CATALOG } from '../../data/catalog';
 import { TBL } from '../../tokens';
 import type { Card } from '../../types/card';
+
+interface LobbyProps {
+  /** Host/join the PeerJS session — owned by Play() so it survives the view switch. */
+  host: (p1Cards: Card[], p2Cards: Card[]) => Promise<string>;
+  join: (code: string, p1Cards: Card[], p2Cards: Card[]) => Promise<void>;
+}
 
 // Resolve a deck's card ID map → ordered Card array
 function deckToCards(cards: Record<string, true>): Card[] {
@@ -79,11 +84,10 @@ const lb = {
   } as CSSProperties,
 };
 
-export function Lobby() {
+export function Lobby({ host, join }: LobbyProps) {
   const { startSolo, savedGame, resumeGame, clearSavedGame } = useGameStore();
   const { decks } = useDeckStore();
   const { playerName, avatarLetter, setPlayerName } = useSettingsStore();
-  const { host, join } = useMultiplayer();
 
   const [myDeckId,  setMyDeckId]  = useState(decks[0]?.id ?? '');
   const [oppDeckId, setOppDeckId] = useState(decks[1]?.id ?? decks[0]?.id ?? '');
