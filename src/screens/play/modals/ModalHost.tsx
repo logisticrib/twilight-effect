@@ -11,8 +11,11 @@ function parseModalId(raw: string): { id: string; player: 'p1' | 'p2' } {
   return { id, player: (player === 'p2' ? 'p2' : 'p1') };
 }
 
-/** Shown to the peer who is waiting for the opponent to finish a setup step. */
-function SetupWaiting({ step, name }: { step: string; name: string }) {
+/** Shown to the peer who is waiting for the opponent to finish a setup step. Only
+ *  ever rendered for the non-acting peer, so the actor is always "the opponent"
+ *  (the synced player names are perspective-relative "You"/"Opponent", so we must
+ *  not show game[player].name here — it reads as "You" on the other client). */
+function SetupWaiting({ step }: { step: string }) {
   const label = step === 'mulligan' ? 'mulligan' : step === 'classbonus' ? 'choose class bonuses' : 'place their Player Character';
   return (
     <div style={{
@@ -27,7 +30,7 @@ function SetupWaiting({ step, name }: { step: string; name: string }) {
           Setup
         </div>
         <div style={{ fontFamily: "'Newsreader', serif", fontSize: 18, color: TBL.ink }}>
-          Waiting for {name} to {label}…
+          Waiting for the opponent to {label}…
         </div>
       </div>
     </div>
@@ -43,7 +46,7 @@ export function ModalHost() {
   if (setupHead) {
     const { id, player } = parseModalId(setupHead);
     const owned = isSolo || player === localPlayer;
-    if (!owned) return <SetupWaiting step={id} name={game[player].name} />;
+    if (!owned) return <SetupWaiting step={id} />;
     const isSequence = game.setupQueue.length > 1;
     switch (id) {
       case 'mulligan':

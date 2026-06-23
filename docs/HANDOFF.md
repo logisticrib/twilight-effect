@@ -23,6 +23,23 @@ Three previously-deferred pickers were built + preview-verified (store + real UI
   unimplemented.
 - **Deferred pickers still open**: Scavenger (unwired — no card carries it), Lens any-deck, Untamed keyword.
   See `tasks/todo.md` Review sections (newest at the bottom) for full per-slice detail.
+- **First-player handicap FLIPPED** (owner ruling, supersedes 2026-06-22): the first player now **skips their
+  Turn-1 draw**, and the **"no Major Actions on Turn 1" restriction is REMOVED**. One handicap only
+  (skip-draw), matching the original `.docx`. Removed the `placePc` first-player draw + all `turn1Block`
+  guards (beginAttack / canPlayActionCard / activateAbility / LoadoutPanel); Zealous's now-moot Turn-1
+  attack bypass deleted (it still bypasses the entry-turn "fresh" restriction). Rules doc + snapshot
+  updated; `rules_reconciliation.md` has the resolution log.
+- **UI copy fixes**: removed the user-facing "summoning sickness" label (kept the no-attack-on-entry logic;
+  reworded the hover/toast reasons to "Cannot attack on its entry turn" / "No Major Actions on its entry
+  turn"); MP waiting overlays now say "the opponent" instead of the synced (perspective-broken) player name.
+- **Client-relative player names (DONE)**: player names are stored as perspective placeholders
+  (p1="You"/p2="Opponent") and the whole `game` is broadcast wholesale, so the GUEST used to see names
+  backwards. New exported `seatName(side, localPlayer)` (gameStore) → "You" for your own seat, "Opponent"
+  for the other; used in every UI name display (Tray stats/dead-zone, PhaseRail turn pill, GameOverScreen
+  title+labels, PileViewer header, Mulligan/ClassBonus/PCPlacement setup titles, endTurn draw toast). The
+  `gameOver` win-flag stays name-based internally (seat names are unique → winnerSide/localWon still
+  correct). Verified both host (p1) and guest (p2) perspectives render correctly. The ⇄ sandbox button now
+  reads "Other side".
 
 ## Repo / sharing (2026-06-07)
 - The app is on GitHub: **https://github.com/logisticrib/twilight-effect** (PRIVATE), scoped to
@@ -214,9 +231,10 @@ w.cards.forEach(c=>{if(E[c.name])c.effects=E[c.name];});fs.writeFileSync(p,JSON.
   attribution + the class gate). UI: `LoadoutPanel` MOVE→MINOR→MAJOR pip strip + `● activating`/
   `activation finished` tag; `CommandZone` green glow + `▶ activating` badge on the current actor and
   dim + `done` badge on sealed characters. See todo.md Review (follow-up 2).
-- **Zealous on turn 1 (2026-06-07, RULING)** — Zealous now bypasses the first-turn "no Major Actions"
-  restriction **for attacks only** (non-attack Majors still blocked). `beginAttack` skips the turn-1
-  block for Zealous; `computeActions` uses `attackTurn1Block = turn1Block && !zealous`.
+- **Zealous on turn 1 (2026-06-07, RULING)** — ⚠️ SUPERSEDED 2026-06-23: the first-player "no Major
+  Actions on Turn 1" restriction was REMOVED entirely (owner flipped the handicap to skip-first-draw — see
+  the 2026-06-23 session block at the top + `rules_reconciliation.md`). Zealous's Turn-1 attack bypass is
+  therefore moot and was deleted; Zealous now only bypasses the entry-turn ("fresh") restriction for attacks.
 - **PC HP married (2026-06-07)** — the PC had TWO unsynced HP values (PlayerState vs PC BoardEntity;
   `makePc` even started at 25 vs 20). FIX: **PC BoardEntity = single source of truth**. `makePc` 25→20;
   `applyDamage`+`adjustHp` PC branches mirror entity HP→`game[owner].hp`; `StatsContent` (Tray) reads

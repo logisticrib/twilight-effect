@@ -1,12 +1,12 @@
 import { useState, useMemo, useEffect, type CSSProperties } from 'react';
 import { CardFace } from '../../components/CardFace';
 import { TBL } from '../../tokens';
-import { useGameStore } from '../../store/gameStore';
+import { useGameStore, seatName } from '../../store/gameStore';
 
 const CARD_SCALE = 0.62;
 
 export function PileViewer() {
-  const { pileView, game, closePile } = useGameStore();
+  const { pileView, game, closePile, localPlayer } = useGameStore();
   const [search, setSearch] = useState('');
 
   const player = pileView ? game[pileView.player] : null;
@@ -54,7 +54,7 @@ export function PileViewer() {
               Dead Zone
             </div>
             <div style={{ fontFamily: "'Newsreader', serif", fontSize: 22, fontWeight: 600, color: TBL.ink, lineHeight: 1.1 }}>
-              {player.name}
+              {seatName(pileView.player, localPlayer)}
             </div>
           </div>
 

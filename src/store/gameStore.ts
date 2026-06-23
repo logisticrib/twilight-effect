@@ -249,6 +249,14 @@ export const FRONT_SLOTS: SlotId[] = ['f1', 'f2', 'f3'];
 export const BACK_SLOTS:  SlotId[] = ['b1', 'b2', 'b3'];
 export function isFront(slot: SlotId): boolean { return FRONT_SLOTS.includes(slot); }
 
+/** Display label for a player seat from the local viewer's perspective. Stored
+ *  player names are perspective placeholders ('You'/'Opponent'), and the whole
+ *  GameState is broadcast wholesale in multiplayer, so each peer must derive the
+ *  label from the seat vs its own `localPlayer` — never read `game[side].name`. */
+export function seatName(side: 'p1' | 'p2', localPlayer: 'p1' | 'p2'): string {
+  return side === localPlayer ? 'You' : 'Opponent';
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 export function freshActs(): Acts { return { move: false, minor: false, major: false }; }
 
@@ -1484,19 +1492,12 @@ export const useGameStore = create<GameStoreState>()(
     const newPlayer = { ...s.game[tp], board: newBoard, _pc: undefined };
     // Advance the setup cursor past this place-pc step.
     const newSetupQueue = s.game.setupQueue.slice(1);
-    let g = recomputeStatics({ ...s.game, [tp]: newPlayer, setupQueue: newSetupQueue });
-    // Setup just finished → the player going first takes their normal Turn-1 draw. (The
-    // first player otherwise never draws on turn 1, since their draw is bundled into the
-    // previous endTurn, which never ran. No first-player draw handicap — only the Turn-1
-    // no-Major-Actions restriction applies.)
-    if (newSetupQueue.length === 0) {
-      const ap = g.activePlayer;
-      const ps = g[ap];
-      if (ps.deck.length > 0) {
-        const [drawn, ...rest] = ps.deck;
-        g = { ...g, [ap]: { ...ps, deck: rest, hand: [...ps.hand, drawn] } };
-      }
-    }
+    const g = recomputeStatics({ ...s.game, [tp]: newPlayer, setupQueue: newSetupQueue });
+    // First-player handicap: the player going first does NOT draw on Turn 1. Their turn
+    // begins at the CZ phase (the draw is bundled into the prior endTurn, which never ran
+    // for them) — so we deliberately do NOT add a draw here. The second player draws
+    // normally via endTurn. (This is the sole first-player handicap; there is no Turn-1
+    // Major-Action restriction.)
     return { game: g };
   }),
 
@@ -1849,11 +1850,9 @@ export const useGameStore = create<GameStoreState>()(
     // gate it on the same budget rules an attack uses. Constructs are not bound by
     // character action economy — their abilities cost only what the card states.
     if (isCharacter(loc.ent)) {
-      const turn1Block = s.game.turn === 1 && player === 'p1' && s.game.activePlayer === 'p1';
       const isExhausted = loc.ent.tapped === 'major' || loc.ent.exhausted;
       const reason = isSealed(s.game, entityId) ? 'Activation already finished'
-        : turn1Block ? 'No Major Actions on Turn 1'
-        : loc.ent.fresh ? 'Summoning sickness'
+        : loc.ent.fresh ? 'No Major Actions on its entry turn'
         : loc.ent.acts.major ? 'Major action already used'
         : isExhausted ? 'Exhausted' : null;
       if (reason) return { toasts: [...s.toasts, toast(`Can't activate ${ability.sourceName}: ${reason}.`)] };
@@ -2152,12 +2151,6 @@ export const useGameStore = create<GameStoreState>()(
     // Summoning sickness — fresh companions cannot attack unless Zealous
     if (ent.fresh && !ent.keywords.includes('Zealous')) {
       return { ...toast('Just entered — cannot attack until next turn (no Zealous).') };
-    }
-
-    // First-turn restriction: first player cannot use Major Actions on turn 1.
-    // Zealous bypasses this *for attacks* (it may always attack the turn it enters).
-    if (s.game.turn === 1 && s.game.activePlayer === 'p1' && !ent.keywords.includes('Zealous')) {
-      return { ...toast('The first player cannot use Major Actions on turn 1.') };
     }
 
     // Attack eligibility: must be in Front Line unless Ranged
@@ -2723,10 +2716,13 @@ export const useGameStore = create<GameStoreState>()(
       // Only reveal the drawn card to its owner. endTurn runs on the player ENDING their
       // turn, who draws for the NEXT player — in multiplayer that's the opponent, so naming
       // the card here would leak it. Sandbox (one controller) sees everything.
-      const reveal = s.conn.mode === 'solo' || nextPlayer === s.localPlayer;
-      drawToast = reveal ? `${readied.name} draws: ${drawn.name}` : `${readied.name} draws a card`;
+      const nextIsLocal = nextPlayer === s.localPlayer;
+      const reveal = s.conn.mode === 'solo' || nextIsLocal;
+      const who = nextIsLocal ? 'You' : 'Opponent';
+      const verb = nextIsLocal ? 'draw' : 'draws';
+      drawToast = reveal ? `${who} ${verb}: ${drawn.name}` : `${who} ${verb} a card`;
     } else {
-      drawToast = `💀 ${readied.name} has no cards to draw — deck out!`;
+      drawToast = `💀 ${nextPlayer === s.localPlayer ? 'You have' : 'Opponent has'} no cards to draw — deck out!`;
       deckOutLoser = true;
     }
     const nextPlayerState = { ...readied, deck: drawnDeck, hand: drawnHand };

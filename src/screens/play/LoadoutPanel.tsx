@@ -71,7 +71,6 @@ function computeActions(
   pendingAction: string | null,
   entSlot: string | null,
   game: GameState,
-  localPlayer: 'p1' | 'p2',
 ) {
   if (!isYours) return null;
   if (ent.kind === 'construct') return 'construct' as const;
@@ -88,8 +87,6 @@ function computeActions(
   const hasRanged = keywords.includes('Ranged');
   const canAttackFromPosition = inFrontLine || hasRanged;
 
-  const turn1Block = game.turn === 1 && localPlayer === 'p1' && game.activePlayer === 'p1';
-
   // Atomic activation: once you've activated another character, this one is sealed.
   const sealed = game.finishedActors.includes(ent.id);
 
@@ -97,22 +94,20 @@ function computeActions(
   // "move must come first" / exhausted gates (consumed in resolveMove).
   const hitRunMove = ent.statuses.includes('hit-run-ready');
 
-  // Zealous bypasses the first-turn restriction for attacks (only).
-  const attackTurn1Block = turn1Block && !zealous;
-  const attackOk = !sealed && !acts.major && !isExhausted && (!fresh || zealous) && (!isPC || hasWeapon) && canAttackFromPosition && !attackTurn1Block;
+  // Zealous bypasses the entry-turn ("fresh") restriction for attacks (only).
+  const attackOk = !sealed && !acts.major && !isExhausted && (!fresh || zealous) && (!isPC || hasWeapon) && canAttackFromPosition;
   const attackReason = sealed ? 'Activation finished' :
     !canAttackFromPosition ? 'Must be in Front Line (or have Ranged)' :
-    attackTurn1Block ? 'No Major Actions on Turn 1' :
     isPC && !hasWeapon ? 'Needs a weapon' :
-    fresh && !zealous ? 'Summoning sickness' :
+    fresh && !zealous ? 'Cannot attack on its entry turn' :
     acts.major ? 'Major used' : 'Exhausted';
 
   return {
     move:    { ok: !sealed && (hitRunMove || (!anyActTaken && !isExhausted)), reason: sealed ? 'Activation finished' : hitRunMove ? '' : anyActTaken ? 'Move must come first' : 'Exhausted' },
     attack:  { ok: attackOk, reason: attackReason },
     equip:   { ok: !sealed && !acts.minor, reason: sealed ? 'Activation finished' : 'Minor used' },
-    ability: { ok: !sealed && !acts.major && !isExhausted && !fresh && !turn1Block && !hasTwoHanded,
-               reason: sealed ? 'Activation finished' : hasTwoHanded ? '2H weapon blocks Magic Actions' : turn1Block ? 'No Major Actions on Turn 1' : fresh ? 'Summoning sickness' : acts.major ? 'Major used' : 'Exhausted' },
+    ability: { ok: !sealed && !acts.major && !isExhausted && !fresh && !hasTwoHanded,
+               reason: sealed ? 'Activation finished' : hasTwoHanded ? '2H weapon blocks Magic Actions' : fresh ? 'No Major Actions on its entry turn' : acts.major ? 'Major used' : 'Exhausted' },
     pendingAction,
   };
 }
@@ -312,7 +307,7 @@ export function LoadoutPanel() {
   const gear1Hidden = loadout.weapon?.hands === 2 ? false : gear0?.heavy;
 
   const entSlot = Object.entries(game[owner].board).find(([, e]) => e?.id === ent.id)?.[0] ?? null;
-  const actions = computeActions(ent, isYours, pending?.charId === ent.id ? pending.action : null, entSlot, game, localPlayer);
+  const actions = computeActions(ent, isYours, pending?.charId === ent.id ? pending.action : null, entSlot, game);
   const abilities = gatherActivated(ent);
   // Atomic activation: a sealed character (you moved on to another) can't act.
   const sealed = isYours && ent.kind !== 'construct' && game.finishedActors.includes(ent.id);
@@ -357,9 +352,6 @@ export function LoadoutPanel() {
         )}
         {ent.poison != null && ent.poison > 0 && (
           <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: TBL.good }}>☠ {ent.poison}</span>
-        )}
-        {ent.fresh && (
-          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: TBL.ink3 }}>summoning sickness</span>
         )}
         {isYours && ent.id === game.currentActor && !sealed && (
           <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: TBL.good, border: `1px solid ${TBL.good}66`, borderRadius: 3, padding: '1px 5px' }}>● activating</span>

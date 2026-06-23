@@ -1,7 +1,7 @@
 import { type CSSProperties } from 'react';
 import { CardFace, CardBack } from '../../components/CardFace';
 import { TBL, CLASSCLR, GLYPH } from '../../tokens';
-import { useGameStore, type PlayerState, type ClassZoneCard } from '../../store/gameStore';
+import { useGameStore, seatName, type PlayerState, type ClassZoneCard } from '../../store/gameStore';
 import { handlePreviewWheel } from './previewScroll';
 
 const PILE_SCALE = 0.2;  // mini card-pile size in the CZ panel (40×56)
@@ -79,7 +79,8 @@ function StatsContent({ player, who, active }: StatsPanelProps) {
   const hp = pcEnt ? pcEnt.hp : player.hp;
   const maxHp = pcEnt ? pcEnt.maxHp : player.maxHp;
   const low = maxHp > 0 && hp / maxHp < 0.4;
-  const avatarLetter = isYou ? 'A' : player.name[0]?.toUpperCase() ?? 'V';
+  const displayName = seatName(who, localPlayer);
+  const avatarLetter = displayName[0];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -94,7 +95,7 @@ function StatsContent({ player, who, active }: StatsPanelProps) {
         }}>{avatarLetter}</div>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontFamily: "'Newsreader', serif", fontSize: 13, fontWeight: 600, color: TBL.ink, lineHeight: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {player.name}
+            {displayName}
           </div>
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 7.5, color: active ? TBL.amber2 : TBL.ink3, textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 2 }}>
             {active ? '● Active' : 'Waiting'}
@@ -185,7 +186,7 @@ function CZContent({ player, who }: CZPanelProps) {
           <span style={pileLabel}>Dead ⌕</span>
           <div
             onClick={() => openPile(who, 'dead')}
-            title={`Click to search ${player.name}'s Dead Zone (${player.dead.length})`}
+            title={`Click to search ${seatName(who, localPlayer) === 'You' ? 'your' : "the opponent's"} Dead Zone (${player.dead.length})`}
             style={{
               position: 'relative', width: pileW, height: pileH, cursor: 'pointer',
               filter: topDead ? 'drop-shadow(0 2px 6px rgba(0,0,0,0.5))' : 'none',

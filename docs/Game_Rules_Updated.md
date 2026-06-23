@@ -215,11 +215,10 @@ Targeting rules apply only to characters (Player Character and Companions). Cons
 - Cost: Flip one face-up Class Zone card face-down
 - Flipped cards return face-up at start of your next turn
 
-**First-Turn Restrictions:**
-Two separate restrictions apply on the first turns of the game:
+**First-Turn Handicap & Entry Restrictions:**
 
 *Player going first — Turn 1:*
-The player who goes first cannot use Major Actions on their first turn. They may still use Movement, Minor Actions, and Special Actions freely. This restriction exists to offset the advantage of moving first. It applies only to Turn 1 of the game and only to the first player.
+The player who goes first does not draw a card on their first turn. This offsets the advantage of moving first. The first player may otherwise act normally on Turn 1 — there is no restriction on Major Actions. (The second player draws normally on their first turn, and all players draw on every turn thereafter.)
 
 *Companions — willpower check on entry:*
 A companion that has just entered the encounter must pass a willpower check before it can take Major Actions. The check is automatically considered passed at the start of its controller's next turn (alongside the existing willpower check that determines whether the companion flees). In practice this means a companion cannot attack or use activated Major Action abilities on the turn it arrives — only Movement, Minor Actions, and Special Actions are available that turn. This restriction applies to all companions at all times, not just Turn 1 of the game.
@@ -263,7 +262,7 @@ Movement does not exhaust the character and does not produce a visible state cha
    - Remove one Anchor counter from each Construct
 
 **2. Draw Phase**
-   - Draw one card (all players draw on every turn, including the first player on Turn 1)
+   - Draw one card (exception: the player going first skips their Turn-1 draw as the first-player handicap)
 
 **3. Class Zone Exchange** *(optional, once per turn)*
    - You may move one card from your hand to your Class Zone, **or** move one card from your Class Zone to your hand — not both.

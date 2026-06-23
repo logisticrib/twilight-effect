@@ -1,5 +1,5 @@
 import { useState, type CSSProperties } from 'react';
-import { useGameStore } from '../../store/gameStore';
+import { useGameStore, seatName } from '../../store/gameStore';
 import { TBL } from '../../tokens';
 
 /**
@@ -33,15 +33,15 @@ export function GameOverScreen() {
         <div style={{ ...S.eyebrow, color: accent }}>
           {localWon ? '✦ Victory ✦' : 'Defeat'}
         </div>
-        <div style={S.title}>{winner}</div>
+        <div style={S.title}>{seatName(winnerSide, localPlayer)} {localWon ? 'win' : 'wins'}</div>
         <div style={S.sub}>
           Claimed the encounter on turn {game.turn}.
         </div>
 
         <div style={S.stats}>
-          <Stat label={game.p1.name} value={`${survivors('p1')} left`} hi={winnerSide === 'p1'} />
+          <Stat label={seatName('p1', localPlayer)} value={`${survivors('p1')} left`} hi={winnerSide === 'p1'} />
           <div style={S.statDiv} />
-          <Stat label={game.p2.name} value={`${survivors('p2')} left`} hi={winnerSide === 'p2'} />
+          <Stat label={seatName('p2', localPlayer)} value={`${survivors('p2')} left`} hi={winnerSide === 'p2'} />
         </div>
 
         <div style={S.row}>

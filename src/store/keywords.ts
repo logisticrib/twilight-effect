@@ -416,10 +416,7 @@ export function canPlayActionCard(
   }
   // Major (default): consumes the character's Major; needs them ready & settled in.
   const isExhausted = ent.tapped === 'major' || ent.exhausted;
-  if (game.turn === 1 && lp === 'p1' && game.activePlayer === 'p1') {
-    return { ok: false, reason: 'No Major Actions on Turn 1' };
-  }
-  if (ent.fresh) return { ok: false, reason: 'Summoning sickness' };
+  if (ent.fresh) return { ok: false, reason: 'No Major Actions on its entry turn' };
   if (ent.acts.major) return { ok: false, reason: 'Major action already used' };
   if (isExhausted) return { ok: false, reason: 'Exhausted' };
   return { ok: true };

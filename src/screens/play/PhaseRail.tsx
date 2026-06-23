@@ -76,7 +76,7 @@ export function PhaseRail() {
     <div style={rail}>
       <div style={turnPill}>
         <div style={turnDot}>{game.turn}</div>
-        <span>{isMyTurn ? 'Your turn' : `${game[game.activePlayer].name}'s turn`}</span>
+        <span>{isMyTurn ? 'Your turn' : "Opponent's turn"}</span>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -106,7 +106,7 @@ export function PhaseRail() {
           background: 'rgba(138,122,214,0.12)', color: TBL.violet,
           border: `1px solid ${TBL.violet}66`,
         }}>
-          ⇄ {localPlayer === 'p1' ? game.p2.name : game.p1.name}
+          ⇄ Other side
         </button>
       )}
 

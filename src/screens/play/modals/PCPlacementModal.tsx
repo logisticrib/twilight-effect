@@ -1,5 +1,5 @@
 import { useEffect, type CSSProperties } from 'react';
-import { useGameStore } from '../../../store/gameStore';
+import { useGameStore, seatName } from '../../../store/gameStore';
 import { TBL } from '../../../tokens';
 
 interface Props { player?: 'p1' | 'p2'; onClose: () => void; }
@@ -10,7 +10,7 @@ interface Props { player?: 'p1' | 'p2'; onClose: () => void; }
  * so this handles ONE player at a time (the current `place-pc:<player>` step).
  */
 export function PCPlacementModal({ player = 'p1', onClose }: Props) {
-  const { game } = useGameStore();
+  const { game, localPlayer } = useGameStore();
 
   const done = !game[player]._pc;
 
@@ -23,7 +23,7 @@ export function PCPlacementModal({ player = 'p1', onClose }: Props) {
   if (done) return null;
 
   const current = player;
-  const playerName = game[current].name;
+  const playerName = seatName(current, localPlayer);
   const step = current === 'p1' ? '1 of 2' : '2 of 2';
 
   const banner: CSSProperties = {

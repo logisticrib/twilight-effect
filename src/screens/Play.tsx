@@ -254,15 +254,14 @@ function ReactiveHoldBanner() {
   const pa = useGameStore(s => s.game.pendingArmor);
   const localPlayer = useGameStore(s => s.localPlayer);
   const isSolo = useGameStore(s => s.conn.mode === 'solo');
-  const game = useGameStore(s => s.game);
   if (isSolo) return null;
   // Hold for an opponent-owned reactive prompt: Dead-Zone recovery, or an Armor choice.
-  const held = (dp && dp.lp !== localPlayer) ? { owner: dp.lp, source: dp.source }
-             : (pa && pa.defender !== localPlayer) ? { owner: pa.defender, source: `${pa.entityName}'s armor` }
-             : null;
-  if (!held) return null;
-  const oppName = game[held.owner].name;
-  const source = held.source;
+  // Only shown to the held (non-owning) peer, so the owner is always "the opponent"
+  // (the synced player names are perspective-relative — don't show them here).
+  const source = (dp && dp.lp !== localPlayer) ? dp.source
+               : (pa && pa.defender !== localPlayer) ? `${pa.entityName}'s armor`
+               : null;
+  if (!source) return null;
   return (
     <div style={{
       position: 'fixed', top: 52, left: '50%', transform: 'translateX(-50%)', zIndex: 210,
@@ -273,7 +272,7 @@ function ReactiveHoldBanner() {
       <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: TBL.amber2, letterSpacing: '0.18em', textTransform: 'uppercase', marginRight: 10 }}>
         Hold
       </span>
-      Waiting for {oppName} to resolve {source}…
+      Waiting for the opponent to resolve {source}…
     </div>
   );
 }

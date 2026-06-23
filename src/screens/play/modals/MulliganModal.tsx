@@ -1,7 +1,7 @@
 import { useState, type CSSProperties } from 'react';
 import { ModalShell, md } from './ModalShell';
 import { CardFace } from '../../../components/CardFace';
-import { useGameStore } from '../../../store/gameStore';
+import { useGameStore, seatName } from '../../../store/gameStore';
 import { CATALOG } from '../../../data/catalog';
 import { TBL } from '../../../tokens';
 import type { Card } from '../../../types/card';
@@ -20,6 +20,7 @@ interface Props { onClose: () => void; isSequence?: boolean; player?: 'p1' | 'p2
 export function MulliganModal({ onClose, isSequence, player = 'p1' }: Props) {
   const game = useGameStore(s => s.game);
   const setGame = useGameStore(s => s.setGame);
+  const localPlayer = useGameStore(s => s.localPlayer);
   const ps = game[player];
 
   // Resolve full Card objects for initial CZ (ClassZoneCard only stores name/class)
@@ -108,7 +109,7 @@ export function MulliganModal({ onClose, isSequence, player = 'p1' }: Props) {
       eyebrow={`Setup · ${player.toUpperCase()} Mulligan${mulliganCount > 0 ? ` · ×${mulliganCount}` : ''}`}
       title={inBottom
         ? `Bottom ${needToBottom} card${needToBottom !== 1 ? 's' : ''}`
-        : `${game[player].name} — Mulligan`}
+        : `${seatName(player, localPlayer)} — Mulligan`}
       sub={inBottom
         ? `Choose ${needToBottom} card${needToBottom !== 1 ? 's' : ''} to place on the bottom of your deck. (${picked.length}/${needToBottom} chosen)`
         : 'Keep this Class Zone and opening hand, or mulligan both. Mulliganing returns everything to your deck and redeals — then you bottom an escalating number of cards. Your PC is never returned.'}

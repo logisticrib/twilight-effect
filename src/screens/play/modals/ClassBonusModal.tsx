@@ -1,7 +1,7 @@
 import { useState, type CSSProperties } from 'react';
 import { ModalShell, md } from './ModalShell';
 import { CardFace } from '../../../components/CardFace';
-import { useGameStore, type GameState, type PlayerState } from '../../../store/gameStore';
+import { useGameStore, seatName, type GameState, type PlayerState } from '../../../store/gameStore';
 import { CATALOG } from '../../../data/catalog';
 import { TBL, CLASSCLR, GLYPH } from '../../../tokens';
 import type { Card, BoardEntity } from '../../../types/card';
@@ -95,7 +95,7 @@ const BONUSES: Record<string, BonusDef> = {
       const opp: 'p1' | 'p2' = p === 'p1' ? 'p2' : 'p1';
       const ops = g[opp];
       const newHp = Math.max(0, ops.hp - 2);
-      return { g: { ...g, [opp]: bumpPcHp(ops, -2) }, result: `${ops.name} HP ${ops.hp} → ${newHp}` };
+      return { g: { ...g, [opp]: bumpPcHp(ops, -2) }, result: `Opponent's PC HP ${ops.hp} → ${newHp}` };
     },
   },
   Necromancer: {
@@ -187,7 +187,7 @@ const BONUSES: Record<string, BonusDef> = {
 interface Props { onClose: () => void; isSequence?: boolean; player?: 'p1' | 'p2'; }
 
 export function ClassBonusModal({ onClose, isSequence, player = 'p1' }: Props) {
-  const { game, setGame } = useGameStore();
+  const { game, setGame, localPlayer } = useGameStore();
   const ps         = game[player];
   const czClasses  = [...new Set(ps.classZone.map(c => c.cls))];
 
@@ -249,7 +249,7 @@ export function ClassBonusModal({ onClose, isSequence, player = 'p1' }: Props) {
     <ModalShell
       glyph="✦" color={TBL.violet}
       eyebrow={`Setup · ${player.toUpperCase()} Class Bonuses`}
-      title={`${game[player].name} — Apply Class Bonuses`}
+      title={`${seatName(player, localPlayer)} — Apply Class Bonuses`}
       sub="One bonus per class in your Class Zone. Apply in any order — each is optional."
       footer={
         <>
