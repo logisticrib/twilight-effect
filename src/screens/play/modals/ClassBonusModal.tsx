@@ -189,7 +189,11 @@ interface Props { onClose: () => void; isSequence?: boolean; player?: 'p1' | 'p2
 export function ClassBonusModal({ onClose, isSequence, player = 'p1' }: Props) {
   const { game, setGame, localPlayer } = useGameStore();
   const ps         = game[player];
-  const czClasses  = [...new Set(ps.classZone.map(c => c.cls))];
+  // The set of class bonuses is LOCKED at the classes in the Class Zone when this phase
+  // begins (i.e. once hands are kept) — snapshot it on mount. A bonus that swaps a CZ
+  // card (czSwapById) changes the live CZ classes, but must NOT change which bonuses are
+  // offered. (Live `ps.classZone` is still used below for swap-target lookups.)
+  const [czClasses] = useState<string[]>(() => [...new Set(game[player].classZone.map(c => c.cls))]);
 
   type Resolution = { kind: 'applied' | 'skipped'; result: string };
   const [resolved,    setResolved]    = useState<Record<number, Resolution>>({});

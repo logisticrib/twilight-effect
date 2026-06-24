@@ -114,9 +114,10 @@ const s = {
       background: `linear-gradient(90deg, ${cls}33, transparent)`,
       borderLeft: `2px solid ${cls}`,
       fontFamily: "'JetBrains Mono', monospace",
-      fontSize: 8.5, letterSpacing: '0.1em',
+      fontSize: 8, letterSpacing: '0.05em',
       color: TBL.ink, textTransform: 'uppercase',
-      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6,
+      whiteSpace: 'nowrap',
     };
   },
   textbox: {
@@ -350,10 +351,13 @@ export function CardFace({
             </div>
           )}
 
-          {/* Type line */}
+          {/* Type line — single line; long subtypes ellipsis-truncate so the rules
+              textbox below keeps its height (companions are tight with the stat block). */}
           <div style={s.typeLine(cls)}>
-            <span>{rawType || (isConstruct ? 'Construct' : isCompanion ? 'Companion' : 'Card')}{subtype ? ` · ${subtype}` : ''}</span>
-            <span>L{level}</span>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
+              {rawType || (isConstruct ? 'Construct' : isCompanion ? 'Companion' : 'Card')}{subtype ? ` · ${subtype}` : ''}
+            </span>
+            <span style={{ flexShrink: 0 }}>L{level}</span>
           </div>
 
           {/* Rules text (keyword chips removed — keywords already lead the text) */}
