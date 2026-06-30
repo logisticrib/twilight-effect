@@ -1099,7 +1099,21 @@
     "text": "ZEALOUS, HIT & RUN. When this character destroys an opposing companion, draw a card.",
     "flavor": "Few who came against her returned. Of those, none returned twice.",
     "createdAt": "2026-05-16T19:05:55.111304Z",
-    "updatedAt": "2026-05-16T19:05:55.111306Z"
+    "updatedAt": "2026-05-16T19:05:55.111306Z",
+    "effects": [
+      {
+        "trigger": "onKill",
+        "if": {
+          "kind": "killedIsCompanion"
+        },
+        "effects": [
+          {
+            "op": "draw",
+            "count": 1
+          }
+        ]
+      }
+    ]
   },
   {
     "id": "54b5bef3",

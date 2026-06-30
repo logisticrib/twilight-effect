@@ -44,6 +44,17 @@ Three previously-deferred pickers were built + preview-verified (store + real UI
   `gameOver` win-flag stays name-based internally (seat names are unique → winnerSide/localWon still
   correct). Verified both host (p1) and guest (p2) perspectives render correctly. The ⇄ sandbox button now
   reads "Other side".
+- **Bug fixes from live 2-player testing (DONE)**:
+  - **Class bonuses lock at phase start** — `ClassBonusModal` derived the offered bonus set LIVE from
+    `ps.classZone`, so a CZ-swapping bonus changed which bonuses were available mid-application. Now
+    snapshotted on mount: `const [czClasses] = useState(() => [...new Set(game[player].classZone…)])`. Live
+    CZ still used for swap-target lookups.
+  - **Wizard "Knowledge is Power" / Doom-Whisperer "Seeds of Despair" — order the kept cards.** The view-deck
+    picker only did top/bottom; the rule says "the rest on top in any order." New `reorderTopCards` helper +
+    `topOrder` state + `TOP n` rank badges + ◀▶ arrows; `apply` gained `topOrderIds`.
+  - **Card type line forced to one line** (CardFace) — long companion subtypes wrapped to 2 lines and
+    cramped the `flex:1` rules textbox; now `nowrap` + ellipsis + smaller font so the textbox keeps height.
+  - **Preview pane shows tapped cards upright** — new `CardFace` `upright` prop (board cards still rotate).
 
 ## Repo / sharing (2026-06-07)
 - The app is on GitHub: **https://github.com/logisticrib/twilight-effect** (PRIVATE), scoped to

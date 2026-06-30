@@ -669,6 +669,17 @@ function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceName: stri
         if (drawn) msgs.push(`Draw ${drawn}`);
         break;
       }
+      case 'shuffleHandRedraw': {
+        // "Target opponent shuffles their hand into their deck and draws that many
+        //  cards minus one." (Convergence Sigil — offset -1.)
+        const ops = g[opp];
+        const n = ops.hand.length;
+        const drawN = Math.max(0, n + (e.offset ?? 0));
+        const reshuffled = shuffle([...ops.deck, ...ops.hand]);
+        g = { ...g, [opp]: { ...ops, hand: reshuffled.slice(0, drawN), deck: reshuffled.slice(drawN) } };
+        msgs.push(`Opponent shuffles ${n} card${n !== 1 ? 's' : ''} away, draws ${drawN}`);
+        break;
+      }
       case 'bounce': {
         // Return permanents (companions or constructs) to their owner's hand: a
         // single clicked target, or a group scope.
@@ -752,17 +763,29 @@ function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceName: stri
         break;
       }
       case 'animate': {
-        // Animate Magic X: a Magical Construct you control becomes an X/X Manifest
-        // companion, retaining its text and Anchor counters. (Leave-sacrifice handled
-        // via the 'manifest' status in bounce.)
-        if (!targetId) break;
-        const loc = findEntityAnywhere(g, targetId);
-        if (!loc || loc.ent.kind !== 'construct' || loc.ent.subtype !== 'Incantation') break;
-        g = updateEntity(g, targetId, {
-          kind: 'companion', atk: e.atk, hp: e.hp, maxHp: e.hp, subtype: 'Manifest',
-          fresh: true, statuses: [...loc.ent.statuses, 'manifest'],
-        });
-        msgs.push(`${loc.ent.name} animates as a ${e.atk}/${e.hp} Manifest`);
+        // Animate Magic X: a Magical (Incantation) Construct you control becomes an X/X
+        // Manifest companion, retaining its text and Anchor counters. (Leave-sacrifice
+        // handled via the 'manifest' status in bounce.) Target is either a single clicked
+        // construct, or the group 'ownMagicalConstructs' (up to `max`, excluding the
+        // source — e.g. The Verdant Still animates up to two; interim auto-picks).
+        let ids: string[] = [];
+        if (e.target === 'ownMagicalConstructs') {
+          ids = (Object.values(g[lp].board) as (BoardEntity | undefined)[])
+            .filter((x): x is BoardEntity => !!x && x.kind === 'construct' && x.subtype === 'Incantation' && x.id !== sourceId)
+            .map(x => x.id);
+          if (e.max != null) ids = ids.slice(0, e.max);
+        } else if (targetId) {
+          ids = [targetId];
+        }
+        for (const id of ids) {
+          const loc = findEntityAnywhere(g, id);
+          if (!loc || loc.ent.kind !== 'construct' || loc.ent.subtype !== 'Incantation') continue;
+          g = updateEntity(g, id, {
+            kind: 'companion', atk: e.atk, hp: e.hp, maxHp: e.hp, subtype: 'Manifest',
+            fresh: true, statuses: [...loc.ent.statuses, 'manifest'],
+          });
+          msgs.push(`${loc.ent.name} animates as a ${e.atk}/${e.hp} Manifest`);
+        }
         break;
       }
       case 'dieCheck': {

@@ -494,7 +494,27 @@
       "text": "When this enters, target opponent shuffles their hand into their deck and draws that many cards minus one. At the start of your turn, draw a card.",
       "flavor": "",
       "createdAt": "2026-05-16T19:02:21.324255Z",
-      "updatedAt": "2026-05-16T19:02:21.324257Z"
+      "updatedAt": "2026-05-16T19:02:21.324257Z",
+      "effects": [
+        {
+          "trigger": "onEnter",
+          "effects": [
+            {
+              "op": "shuffleHandRedraw",
+              "offset": -1
+            }
+          ]
+        },
+        {
+          "trigger": "startOfTurn",
+          "effects": [
+            {
+              "op": "draw",
+              "count": 1
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "39ab02db",
@@ -515,7 +535,21 @@
       "text": "When this enters, animate up to two Magical Constructs you control as 3/3 Manifest companions with their text and Anchor counters retained. If a Manifest would leave the encounter, sacrifice it instead.",
       "flavor": "",
       "createdAt": "2026-05-16T19:02:21.324264Z",
-      "updatedAt": "2026-05-16T19:02:21.324265Z"
+      "updatedAt": "2026-05-16T19:02:21.324265Z",
+      "effects": [
+        {
+          "trigger": "onEnter",
+          "effects": [
+            {
+              "op": "animate",
+              "atk": 3,
+              "hp": 3,
+              "target": "ownMagicalConstructs",
+              "max": 2
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "c1bb0234",

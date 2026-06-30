@@ -41,7 +41,7 @@ export type TargetSpec =
   | 'anyConstruct' | 'physicalConstruct' | 'magicalConstruct'
   | 'anyItem' | 'targetPlayer'
   // auto-scoped groups (no selection)
-  | 'self' | 'allEnemies' | 'allEnemyCompanions' | 'ownCompanions' | 'ownPhysicalConstructs'
+  | 'self' | 'allEnemies' | 'allEnemyCompanions' | 'ownCompanions' | 'ownPhysicalConstructs' | 'ownMagicalConstructs'
   | 'frontLineOwn' | 'frontLineEnemy' | 'backLineEnemy' | 'sameLineAsTarget' | 'ownParty'
   // combat-trigger context (resolved from the event, not the board)
   | 'damagedController';   // the Player Character of the just-damaged entity's owner
@@ -81,6 +81,7 @@ export type Effect =
   | { op: 'draw'; count: number; if?: Condition }
   | { op: 'discard'; count: number; target: TargetSpec; random?: boolean }
   | { op: 'mill'; count: number; target: TargetSpec }
+  | { op: 'shuffleHandRedraw'; offset?: number }  // opponent shuffles hand into deck, redraws (handSize + offset); Convergence Sigil uses offset -1
   | { op: 'deckPeek'; look: number; dests: ('hand' | 'top' | 'bottom')[]; maxHand?: number }  // scry/select
   | { op: 'returnFromDead'; cardType?: string; to: 'hand' | 'encounter' }
   | { op: 'search'; cardType: string }
@@ -93,7 +94,7 @@ export type Effect =
   | { op: 'sacrifice'; target: TargetSpec }
   | { op: 'sacrificeItem'; target: TargetSpec }
   | { op: 'equipFromHand'; target: TargetSpec }
-  | { op: 'animate'; atk: number; hp: number; target: TargetSpec }  // Animate Magic X
+  | { op: 'animate'; atk: number; hp: number; target: TargetSpec; max?: number }  // Animate Magic X (max caps a group target, e.g. "up to two")
   | { op: 'dieCheck'; threshold: number; onPass: Effect[]; onFail: Effect[] }  // roll d6, branch
   | { op: 'attackDisarm'; attacker: TargetSpec; target: TargetSpec }  // two-step: your char attacks, then sac an item on the target
   | { op: 'moveAnchor'; count: number }  // two-step: move N anchors from one of your Physical Constructs to another
