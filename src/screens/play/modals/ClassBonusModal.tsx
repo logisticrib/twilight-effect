@@ -39,7 +39,7 @@ interface BonusDef {
     g: GameState,
     player: 'p1' | 'p2',
     handCard?: Card,
-    extra?: { czCardId?: string; bottomIds?: string[] },
+    extra?: { czCardId?: string; bottomIds?: string[]; topOrderIds?: string[] },
   ) => { g: GameState; result: string };
 }
 
@@ -63,6 +63,26 @@ function czSwapById(g: GameState, player: 'p1' | 'p2', handCard: Card, czCardId:
     g: { ...g, [player]: { ...ps, hand: [...hand, retCard], classZone: newCZ } },
     result: `${handCard.name} → CZ · ${leaving.name} → hand`,
   };
+}
+
+/** View-deck bonus: rearrange the looked-at top cards of `owner`'s deck — send any to
+ *  the bottom, and keep the rest on top in the chosen order (`topOrderIds`). Mirrors the
+ *  rule "put any number on the bottom and the rest on top in any order." */
+function reorderTopCards(g: GameState, owner: 'p1' | 'p2', look: number, bottomIds: string[], topOrderIds: string[]) {
+  const ds   = g[owner];
+  const seen = ds.deck.slice(0, look);
+  const rest = ds.deck.slice(look);
+  const bottomed = seen.filter(c => bottomIds.includes(c.id));
+  // Kept-on-top in the player's chosen order; append any kept card not listed (safety).
+  const ordered = topOrderIds
+    .map(id => seen.find(c => c.id === id))
+    .filter((c): c is Card => !!c && !bottomIds.includes(c.id));
+  const keptSet = new Set(ordered.map(c => c.id));
+  const kept = [...ordered, ...seen.filter(c => !bottomIds.includes(c.id) && !keptSet.has(c.id))];
+  const result = bottomed.length
+    ? `Bottomed: ${bottomed.map(c => c.name).join(', ')}${kept.length > 1 ? ` · top: ${kept.map(c => c.name).join(', ')}` : ''}`
+    : kept.length > 1 ? `Top order: ${kept.map(c => c.name).join(', ')}` : 'Kept on top';
+  return { g: { ...g, [owner]: { ...ds, deck: [...kept, ...rest, ...bottomed] } }, result };
 }
 
 const isWeapon    = (name: string) => {
@@ -109,34 +129,15 @@ const BONUSES: Record<string, BonusDef> = {
   },
   Wizard: {
     name: 'Knowledge is Power', mode: 'view-deck', deckOwner: 'self',
-    desc: 'Look at the top 2 cards of your deck. Choose any to bottom; rest stay on top.',
-    apply: (g, p, _h, { bottomIds = [] } = {}) => {
-      const ps = g[p];
-      const top2    = ps.deck.slice(0, 2);
-      const rest    = ps.deck.slice(2);
-      const kept    = top2.filter(c => !bottomIds.includes(c.id));
-      const bottomed = top2.filter(c =>  bottomIds.includes(c.id));
-      return {
-        g: { ...g, [p]: { ...ps, deck: [...kept, ...rest, ...bottomed] } },
-        result: bottomed.length ? `Bottomed: ${bottomed.map(c => c.name).join(', ')}` : 'Kept both on top',
-      };
-    },
+    desc: 'Look at the top 2 cards of your deck. Put any on the bottom; keep the rest on top in any order.',
+    apply: (g, p, _h, { bottomIds = [], topOrderIds = [] } = {}) =>
+      reorderTopCards(g, p, 2, bottomIds, topOrderIds),
   },
   'Doom-Whisperer': {
     name: 'Seeds of Despair', mode: 'view-deck', deckOwner: 'opponent',
-    desc: "Look at the top 2 cards of your opponent's deck. Choose any to bottom; rest stay on top.",
-    apply: (g, p, _h, { bottomIds = [] } = {}) => {
-      const opp: 'p1' | 'p2' = p === 'p1' ? 'p2' : 'p1';
-      const ops     = g[opp];
-      const top2    = ops.deck.slice(0, 2);
-      const rest    = ops.deck.slice(2);
-      const kept    = top2.filter(c => !bottomIds.includes(c.id));
-      const bottomed = top2.filter(c =>  bottomIds.includes(c.id));
-      return {
-        g: { ...g, [opp]: { ...ops, deck: [...kept, ...rest, ...bottomed] } },
-        result: bottomed.length ? `Bottomed: ${bottomed.map(c => c.name).join(', ')}` : 'Kept both on top',
-      };
-    },
+    desc: "Look at the top 2 cards of your opponent's deck. Put any on the bottom; keep the rest on top in any order.",
+    apply: (g, p, _h, { bottomIds = [], topOrderIds = [] } = {}) =>
+      reorderTopCards(g, p === 'p1' ? 'p2' : 'p1', 2, bottomIds, topOrderIds),
   },
   Warrior: {
     name: 'Gear Up!', mode: 'pick-hand',
@@ -200,15 +201,17 @@ export function ClassBonusModal({ onClose, isSequence, player = 'p1' }: Props) {
   const [pickingIdx,  setPickingIdx]  = useState<number | null>(null);
   const [czTargetId,  setCzTargetId]  = useState<string | null>(null);
   const [toBottom,    setToBottom]    = useState<string[]>([]);
+  // view-deck: the chosen top order (ids of the looked-at cards, top → bottom).
+  const [topOrder,    setTopOrder]    = useState<string[]>([]);
 
   const allDone = czClasses.every((_, i) => resolved[i] !== undefined);
 
-  const applyBonus = (i: number, cls: string, handCard?: Card, czCardId?: string, bottomIds?: string[]) => {
+  const applyBonus = (i: number, cls: string, handCard?: Card, czCardId?: string, bottomIds?: string[], topOrderIds?: string[]) => {
     const bonus = BONUSES[cls];
     if (!bonus) { skipBonus(i); return; }
     let appliedResult = '';
     setGame(g => {
-      const { g: newG, result } = bonus.apply(g, player, handCard, { czCardId, bottomIds });
+      const { g: newG, result } = bonus.apply(g, player, handCard, { czCardId, bottomIds, topOrderIds });
       appliedResult = result;
       return newG;
     });
@@ -216,6 +219,7 @@ export function ClassBonusModal({ onClose, isSequence, player = 'p1' }: Props) {
     setPickingIdx(null);
     setCzTargetId(null);
     setToBottom([]);
+    setTopOrder([]);
   };
 
   const skipBonus = (i: number) => {
@@ -223,21 +227,35 @@ export function ClassBonusModal({ onClose, isSequence, player = 'p1' }: Props) {
     setPickingIdx(null);
     setCzTargetId(null);
     setToBottom([]);
+    setTopOrder([]);
   };
 
   const openPicker = (i: number, cls: string) => {
     if (pickingIdx === i) { setPickingIdx(null); setCzTargetId(null); return; }
     setPickingIdx(i);
     setToBottom([]);
+    setTopOrder([]);
     // Auto-select the first valid CZ target if exactly one exists
     const bonus = BONUSES[cls];
     if (bonus?.czFilter) {
       const validCZ = ps.classZone.filter(c => !c.faceDown && bonus.czFilter!(c.name, c.cls));
       setCzTargetId(validCZ.length === 1 ? validCZ[0].id : null);
+    } else if (bonus?.mode === 'view-deck') {
+      // Seed the top-order list with the looked-at cards in current deck order.
+      const owner = bonus.deckOwner === 'opponent' ? (player === 'p1' ? 'p2' : 'p1') : player;
+      setTopOrder(game[owner].deck.slice(0, 2).map(c => c.id));
+      setCzTargetId(null);
     } else {
       setCzTargetId(null);
     }
   };
+
+  // Move a looked-at card earlier/later in the top order (view-deck reorder).
+  const moveTop = (id: string, dir: -1 | 1) => setTopOrder(o => {
+    const idx = o.indexOf(id), j = idx + dir;
+    if (idx < 0 || j < 0 || j >= o.length) return o;
+    const n = [...o]; [n[idx], n[j]] = [n[j], n[idx]]; return n;
+  });
 
   const itemStyle = (isDone: boolean, isPicking: boolean): CSSProperties => ({
     display: 'flex', alignItems: 'flex-start', gap: 14,
@@ -248,6 +266,11 @@ export function ClassBonusModal({ onClose, isSequence, player = 'p1' }: Props) {
   });
 
   const cardHoverStyle: CSSProperties = { cursor: 'pointer', transition: 'transform .12s' };
+  const arrowBtn: CSSProperties = {
+    cursor: 'pointer', fontFamily: "'JetBrains Mono', monospace", fontSize: 11, lineHeight: 1,
+    color: TBL.ink, background: 'rgba(255,255,255,0.05)', border: `1px solid ${TBL.matLine2}`,
+    borderRadius: 4, padding: '3px 7px',
+  };
 
   return (
     <ModalShell
@@ -453,44 +476,59 @@ export function ClassBonusModal({ onClose, isSequence, player = 'p1' }: Props) {
                 display: 'flex', flexDirection: 'column', gap: 12,
               }}>
                 <div style={{ ...md.sectionLbl, color: TBL.violet }}>
-                  Top {deckPreview.length} card{deckPreview.length !== 1 ? 's' : ''} of {bonus.deckOwner === 'opponent' ? "opponent's" : 'your'} deck — click to bottom
+                  Top {deckPreview.length} card{deckPreview.length !== 1 ? 's' : ''} of {bonus.deckOwner === 'opponent' ? "opponent's" : 'your'} deck — click to bottom; arrows set the top order (1 = drawn first)
                   <div style={md.sectionLine} />
                 </div>
                 {deckPreview.length === 0 && (
                   <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: TBL.ink4 }}>Deck is empty</span>
                 )}
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                  {deckPreview.map(card => {
-                    const marked = toBottom.includes(card.id);
-                    return (
-                      <div
-                        key={card.id}
-                        onClick={() => setToBottom(ids => ids.includes(card.id) ? ids.filter(x => x !== card.id) : [...ids, card.id])}
-                        style={{
-                          cursor: 'pointer', position: 'relative',
-                          transform: marked ? 'translateY(8px)' : 'none',
-                          transition: 'transform .14s',
-                          filter: marked ? 'brightness(0.6)' : 'none',
-                          outline: marked ? `2px solid ${TBL.danger}` : 'none',
-                          borderRadius: 10,
-                        }}
-                      >
-                        <CardFace data={card} scale={0.52} />
-                        <div style={{
-                          position: 'absolute', top: 4, left: '50%', transform: 'translateX(-50%)',
-                          fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 700,
-                          color: '#fff', background: marked ? TBL.danger : TBL.violet,
-                          padding: '2px 7px', borderRadius: 3, whiteSpace: 'nowrap',
-                        }}>
-                          {marked ? '↓ BOTTOM' : 'ON TOP'}
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+                  {(() => {
+                    const ordered = topOrder.length
+                      ? topOrder.map(id => deckPreview.find(c => c.id === id)).filter((c): c is Card => !!c)
+                      : deckPreview;
+                    const keptCount = ordered.filter(c => !toBottom.includes(c.id)).length;
+                    let topN = 0;
+                    return ordered.map(card => {
+                      const marked = toBottom.includes(card.id);
+                      const rank = marked ? null : ++topN;
+                      return (
+                        <div key={card.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                          <div
+                            onClick={() => setToBottom(ids => ids.includes(card.id) ? ids.filter(x => x !== card.id) : [...ids, card.id])}
+                            style={{
+                              cursor: 'pointer', position: 'relative',
+                              transform: marked ? 'translateY(8px)' : 'none',
+                              transition: 'transform .14s',
+                              filter: marked ? 'brightness(0.6)' : 'none',
+                              outline: marked ? `2px solid ${TBL.danger}` : 'none',
+                              borderRadius: 10,
+                            }}
+                          >
+                            <CardFace data={card} scale={0.52} />
+                            <div style={{
+                              position: 'absolute', top: 4, left: '50%', transform: 'translateX(-50%)',
+                              fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 700,
+                              color: '#fff', background: marked ? TBL.danger : TBL.violet,
+                              padding: '2px 7px', borderRadius: 3, whiteSpace: 'nowrap',
+                            }}>
+                              {marked ? '↓ BOTTOM' : `TOP ${rank}`}
+                            </div>
+                          </div>
+                          {!marked && keptCount > 1 && (
+                            <div style={{ display: 'flex', gap: 4 }}>
+                              <button style={arrowBtn} onClick={() => moveTop(card.id, -1)} title="Move earlier (toward top)">◀</button>
+                              <button style={arrowBtn} onClick={() => moveTop(card.id, 1)} title="Move later">▶</button>
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    });
+                  })()}
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button style={md.btn('ghost')} onClick={() => openPicker(i, cls)}>Cancel</button>
-                  <button style={md.btn('primary')} onClick={() => applyBonus(i, cls, undefined, undefined, toBottom)}>
+                  <button style={md.btn('primary')} onClick={() => applyBonus(i, cls, undefined, undefined, toBottom, topOrder)}>
                     Confirm order
                   </button>
                 </div>
