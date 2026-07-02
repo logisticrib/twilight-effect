@@ -2,7 +2,33 @@
 
 Self-contained context for continuing the card-effect engine work in a fresh session.
 
-## Latest session (2026-06-23) — deferred player-choice pickers
+## Latest session (2026-07-02) — Fable audit + fix batches 1-3
+A 4-agent codebase audit produced **`tasks/audit_2026-07-02.md`** (~50 findings, file:line refs,
+severities, ranked batch plan) — read it before proposing engine/MP work. Three fix batches landed:
+- **Batch 1 (build-green)**: all 10 "pre-existing" TS errors fixed — they were failing `tsc -b`, so
+  `npm run build` NEVER worked. Typecheck is now a ZERO-error gate; treat any error as yours.
+- **Batch 2 (gameplay correctness, 23/23 runtime-verified)**: `destroyEntity`/`deadCardsOf` — every
+  destruction path now moves cards to the Dead Zone (previously ALL destruction lost cards from the
+  game); `setPcHp` — single PC-HP write (entity→headline mirror + win check); **`game.gameOver` now
+  stores the winning SIDE 'p1'|'p2'** (render via seatName); equip slot-capacity gate (no more silent
+  item destruction); dead-pick queue resolves by card id; Zealous/Acrobatics via effectiveKeywords;
+  `actionPM` wired (4 Minor Actions were overcharged as Major); OathswornModal localPlayer + sworn-card
+  capture fix + sacrifice→dead; PoisonModal PC-entity write + pure updaters; Tab-cycle localPlayer;
+  `LOCAL_PROMPTS_CLEARED` reset constant.
+- **Batch 3 (MP races, 19/19 protocol-verified)**: reactiveHold enforced at the BROADCAST layer
+  (`startStateSync` skips sends while held; reactiveHold exported + covers pendingAttackChoice);
+  owner-gated cancelPeek/cancelDeadPick; guest silent until the host's first snapshot; PROTOCOL_VERSION
+  handshake (mismatch → refuse); STATE_SYNC shape check; lost-sync self-heal via sentSeq/recvSeq on
+  PING/PONG (fixes the endTurn-deadlock); latency via origTs.
+- **NEW VERIFICATION HARNESS** (when preview tools are blocked/insufficient): drive the REAL store or
+  MultiplayerSession under Node via Vite — scratchpad .mjs, `createServer({server:{middlewareMode:true},
+  appType:'custom'})`, `ssrLoadModule('/src/store/gameStore.ts')`; alias `peerjs` to a stub via
+  `resolve.alias` for protocol tests (two sessions over fake DataConnections). Import vite by absolute
+  file URL (`node_modules/vite/dist/node/index.js`) since the script lives outside the app.
+- Remaining audit work: **batch 4 = guest deck in READY (H3)**, then join-lifecycle (M4/M5),
+  reconnect (M1), Vitest data-contract test, quality refactors (§d of the audit).
+
+## Previous session (2026-06-23) — deferred player-choice pickers
 Three previously-deferred pickers were built + preview-verified (store + real UI), typecheck clean:
 - **Kit-Master multi-item picker** — when a source character holds 2+ items the player chooses which to
   move (`allItemsOf`, `PendingKit.step:'item'`, `pickKitItem`, `KitItemModal`); 1 item still skips the

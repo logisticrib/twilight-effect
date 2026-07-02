@@ -1135,13 +1135,16 @@ function armPrompts(game: GameState, deadSink: PendingDeadPick[], armorSink: Arm
  * the owner's resolution (the owner's modal already serializes their own side).
  * Returns the blocking source name, or null. The owner is never held by their own pick.
  */
-function reactiveHold(game: GameState, localPlayer: 'p1' | 'p2'): string | null {
+export function reactiveHold(game: GameState, localPlayer: 'p1' | 'p2'): string | null {
   const dp = game.pendingDeadPick;
   if (dp && dp.lp !== localPlayer) return dp.source;
   // A mid-combat Armor choice owned by the opponent (defender) holds the attacker
   // until it resolves, so the attacker's broadcasts don't clobber the resolution.
   const pa = game.pendingArmor;
   if (pa && pa.defender !== localPlayer) return `${pa.entityName}'s armor`;
+  // The opponent's pre-attack pay-HP choice (Mara) — same clobber risk.
+  const pac = game.pendingAttackChoice;
+  if (pac && pac.lp !== localPlayer) return `${pac.sourceName} (attack choice)`;
   return null;
 }
 
@@ -2197,6 +2200,12 @@ export const useGameStore = create<GameStoreState>()(
   }),
 
   cancelPeek: () => set(s => {
+    const pk = s.game.pendingPeek;
+    if (!pk) return s;
+    // Only the scry's owner may cancel it — the global Escape handler on the OTHER
+    // client used to remotely wipe the opponent's peek mid-decision. (Sandbox
+    // controls both seats, so it may always cancel.)
+    if (s.conn.mode !== 'solo' && pk.lp !== s.localPlayer) return s;
     const { peek, rest } = nextPeek(s.game, s.game.pendingPeekQueue);
     return { game: { ...s.game, pendingPeek: peek, pendingPeekQueue: rest } };
   }),
@@ -2228,6 +2237,11 @@ export const useGameStore = create<GameStoreState>()(
   }),
 
   cancelDeadPick: () => set(s => {
+    const dp = s.game.pendingDeadPick;
+    if (!dp) return s;
+    // Owner-only, like cancelPeek — an Escape on the other client must not wipe the
+    // opponent's recovery pick. (The owner keeps the escape-hatch cancel.)
+    if (s.conn.mode !== 'solo' && dp.lp !== s.localPlayer) return s;
     const [next, ...rest] = s.game.pendingDeadPickQueue;
     return { game: { ...s.game, pendingDeadPick: next ?? null, pendingDeadPickQueue: rest } };
   }),

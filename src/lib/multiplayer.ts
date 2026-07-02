@@ -4,11 +4,16 @@ import type { GameState } from '../store/gameStore';
 // ─── Message protocol ─────────────────────────────────────────────────────────
 // Multiplayer is authoritative state-sync: the mutating peer broadcasts its full
 // `game`, the receiver applies it. (The old per-action replay protocol was removed.)
+
+/** Bump whenever the message protocol or the synced GameState schema changes shape —
+ *  mismatched builds refuse to connect instead of desyncing/crashing mid-game. */
+export const PROTOCOL_VERSION = 1;
+
 export type NetworkMessage =
-  | { type: 'STATE_SYNC'; state: GameState }
-  | { type: 'READY';      name: string; avatar: string }
-  | { type: 'PING';       ts: number }
-  | { type: 'PONG';       ts: number; origTs: number };
+  | { type: 'STATE_SYNC'; state: GameState; seq?: number }
+  | { type: 'READY';      name: string; avatar: string; v?: number }
+  | { type: 'PING';       ts: number; seq?: number }
+  | { type: 'PONG';       ts: number; origTs: number; recvSeq?: number };
 
 export type SessionStatus =
   | 'idle'
@@ -40,6 +45,13 @@ export class MultiplayerSession {
   private conn: DataConnection | null = null;
   private pingInterval: ReturnType<typeof setInterval> | null = null;
   private pendingPing: number | null = null;
+  // Sync bookkeeping: monotonic count of STATE_SYNCs we've sent / applied from the
+  // peer, piggybacked on PING/PONG. Snapshot sync normally self-heals on the next
+  // mutation, but a lost FINAL sync (e.g. right after endTurn) would deadlock the
+  // turn with both players waiting — the seq mismatch detects that and re-sends.
+  private sentSeq = 0;
+  private recvSeq = 0;
+  private lastState: GameState | null = null;
   private callbacks: MultiplayerCallbacks;
   public code = '';
   public isHost = false;
@@ -51,6 +63,7 @@ export class MultiplayerSession {
   /** HOST: create a peer and wait for a connection. */
   async host(playerName: string, avatarLetter: string): Promise<string> {
     this.isHost = true;
+    this.sentSeq = 0; this.recvSeq = 0; this.lastState = null; this.pendingPing = null;
     this.callbacks.onStatusChange('creating');
     return new Promise((resolve, reject) => {
       // Generate a 6-char alphanumeric code as the peer ID
@@ -86,6 +99,7 @@ export class MultiplayerSession {
   async join(code: string, playerName: string, avatarLetter: string): Promise<void> {
     this.isHost = false;
     this.code = code;
+    this.sentSeq = 0; this.recvSeq = 0; this.lastState = null; this.pendingPing = null;
     this.callbacks.onStatusChange('connecting');
 
     const peer = new Peer(undefined as unknown as string, {
@@ -116,7 +130,9 @@ export class MultiplayerSession {
   }
 
   sendStateSync(state: GameState) {
-    this.send({ type: 'STATE_SYNC', state });
+    this.sentSeq++;
+    this.lastState = state;
+    this.send({ type: 'STATE_SYNC', state, seq: this.sentSeq });
   }
 
   destroy() {
@@ -130,13 +146,13 @@ export class MultiplayerSession {
 
   private _wireConn(conn: DataConnection, name: string, avatar: string) {
     conn.on('open', () => {
-      // Announce ourselves
-      this.send({ type: 'READY', name, avatar });
+      // Announce ourselves (with the protocol version — mismatched builds refuse to play)
+      this.send({ type: 'READY', name, avatar, v: PROTOCOL_VERSION });
       this.callbacks.onStatusChange('connected');
       // Start ping loop
       this.pingInterval = setInterval(() => {
         this.pendingPing = Date.now();
-        this.send({ type: 'PING', ts: this.pendingPing });
+        this.send({ type: 'PING', ts: this.pendingPing, seq: this.sentSeq });
       }, 3000);
     });
 
@@ -144,24 +160,37 @@ export class MultiplayerSession {
       try {
         const msg = JSON.parse(raw as string) as NetworkMessage;
         if (msg.type === 'PING') {
-          this.send({ type: 'PONG', ts: Date.now(), origTs: msg.ts });
+          // Reply with how many of the peer's STATE_SYNCs we've applied — if they've
+          // sent more, they re-send the latest (see PONG below).
+          this.send({ type: 'PONG', ts: Date.now(), origTs: msg.ts, recvSeq: this.recvSeq });
           return;
         }
         if (msg.type === 'PONG') {
-          if (this.pendingPing) {
-            const latency = Math.round((Date.now() - this.pendingPing) / 2);
-            this.callbacks.onLatency(latency);
-            this.pendingPing = null;
+          // Latency from the ping's own timestamp — pendingPing is overwritten every
+          // 3s, so matching a late PONG against a newer ping reported garbage.
+          this.callbacks.onLatency(Math.round((Date.now() - msg.origTs) / 2));
+          this.pendingPing = null;
+          // Self-heal a dropped sync: the peer has applied fewer of our syncs than
+          // we've sent → push the latest snapshot again (idempotent on the receiver).
+          if (msg.recvSeq !== undefined && msg.recvSeq < this.sentSeq && this.lastState) {
+            this.send({ type: 'STATE_SYNC', state: this.lastState, seq: this.sentSeq });
           }
           return;
         }
         if (msg.type === 'READY') {
+          if ((msg.v ?? 0) !== PROTOCOL_VERSION) {
+            this.callbacks.onError(
+              `Version mismatch — opponent's build speaks protocol v${msg.v ?? 0}, this one v${PROTOCOL_VERSION}. Both players need the same app version.`);
+            conn.close(); // refuse: playing across schema versions desyncs/crashes mid-game
+            return;
+          }
           this.callbacks.onOpponentJoined({ name: msg.name, avatar: msg.avatar, status: 'ready' });
           return;
         }
+        if (msg.type === 'STATE_SYNC') this.recvSeq = msg.seq ?? this.recvSeq + 1;
         this.callbacks.onMessage(msg);
-      } catch {
-        // ignore malformed messages
+      } catch (e) {
+        console.warn('[mp] dropped malformed message', e, raw);
       }
     });
 

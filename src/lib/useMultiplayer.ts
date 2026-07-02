@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { MultiplayerSession, type NetworkMessage } from './multiplayer';
-import { useGameStore } from '../store/gameStore';
+import { useGameStore, reactiveHold } from '../store/gameStore';
 import { useSettingsStore } from '../store/settingsStore';
 
 /**
@@ -12,6 +12,10 @@ export function useMultiplayer() {
   // True while we are applying a remote STATE_SYNC, so the game subscription
   // does not echo that state straight back to the sender (infinite loop).
   const applyingRemoteRef = useRef(false);
+  // False on a GUEST from join() until the host's authoritative first STATE_SYNC has
+  // been applied: the guest's independently-shuffled local game must never broadcast
+  // over the host's (a click or Escape in that window used to overwrite it).
+  const syncedRef = useRef(true);
   // Unsubscribe handle for the game-state broadcast subscription.
   const unsubGameRef = useRef<(() => void) | null>(null);
   const {
@@ -33,6 +37,14 @@ export function useMultiplayer() {
       (s) => s.game,
       (g) => {
         if (applyingRemoteRef.current) return;
+        if (!syncedRef.current) return; // guest pre-sync window — stay silent
+        // While an opponent-owned reactive prompt (armor pick / dead-zone pick /
+        // attack choice) is outstanding, do NOT broadcast: our snapshot still carries
+        // the unresolved prompt, so it would overwrite their in-flight resolution —
+        // re-arming their modal and double-applying the effect. The store-level
+        // reactiveHold no-ops the action mutators; THIS is the wire-level gate that
+        // covers everything else (selection clicks, modal setGame, future mutators).
+        if (reactiveHold(g, useGameStore.getState().localPlayer)) return;
         session.sendStateSync(g);
       }
     );
@@ -57,17 +69,26 @@ export function useMultiplayer() {
         },
         onMessage: (msg: NetworkMessage) => {
           if (msg.type === 'STATE_SYNC') {
+            // Never apply a malformed snapshot — a corrupted message (or a build with
+            // a different GameState schema slipping past the version check) would
+            // otherwise crash mid-game with no diagnostic.
+            const st = msg.state;
+            if (!st || typeof st !== 'object' || !st.p1 || !st.p2 || !st.activePlayer) {
+              console.warn('[mp] dropped malformed STATE_SYNC', st);
+              return;
+            }
             // Apply the sender's authoritative game state. Preserve our own
             // `selected` (a local UI concern) so an opponent's action does not
             // wipe our current selection. The flag stops us echoing it back.
             applyingRemoteRef.current = true;
             try {
               useGameStore.setState((s) => ({
-                game: { ...msg.state, selected: s.game.selected },
+                game: { ...st, selected: s.game.selected },
               }));
             } finally {
               applyingRemoteRef.current = false;
             }
+            syncedRef.current = true; // first host snapshot received — guest may broadcast
           }
         },
         onLatency: (ms) => setConn({ latency: ms }),
@@ -85,6 +106,7 @@ export function useMultiplayer() {
   const host = useCallback(async (p1Cards: import('../types/card').Card[], p2Cards: import('../types/card').Card[]): Promise<string> => {
     const session = getSession();
     const code = await session.host(playerName, avatarLetter);
+    syncedRef.current = true; // the host's game IS the authoritative one
     startStateSync(session);
     startMultiplayer('host', code, 'p1', p1Cards, p2Cards);
     // When opponent connects and is ready, send them the current game state
@@ -103,6 +125,7 @@ export function useMultiplayer() {
   /** GUEST: connect using the host's code. */
   const join = useCallback(async (code: string, p1Cards: import('../types/card').Card[], p2Cards: import('../types/card').Card[]): Promise<void> => {
     const session = getSession();
+    syncedRef.current = false; // silent until the host's first snapshot arrives
     await session.join(code, playerName, avatarLetter);
     startStateSync(session);
     startMultiplayer('join', code, 'p2', p1Cards, p2Cards);
@@ -114,6 +137,7 @@ export function useMultiplayer() {
     unsubGameRef.current = null;
     sessionRef.current?.destroy();
     sessionRef.current = null;
+    syncedRef.current = true;
     clearBroadcast();
     backToLobby();
   }, [clearBroadcast, backToLobby]);
