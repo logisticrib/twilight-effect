@@ -1018,7 +1018,23 @@
     "text": "ZEALOUS. When this character attacks, you may pay 1 HP from your player character: deal 1 additional damage.",
     "flavor": "",
     "createdAt": "2026-05-16T19:05:55.111238Z",
-    "updatedAt": "2026-05-16T19:05:55.111240Z"
+    "updatedAt": "2026-05-16T19:05:55.111240Z",
+    "effects": [
+      {
+        "trigger": "onAttack",
+        "optional": true,
+        "cost": {
+          "kind": "payHP",
+          "amount": 1
+        },
+        "effects": [
+          {
+            "op": "attackBonus",
+            "amount": 1
+          }
+        ]
+      }
+    ]
   },
   {
     "id": "c1efc377",

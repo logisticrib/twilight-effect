@@ -83,6 +83,9 @@ export interface GameState {
    *  serializable resume state so combat continues after the pick. Routed to the
    *  defender; the attacker is held (see `reactiveHold`) until it resolves. */
   pendingArmor: PendingArmor | null;
+  /** Pre-attack optional ability prompt (Mara: "you may pay HP from your PC: +N damage").
+   *  Routed to the attacker; combat commits once they choose via `resolveAttackChoice`. */
+  pendingAttackChoice: PendingAttackChoice | null;
   /** Remaining setup steps as `"<step>:<player>"`, e.g. "mulligan:p1". Synced so MP
    *  setup is SERIALIZED — only the head step's owner acts (turn-like, so the wholesale
    *  state-sync stays correct even for cross-half class bonuses); the other peer waits.
@@ -241,6 +244,17 @@ export interface ArmorChoiceData {
 export interface PendingArmor extends ArmorChoiceData {
   ctx?: AttackCtx;
   queue?: ArmorChoiceData[];
+}
+
+/** A pre-attack "you may pay HP: +N damage" prompt (Mara). Captures the attack so it
+ *  can be committed (with or without the bonus) once the attacker decides. */
+export interface PendingAttackChoice {
+  lp: 'p1' | 'p2';       // the attacking player (who chooses)
+  charId: string;        // the attacker
+  targetId: string;      // the attack's target
+  sourceName: string;    // the ability's source (for the prompt)
+  payHP: number;
+  bonus: number;
 }
 
 // ─── Adjacency map ────────────────────────────────────────────────────────────
@@ -494,6 +508,67 @@ function finalizeAttack(game: GameState, ctx: AttackCtx): GameState {
     ...activationPatch(game, ctx.charId),
     selected: null,
   });
+}
+
+/** An optional "you may pay HP from your PC: +N attack damage" on-attack ability
+ *  (Mara, the Sworn Sword). Returns the cost + bonus if the controller can pay, else null. */
+function optionalAttackAbility(attacker: BoardEntity, game: GameState, side: 'p1' | 'p2'): { sourceName: string; payHP: number; bonus: number } | null {
+  for (const clause of combatTriggerEffects(attacker, 'onAttack')) {
+    if (!clause.optional || clause.cost?.kind !== 'payHP') continue;
+    const bonus = clause.effects.reduce((sum, e) => e.op === 'attackBonus' ? sum + e.amount : sum, 0);
+    if (bonus <= 0) continue;
+    const pcLoc = pcIdOf(game, side);
+    const pc = pcLoc ? findEntityAnywhere(game, pcLoc)?.ent : null;
+    if (!pc || pc.hp <= clause.cost.amount) continue; // must keep ≥1 HP — never pay a lethal cost
+    return { sourceName: clause.sourceName, payHP: clause.cost.amount, bonus };
+  }
+  return null;
+}
+
+/** Pay HP directly from a player's PC (a cost, not damage — armor/replacement don't apply). */
+function payPcHp(game: GameState, side: 'p1' | 'p2', amount: number): GameState {
+  const pcId = pcIdOf(game, side);
+  const loc = pcId ? findEntityAnywhere(game, pcId) : null;
+  if (!loc) return game;
+  const newHp = Math.max(0, loc.ent.hp - amount);
+  const g = updateEntity(game, loc.ent.id, { hp: newHp });   // PC entity = source of truth
+  return { ...g, [side]: { ...g[side], hp: newHp } };          // mirror to the headline HP
+}
+
+/** Commit an attack: tap the attacker, build the hit queue (primary + Cleave), and drive
+ *  it. `bonusDmg` is the optional on-attack bonus the player opted into (else 0). Returns
+ *  the finished game (+log) or a mid-combat pause (PendingArmor already set on `game`). */
+function commitAttack(game: GameState, charId: string, targetEntityId: string, bonusDmg: number):
+  | { paused: true; game: GameState }
+  | { paused: false; game: GameState; msg: string } {
+  const attLoc = findEntityAnywhere(game, charId);
+  const tgtLoc = findEntityAnywhere(game, targetEntityId);
+  if (!attLoc || !tgtLoc) return { paused: false, game, msg: '' };
+  const attacker = attLoc.ent;
+  const oppPlayer: 'p1' | 'p2' = attLoc.player === 'p1' ? 'p2' : 'p1';
+
+  const newGame = updateEntity(game, charId, { tapped: 'major', exhausted: true, acts: { ...attacker.acts, major: true } });
+  const dmg = effectiveAttack(attacker, game) + attackDamageBonus(attacker, game, attLoc.player) + bonusDmg;
+  const hitQueue = [targetEntityId];
+  const acroMsgs: string[] = [];
+  if (effectiveKeywords(attacker, game).includes('Cleave')) {
+    const tgtSlot = findSlot(game[oppPlayer].board, targetEntityId);
+    if (tgtSlot) for (const ls of (isFront(tgtSlot as SlotId) ? FRONT_SLOTS : BACK_SLOTS)) {
+      const lineEnt = newGame[oppPlayer].board[ls];
+      if (!lineEnt || lineEnt.id === targetEntityId) continue;
+      if (isImmuneToSplash(lineEnt)) { acroMsgs.push(`${lineEnt.name} evades the Cleave (Acrobatics)`); continue; }
+      hitQueue.push(lineEnt.id);
+    }
+  }
+  const ctx: AttackCtx = {
+    charId, attackerName: attacker.name, attackerPlayer: attLoc.player, dmg, hitQueue, phase: 'damage',
+    reckless: effectiveKeywords(attacker, game).includes('Reckless'),
+    hitRun: effectiveKeywords(attacker, game).includes('Hit & Run'),
+    msgs: acroMsgs, events: [], deadSink: [], armorSink: [],
+  };
+  const res = driveAttack(newGame, ctx);
+  if (!res.done) return { paused: true, game: { ...res.game, pendingArmor: res.pendingArmor } };
+  return { paused: false, game: finalizeAttack(res.game, res.ctx), msg: res.ctx.msgs.join(' | ') };
 }
 
 function rollD6(): number { return 1 + Math.floor(Math.random() * 6); }
@@ -866,7 +941,7 @@ interface DamageEvent {
 }
 
 /** A clause (effects + gate + label) drawn from an entity's combat triggers. */
-interface CombatClause { effects: Effect[]; if?: Condition; sourceName: string }
+interface CombatClause { effects: Effect[]; if?: Condition; sourceName: string; optional?: boolean; cost?: Cost }
 
 /** Combat-trigger clauses from an entity's own card AND its equipped items. */
 function combatTriggerEffects(ent: BoardEntity, trigger: Trigger): CombatClause[] {
@@ -874,7 +949,7 @@ function combatTriggerEffects(ent: BoardEntity, trigger: Trigger): CombatClause[
   const collect = (name: string) => {
     const card = CATALOG.find(c => c.name === name);
     for (const ce of card?.effects ?? [])
-      if (ce.trigger === trigger) out.push({ effects: ce.effects, if: ce.if, sourceName: name });
+      if (ce.trigger === trigger) out.push({ effects: ce.effects, if: ce.if, sourceName: name, optional: ce.optional, cost: ce.cost });
   };
   collect(ent.name);
   const lo = ent.loadout;
@@ -1056,6 +1131,7 @@ function magicCtx(game: GameState, lp: 'p1' | 'p2', card?: Card): EffectCtx | un
 function attackDamageBonus(attacker: BoardEntity, game: GameState, side: 'p1' | 'p2'): number {
   let sum = 0;
   for (const clause of combatTriggerEffects(attacker, 'onAttack')) {
+    if (clause.optional) continue; // "you may pay…" bonuses are added only if the player opts in
     if (clause.if && !conditionMet(game, side, clause.if)) continue;
     for (const e of clause.effects) if (e.op === 'attackBonus') sum += e.amount;
   }
@@ -1349,6 +1425,7 @@ export function makeNewGame(
     pendingDeadPickQueue: [],
     pendingPoison: null,
     pendingArmor: null,
+    pendingAttackChoice: null,
     setupQueue: [...SETUP_SEQUENCE],
     p1: dealPlayer(p1Name, p1Cards, 'pc-p1'),
     p2: dealPlayer(p2Name, p2Cards, 'pc-p2'),
@@ -1452,6 +1529,8 @@ interface GameStoreState {
   resolveAttack: (targetEntityId: string) => void;
   /** Defender's mid-combat Armor pick — resolves `game.pendingArmor` and resumes the attack. */
   resolveArmor: (pieceId: string) => void;
+  /** Resolve Mara's pre-attack optional ability — pay HP for +damage, or decline; commits the attack. */
+  resolveAttackChoice: (accept: boolean) => void;
 
   // Cancel any pending action
   cancelPending: () => void;
@@ -2134,7 +2213,7 @@ export const useGameStore = create<GameStoreState>()(
       ...sg,
       currentActor: sg.currentActor ?? null, finishedActors: sg.finishedActors ?? [],
       setupQueue: sg.setupQueue ?? [],
-      pendingPeek: null, pendingPeekQueue: [], pendingDeadPick: null, pendingDeadPickQueue: [], pendingPoison: null, pendingArmor: null,
+      pendingPeek: null, pendingPeekQueue: [], pendingDeadPick: null, pendingDeadPickQueue: [], pendingPoison: null, pendingArmor: null, pendingAttackChoice: null,
     };
     return { game, playPhase: 'game', conn: { ...EMPTY_CONN, mode: 'solo', code: 'RESUMED' }, localPlayer: 'p1' as const };
   }),
@@ -2300,46 +2379,35 @@ export const useGameStore = create<GameStoreState>()(
       }
     }
 
-    // ── Tap attacker (major action) ────────────────────────────────────────────
-    const newGame = updateEntity(game, pending.charId, {
-      tapped: 'major', exhausted: true,
-      acts: { ...attacker.acts, major: true },
-    });
-
-    // Build the hit queue: primary target + (Cleave) the rest of its line. Acrobatics
-    // dodges Cleave splash. Damage is computed once from pre-combat state.
-    const dmg = effectiveAttack(attacker, game) + attackDamageBonus(attacker, game, attLoc.player);
-    const hitQueue = [targetEntityId];
-    const acroMsgs: string[] = [];
-    const hasCleave = effectiveKeywords(attacker, game).includes('Cleave');
-    if (hasCleave && tgtLoc) {
-      const tgtSlot = findSlot(game[oppPlayer].board, targetEntityId);
-      if (tgtSlot) {
-        const lineSlots = isFront(tgtSlot as SlotId) ? FRONT_SLOTS : BACK_SLOTS;
-        for (const ls of lineSlots) {
-          const lineEnt = newGame[oppPlayer].board[ls];
-          if (!lineEnt || lineEnt.id === targetEntityId) continue;
-          if (isImmuneToSplash(lineEnt)) { acroMsgs.push(`${lineEnt.name} evades the Cleave (Acrobatics)`); continue; }
-          hitQueue.push(lineEnt.id);
-        }
-      }
+    // Optional on-attack ability (Mara): pause to ask the attacker whether to pay HP
+    // for +damage. Decided BEFORE the attack resolves (the bonus rides the attack).
+    const opt = optionalAttackAbility(attacker, game, attLoc.player);
+    if (opt) {
+      return { pending: null, game: { ...game, pendingAttackChoice: {
+        lp: attLoc.player, charId: pending.charId, targetId: targetEntityId,
+        sourceName: opt.sourceName, payHP: opt.payHP, bonus: opt.bonus } } };
     }
 
-    // Drive the attack. It pauses (returns a PendingArmor) when a hit lands on a
-    // character with 2+ armor pieces — the defender then picks via resolveArmor.
-    const ctx: AttackCtx = {
-      charId: pending.charId, attackerName: attacker.name, attackerPlayer: attLoc.player,
-      dmg, hitQueue, phase: 'damage',
-      reckless: effectiveKeywords(attacker, game).includes('Reckless'),
-      hitRun: effectiveKeywords(attacker, game).includes('Hit & Run'),
-      msgs: acroMsgs, events: [], deadSink: [], armorSink: [],
-    };
-    const res = driveAttack(newGame, ctx);
-    if (!res.done) {
-      return { pending: null, game: { ...res.game, pendingArmor: res.pendingArmor } };
+    const r = commitAttack(game, pending.charId, targetEntityId, 0);
+    if (r.paused) return { pending: null, game: r.game };
+    return { pending: null, game: r.game, toasts: [...s.toasts, pushToast(r.msg)] };
+  }),
+
+  // ── Optional pre-attack ability (Mara): pay HP for +damage, or decline ─────────
+  resolveAttackChoice: (accept) => set(s => {
+    const pac = s.game.pendingAttackChoice;
+    if (!pac) return s;
+    let game: GameState = { ...s.game, pendingAttackChoice: null };
+    const prefix: string[] = [];
+    if (accept) {
+      game = payPcHp(game, pac.lp, pac.payHP);
+      prefix.push(`${pac.sourceName}: pays ${pac.payHP} HP for +${pac.bonus}`);
     }
-    const t = pushToast(res.ctx.msgs.join(' | '));
-    return { pending: null, game: finalizeAttack(res.game, res.ctx), toasts: [...s.toasts, t] };
+    const r = commitAttack(game, pac.charId, pac.targetId, accept ? pac.bonus : 0);
+    if (r.paused) return { game: r.game };
+    const id = ++toastId;
+    setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 3000);
+    return { game: r.game, toasts: [...s.toasts, { id, msg: [...prefix, r.msg].filter(Boolean).join(' | ') }] };
   }),
 
   // ── Armor choice (mid-combat): the defender picks which piece absorbs the hit ──
