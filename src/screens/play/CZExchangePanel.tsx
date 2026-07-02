@@ -60,15 +60,15 @@ export function CZExchangePanel() {
   const btnRow: CSSProperties = {
     display: 'flex', gap: 8, marginTop: 10,
   };
-  const choiceBtn = (color: string, active?: boolean): CSSProperties => ({
+  const choiceBtn: CSSProperties = {
     flex: 1, padding: '8px 12px', borderRadius: 7, cursor: 'pointer',
     fontFamily: "'Inter', sans-serif", fontSize: 12, fontWeight: 600,
     textAlign: 'center',
-    background: active ? `${color}22` : 'rgba(255,255,255,0.04)',
-    border: `1px solid ${active ? color : TBL.matLine2}`,
-    color: active ? color : TBL.ink2,
+    background: 'rgba(255,255,255,0.04)',
+    border: `1px solid ${TBL.matLine2}`,
+    color: TBL.ink2,
     transition: 'all .12s',
-  });
+  };
   const cardPill = (clr: string): CSSProperties => ({
     padding: '4px 10px', borderRadius: 5, cursor: 'pointer',
     fontFamily: "'Inter', sans-serif", fontSize: 11.5, color: TBL.ink,
@@ -105,17 +105,17 @@ export function CZExchangePanel() {
             {ps.classZone.length >= 5 && <span style={{ color: TBL.amber2 }}> CZ is full (5/5) — can only move out.</span>}
           </div>
           <div style={btnRow}>
-            <div style={choiceBtn(TBL.amber, mode === 'cz-to-hand')}
+            <div style={choiceBtn}
               onClick={() => setMode('cz-to-hand')}>
               ← CZ → Hand
             </div>
             <div
-              style={choiceBtn(TBL.violet, mode === 'hand-to-cz')}
+              style={choiceBtn}
               onClick={() => ps.classZone.length < 5 ? setMode('hand-to-cz') : undefined}
             >
               Hand → CZ →
             </div>
-            <div style={choiceBtn(TBL.ink3)} onClick={doPass}>
+            <div style={choiceBtn} onClick={doPass}>
               Pass
             </div>
           </div>
@@ -149,8 +149,8 @@ export function CZExchangePanel() {
             })}
           </div>
           <div style={btnRow}>
-            <div style={choiceBtn(TBL.ink3)} onClick={() => setMode('choose')}>← Back</div>
-            <div style={choiceBtn(TBL.ink3)} onClick={doPass}>Pass</div>
+            <div style={choiceBtn} onClick={() => setMode('choose')}>← Back</div>
+            <div style={choiceBtn} onClick={doPass}>Pass</div>
           </div>
         </>
       )}
@@ -187,8 +187,8 @@ export function CZExchangePanel() {
             })}
           </div>
           <div style={btnRow}>
-            <div style={choiceBtn(TBL.ink3)} onClick={() => setMode('choose')}>← Back</div>
-            <div style={choiceBtn(TBL.ink3)} onClick={doPass}>Pass</div>
+            <div style={choiceBtn} onClick={() => setMode('choose')}>← Back</div>
+            <div style={choiceBtn} onClick={doPass}>Pass</div>
           </div>
         </>
       )}

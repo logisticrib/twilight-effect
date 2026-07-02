@@ -73,9 +73,10 @@ Three previously-deferred pickers were built + preview-verified (store + real UI
   `"C:\Program Files\nodejs\node.exe" node_modules/vite/bin/vite.js --host` — or use the
   Claude Preview tool: `preview_start` with config name `twilight-app` (port 5173).
 - Typecheck: `"C:\Program Files\nodejs\node.exe" node_modules/typescript/bin/tsc --noEmit -p tsconfig.app.json`
-  - PRE-EXISTING errors (ignore, not ours): CardFace.tsx `cls` unused + 2 arg errors;
-    Play.tsx `isMatchingPhase` unused; CZExchangePanel(108/113); HandFan(8/14);
-    ClassBonusModal(261); deckStore(35). Filter these out when checking your work.
+  - ZERO errors expected (2026-07-02: the old "pre-existing errors to ignore" list was fixed —
+    they were breaking `npm run build`, which runs `tsc -b`). Treat ANY error as yours.
+- Audit: `tasks/audit_2026-07-02.md` — 4-agent codebase audit (~50 findings with file:line refs,
+  severities, and a batch plan). Batch 1 (build-green) done; gameplay-correctness + MP-race batches open.
 - Design docs one level up: `Game_Rules_Updated.md`, `Card_Design_Parameters.md` (the
   machine-readable spec — authoritative), `Card_Generation_Master_Prompt.md`,
   `Master_Keyword_List.md`, `Class Design Guide.docx`.

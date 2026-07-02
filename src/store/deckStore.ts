@@ -32,7 +32,7 @@ const SEED: Deck[] = [
 
 export const useDeckStore = create<DeckState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       decks: SEED,
       activeDeckId: SEED[0].id,
 

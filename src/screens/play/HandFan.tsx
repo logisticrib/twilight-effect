@@ -7,7 +7,6 @@ import { TBL } from '../../tokens';
 
 const HAND_SCALE = 0.54;
 const CARD_W = BASE_W * HAND_SCALE;
-const CARD_H = 280 * HAND_SCALE;           // ~151px — card total height
 const ZONE_H = 175;                         // hand zone height — must match HAND_H in Playmat
 const OVERLAP = CARD_W * 0.42;
 const SPREAD_DEG = 14;

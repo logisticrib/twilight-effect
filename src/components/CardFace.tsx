@@ -23,7 +23,7 @@ const s = {
       cursor: hoverable ? 'pointer' : 'default',
     };
   },
-  card(cls: string, dark: string, sel: boolean): CSSProperties {
+  card(dark: string, sel: boolean): CSSProperties {
     return {
       position: 'absolute',
       top: 0, left: 0,
@@ -63,7 +63,7 @@ const s = {
     color: '#fff', lineHeight: 1.05, letterSpacing: '0.01em',
     textShadow: '0 1px 2px rgba(0,0,0,0.6)',
   } as CSSProperties,
-  gem(cls: string, dark: string, small?: boolean): CSSProperties {
+  gem(dark: string, small?: boolean): CSSProperties {
     return {
       width: 26, height: 26, borderRadius: '50%', flexShrink: 0,
       background: `radial-gradient(circle at 35% 30%, #fff6, ${dark})`,
@@ -197,7 +197,7 @@ const s = {
 
 // ─── PC card variant ──────────────────────────────────────────────────────────
 function PcCard({
-  data, scale, selected, hoverable, scrollText, textboxRef, onWheel, onClick, onMouseEnter, onMouseLeave,
+  data, scale = 1, selected = false, hoverable = false, scrollText, textboxRef, onWheel, onClick, onMouseEnter, onMouseLeave,
 }: CardFaceProps & { data: BoardEntity & { kind: 'pc' } }) {
   const cls = CLASSCLR[data.cls] ?? TBL.violet;
   const dark = CLASSDARK[data.cls] ?? '#3a2f5c';
@@ -205,11 +205,11 @@ function PcCard({
   return (
     <div style={s.wrap(scale, 0, hoverable)}
       onClick={onClick} onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave} onWheel={onWheel}>
-      <div style={{ ...s.card(cls, dark, selected), transform: `scale(${scale})` }}>
+      <div style={{ ...s.card(dark, selected), transform: `scale(${scale})` }}>
         <div style={s.inner(cls, true)}>
           <div style={s.banner(cls, dark)}>
             <div style={s.name}>{data.name}</div>
-            <div style={s.gem(cls, dark, true)}>♛</div>
+            <div style={s.gem(dark, true)}>♛</div>
           </div>
           <div style={s.art(cls, dark)}>
             <div style={s.levelPip}>Champion</div>
@@ -328,13 +328,13 @@ export function CardFace({
   return (
     <div style={s.wrap(scale, rot, hoverable)}
       onClick={onClick} onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave} onWheel={onWheel}>
-      <div style={{ ...s.card(cls, dark, selected), transform: `scale(${scale})` }}>
+      <div style={{ ...s.card(dark, selected), transform: `scale(${scale})` }}>
         <div style={s.inner(cls)}>
 
           {/* Banner */}
           <div style={s.banner(cls, dark)}>
             <div style={s.name}>{data.name}</div>
-            <div style={s.gem(cls, dark)}>{level}</div>
+            <div style={s.gem(dark)}>{level}</div>
           </div>
 
           {/* Art window */}

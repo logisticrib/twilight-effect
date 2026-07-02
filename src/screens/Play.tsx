@@ -448,12 +448,6 @@ function EquipPickModal() {
   );
 }
 
-/** The Matching screen is shown while waiting for an opponent (host/join modes). */
-function isMatchingPhase() {
-  const { playPhase, conn } = useGameStore.getState();
-  return playPhase === 'game' && (conn.mode === 'host' || conn.mode === 'join') && conn.opponentStatus !== 'ready';
-}
-
 export function Play() {
   const playPhase = useGameStore(s => s.playPhase);
   const connMode  = useGameStore(s => s.conn.mode);
@@ -465,6 +459,7 @@ export function Play() {
   const { host, join, disconnect } = useMultiplayer();
 
   if (playPhase === 'lobby') return <Lobby host={host} join={join} />;
+  // The Matching screen is shown while waiting for an opponent (host/join modes).
   if (playPhase === 'game' && (connMode === 'host' || connMode === 'join') && oppStatus !== 'ready') {
     return <Matching disconnect={disconnect} />;
   }

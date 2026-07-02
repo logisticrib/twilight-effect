@@ -300,7 +300,6 @@ export function ClassBonusModal({ onClose, isSequence, player = 'p1' }: Props) {
           : [];
         const hasCzFilter     = !!bonus?.czFilter;
         const noCzTarget      = hasCzFilter && validCzTargets.length === 0;
-        const selectedCzCard  = ps.classZone.find(c => c.id === czTargetId) ?? null;
 
         // view-deck: whose deck
         const deckOwnerKey = bonus?.mode === 'view-deck'
