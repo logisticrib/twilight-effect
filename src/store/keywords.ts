@@ -88,8 +88,9 @@ export function recomputeStatics(game: GameState): GameState {
  * target it directly (splash/area/indirect). The primary target of an attack is
  * "targeted directly" and is unaffected; only splash (e.g. Cleave) is prevented.
  */
-export function isImmuneToSplash(ent: BoardEntity): boolean {
-  return ent.keywords.includes('Acrobatics');
+export function isImmuneToSplash(ent: BoardEntity, game: GameState): boolean {
+  // effectiveKeywords: item-granted Acrobatics dodges too; suppressed doesn't.
+  return effectiveKeywords(ent, game).includes('Acrobatics');
 }
 
 /** Add the Hit & Run bonus-move marker to an entity's statuses (no duplicates). */
@@ -338,13 +339,13 @@ export function canHoldItem(ent: BoardEntity, isWeapon: boolean, heavy: boolean)
 }
 
 // ─── Action economy ───────────────────────────────────────────────────────────
-// The cost a card charges when played from hand. `actionSub` is the authored field
-// ('Minor' | 'Major' | 'Special'); it is empty on every current card, so we default
-// to 'Major' — every Action card in the decks is a spell or combat maneuver, the
-// canonical Major-Action category. Authored values override the default.
+// The cost a card charges when played from hand. The decks author the Minor/Major
+// flag in `actionPM` (`actionSub` — same domain plus 'Special' — takes precedence if
+// ever set; it is empty on every current card). Unauthored cards default to 'Major' —
+// the canonical category for spells and combat maneuvers.
 export type ActionCost = 'Minor' | 'Major' | 'Special';
 export function actionTypeOf(card: Card): ActionCost {
-  const s = card.actionSub;
+  const s = card.actionSub || card.actionPM;
   if (s === 'Minor' || s === 'Major' || s === 'Special') return s;
   return 'Major';
 }

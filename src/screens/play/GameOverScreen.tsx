@@ -3,24 +3,22 @@ import { useGameStore, seatName } from '../../store/gameStore';
 import { TBL } from '../../tokens';
 
 /**
- * Full-screen victory/defeat overlay. Shown when `game.gameOver` (the winner's
- * name) is set. Closes the play loop that previously only fired a toast.
+ * Full-screen victory/defeat overlay. Shown when `game.gameOver` (the winning SIDE,
+ * 'p1' | 'p2') is set. Closes the play loop that previously only fired a toast.
  *
  * No `backdropFilter: blur` here — it hangs the preview screenshot/eval tooling
  * on full-screen overlays (see project notes).
  */
 export function GameOverScreen() {
-  const winner = useGameStore(s => s.game.gameOver);
+  const winnerSide = useGameStore(s => s.game.gameOver);
   const game = useGameStore(s => s.game);
   const localPlayer = useGameStore(s => s.localPlayer);
   const backToLobby = useGameStore(s => s.backToLobby);
   const [dismissed, setDismissed] = useState(false);
 
-  if (!winner || dismissed) return null;
+  if (!winnerSide || dismissed) return null;
 
-  // Resolve the winning side from the stored name; default to p1 on a tie.
-  const winnerSide: 'p1' | 'p2' = game.p2.name === winner && game.p1.name !== winner ? 'p2' : 'p1';
-  const localWon = game[localPlayer].name === winner;
+  const localWon = winnerSide === localPlayer;
 
   const survivors = (side: 'p1' | 'p2') =>
     Object.values(game[side].board).filter(Boolean).length;

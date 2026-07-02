@@ -27,7 +27,7 @@ function GameView() {
 
       if (e.key === 'Tab') {
         e.preventDefault();
-        const yours = Object.values(game.p1.board)
+        const yours = Object.values(game[localPlayer].board)
           .filter((c): c is NonNullable<typeof c> => !!c)
           .map(c => c.id);
         if (yours.length === 0) return;
@@ -47,7 +47,7 @@ function GameView() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [game.selected, game.activePlayer, game.currentPhase, localPlayer, game.p1.board, endTurn, advancePhase, selectEntity, cancelPending, cancelPlay, cancelTrigger, cancelKit, cancelActionTarget, cancelPeek, pileView, closePile]);
+  }, [game.selected, game.activePlayer, game.currentPhase, localPlayer, game.p1.board, game.p2.board, endTurn, advancePhase, selectEntity, cancelPending, cancelPlay, cancelTrigger, cancelKit, cancelActionTarget, cancelPeek, pileView, closePile]);
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>

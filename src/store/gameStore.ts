@@ -60,7 +60,9 @@ export interface GameState {
    *  unused budget. Reset each turn. */
   finishedActors: string[];
   /** Set to the winner's name when the game ends; null while the game is ongoing. */
-  gameOver: string | null;
+  /** The winning SIDE once the game has ended (render via `seatName` — never store
+   *  or display a name here; names are perspective placeholders). */
+  gameOver: 'p1' | 'p2' | null;
   // ── Cross-client prompts (live in `game` so they sync over multiplayer and route
   //    to the owning player). Active-player-only prompts (targeting/trigger/kit/equip)
   //    stay store-local. Each modal renders only when `localPlayer === <prompt>.lp`
@@ -279,6 +281,14 @@ export function seatName(side: 'p1' | 'p2', localPlayer: 'p1' | 'p2'): string {
   return side === localPlayer ? 'You' : 'Opponent';
 }
 
+/** Store-local (unsynced) prompt state, nulled whenever a new game starts, control
+ *  changes hands, or a save resumes — stale prompts from a previous game reference
+ *  dead entity ids. Game-level synced prompts live in GameState (reset by makeNewGame). */
+const LOCAL_PROMPTS_CLEARED = {
+  pending: null, pendingPlay: null, pendingTrigger: null, pendingKit: null,
+  pendingActionTarget: null, pendingEquipPick: null, pileView: null,
+};
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 export function freshActs(): Acts { return { move: false, minor: false, major: false }; }
 
@@ -338,6 +348,48 @@ function removeEntity(game: GameState, entityId: string): GameState {
     ...game,
     [loc.player]: { ...game[loc.player], board },
   };
+}
+
+/** The catalog cards a destroyed/sacrificed entity carries to its owner's Dead Zone:
+ *  its own card plus any equipped items' (deduped by item id — a heavy item occupies
+ *  both gear slots but is one card). */
+function deadCardsOf(ent: BoardEntity): Card[] {
+  const names: string[] = [ent.name];
+  const seen = new Set<string>();
+  for (const it of [ent.loadout?.weapon, ...(ent.loadout?.gear ?? [])]) {
+    if (!it || seen.has(it.id)) continue;
+    seen.add(it.id);
+    names.push(it.name);
+  }
+  return names.map(n => CATALOG.find(c => c.name === n)).filter((c): c is Card => !!c);
+}
+
+/** Remove a destroyed/sacrificed entity from the board AND move its card (plus its
+ *  equipped items') to its owner's Dead Zone; a tucked Oathsworn card returns to its
+ *  owner's hand. Every destruction path must use this — bare `removeEntity` loses the
+ *  cards from the game. (Bounce and cost-sacrifice paths do their own zone moves.) */
+function destroyEntity(game: GameState, entityId: string): GameState {
+  const loc = findEntityAnywhere(game, entityId);
+  if (!loc) return game;
+  const dead = deadCardsOf(loc.ent);
+  const sworn = loc.ent.sworn;
+  const g = removeEntity(game, entityId);
+  return { ...g, [loc.player]: {
+    ...g[loc.player],
+    dead: dead.length ? [...g[loc.player].dead, ...dead] : g[loc.player].dead,
+    hand: sworn ? [...g[loc.player].hand, sworn] : g[loc.player].hand,
+  } };
+}
+
+/** Set a Player Character's HP. The PC board entity is the single source of truth,
+ *  mirrored to the PlayerState headline; at 0 HP the game ends — `gameOver` gets the
+ *  winning SIDE (`winnerIfDead` when the caller knows who takes credit, else the PC
+ *  owner's opponent). */
+function setPcHp(game: GameState, side: 'p1' | 'p2', pcEntityId: string, newHp: number, winnerIfDead?: 'p1' | 'p2'): GameState {
+  let g = updateEntity(game, pcEntityId, { hp: newHp });
+  g = { ...g, [side]: { ...g[side], hp: newHp } };
+  if (newHp <= 0 && !g.gameOver) g = { ...g, gameOver: winnerIfDead ?? (side === 'p1' ? 'p2' : 'p1') };
+  return g;
 }
 
 // ─── Damage + effect interpreter (shared by combat and Action cards) ───────────
@@ -404,20 +456,16 @@ function applyDamage(game: GameState, entityId: string, dmg: number, sourceName:
   // The Player Character's HP is the single source of truth, mirrored to the
   // PlayerState headline HP (stats pane) so combat and the display stay married.
   if (ent.kind === 'pc') {
-    let g = updateEntity(game, entityId, { hp: newHp });
-    g = { ...g, [loc.player]: { ...g[loc.player], hp: newHp } };
-    if (newHp <= 0) {
-      const winner = sourcePlayer === 'p1' ? game.p1.name : game.p2.name;
-      msgs.push(`💀 ${winner} wins! ${ent.name} (PC) defeated.`);
-      return { game: { ...g, gameOver: winner }, msgs };
-    }
-    msgs.push(`${sourceName} hits ${ent.name} for ${dmg} (${newHp} HP left)`);
+    const g = setPcHp(game, loc.player, entityId, newHp, sourcePlayer);
+    msgs.push(newHp <= 0
+      ? `💀 ${ent.name} (PC) is defeated!`
+      : `${sourceName} hits ${ent.name} for ${dmg} (${newHp} HP left)`);
     return { game: g, msgs };
   }
 
   if (newHp <= 0) {
     msgs.push(`${sourceName} destroys ${ent.name}!`);
-    let g = removeEntity(game, entityId);
+    let g = destroyEntity(game, entityId);
     if (hasRemovalTrigger(ent)) {
       const rt = resolveRemovalTriggers(g, ent, loc.player, sink, armorSink);
       g = rt.game; msgs.push(...rt.msgs);
@@ -490,7 +538,17 @@ function driveAttack(game: GameState, ctx: AttackCtx):
     if (aLoc) {
       const atkHp = Math.max(0, aLoc.ent.hp - 1);
       ctx.msgs.push(`${ctx.attackerName} takes 1 damage (Reckless)`);
-      g = (atkHp <= 0 && aLoc.ent.kind !== 'pc') ? removeEntity(g, ctx.charId) : updateEntity(g, ctx.charId, { hp: atkHp });
+      if (aLoc.ent.kind === 'pc') {
+        g = setPcHp(g, aLoc.player, ctx.charId, atkHp); // mirrors the headline; recoil at 0 HP loses the game
+      } else if (atkHp <= 0) {
+        g = destroyEntity(g, ctx.charId);
+        if (hasRemovalTrigger(aLoc.ent)) {
+          const rt = resolveRemovalTriggers(g, aLoc.ent, aLoc.player, ctx.deadSink, ctx.armorSink);
+          g = rt.game; ctx.msgs.push(...rt.msgs);
+        }
+      } else {
+        g = updateEntity(g, ctx.charId, { hp: atkHp });
+      }
     }
   }
   if (ctx.hitRun) {
@@ -530,9 +588,7 @@ function payPcHp(game: GameState, side: 'p1' | 'p2', amount: number): GameState 
   const pcId = pcIdOf(game, side);
   const loc = pcId ? findEntityAnywhere(game, pcId) : null;
   if (!loc) return game;
-  const newHp = Math.max(0, loc.ent.hp - amount);
-  const g = updateEntity(game, loc.ent.id, { hp: newHp });   // PC entity = source of truth
-  return { ...g, [side]: { ...g[side], hp: newHp } };          // mirror to the headline HP
+  return setPcHp(game, side, loc.ent.id, Math.max(0, loc.ent.hp - amount));
 }
 
 /** Commit an attack: tap the attacker, build the hit queue (primary + Cleave), and drive
@@ -556,7 +612,7 @@ function commitAttack(game: GameState, charId: string, targetEntityId: string, b
     if (tgtSlot) for (const ls of (isFront(tgtSlot as SlotId) ? FRONT_SLOTS : BACK_SLOTS)) {
       const lineEnt = newGame[oppPlayer].board[ls];
       if (!lineEnt || lineEnt.id === targetEntityId) continue;
-      if (isImmuneToSplash(lineEnt)) { acroMsgs.push(`${lineEnt.name} evades the Cleave (Acrobatics)`); continue; }
+      if (isImmuneToSplash(lineEnt, game)) { acroMsgs.push(`${lineEnt.name} evades the Cleave (Acrobatics)`); continue; }
       hitQueue.push(lineEnt.id);
     }
   }
@@ -727,7 +783,11 @@ function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceName: stri
           const loc = findEntityAnywhere(g, id);
           if (!loc) continue;
           const healed = Math.min(effectiveMaxHp(loc.ent, g), loc.ent.hp + amt);
-          if (healed !== loc.ent.hp) { g = updateEntity(g, id, { hp: healed }); msgs.push(`${loc.ent.name} heals to ${healed} HP`); }
+          if (healed !== loc.ent.hp) {
+            // A healed PC mirrors to the headline HP (PC entity = source of truth).
+            g = loc.ent.kind === 'pc' ? setPcHp(g, loc.player, id, healed) : updateEntity(g, id, { hp: healed });
+            msgs.push(`${loc.ent.name} heals to ${healed} HP`);
+          }
         }
         break;
       }
@@ -833,7 +893,7 @@ function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceName: stri
         if (!loc) break;
         const cur = loc.ent.anchors ?? 0;
         const next = Math.max(0, cur + e.delta);
-        if (e.delta < 0 && next <= 0) { g = removeEntity(g, targetId); msgs.push(`${loc.ent.name} loses its last anchor — sacrificed!`); }
+        if (e.delta < 0 && next <= 0) { g = destroyEntity(g, targetId); msgs.push(`${loc.ent.name} loses its last anchor — sacrificed!`); }
         else { g = updateEntity(g, targetId, { anchors: next }); msgs.push(`${loc.ent.name} anchors ${cur} → ${next}`); }
         break;
       }
@@ -1275,13 +1335,20 @@ function ownPhysicalConstructIds(game: GameState, lp: 'p1' | 'p2'): string[] {
  * hand. Does NOT spend an action — callers add the action cost when appropriate (the
  * normal Minor-action equip does; on-enter "equip from hand" does not).
  */
+/** Weapon/heavy classification for a hand item (drives slot placement + the capacity
+ *  gate in equipItem). Sniffed from itemKind/subtype/text — the deck data has no
+ *  structured field for it yet. */
+function itemProfileOf(card: Card): { isWeapon: boolean; isHeavy: boolean } {
+  const isWeapon = card.itemKind?.toLowerCase().includes('weapon') ||
+                   (card.type === 'Item' && (card.subtype?.toLowerCase().includes('weapon') || card.subtype?.toLowerCase().includes('sword') || card.subtype?.toLowerCase().includes('bow') || card.subtype?.toLowerCase().includes('staff') || card.subtype?.toLowerCase().includes('dagger') || card.subtype?.toLowerCase().includes('axe') || card.subtype?.toLowerCase().includes('mace') || card.subtype?.toLowerCase().includes('wand')));
+  return { isWeapon: !!isWeapon, isHeavy: !!card.text?.toLowerCase().includes('heavy') };
+}
+
 function equipOnto(game: GameState, lp: 'p1' | 'p2', entityId: string, card: Card): GameState {
   const loc = findEntityAnywhere(game, entityId);
   if (!loc) return game;
   const loadout = loc.ent.loadout ?? { weapon: null, gear: [] };
-  const isWeapon = card.itemKind?.toLowerCase().includes('weapon') ||
-                   (card.type === 'Item' && (card.subtype?.toLowerCase().includes('weapon') || card.subtype?.toLowerCase().includes('sword') || card.subtype?.toLowerCase().includes('bow') || card.subtype?.toLowerCase().includes('staff') || card.subtype?.toLowerCase().includes('dagger') || card.subtype?.toLowerCase().includes('axe') || card.subtype?.toLowerCase().includes('mace') || card.subtype?.toLowerCase().includes('wand')));
-  const isHeavy = card.text?.toLowerCase().includes('heavy');
+  const { isWeapon, isHeavy } = itemProfileOf(card);
   const armorMatch = card.text?.match(/armor\s+(\d+)/i);
   const armorVal = armorMatch ? parseInt(armorMatch[1]) : undefined;
   const equippedItem = {
@@ -1289,17 +1356,20 @@ function equipOnto(game: GameState, lp: 'p1' | 'p2', entityId: string, card: Car
     hands: card.text?.toLowerCase().includes('two-handed') ? 2 as const : 1 as const,
     heavy: isHeavy, armor: armorVal, counters: 0, text: card.text,
   };
-  const newLoadout = { ...loadout, gear: [...(loadout.gear ?? [])] };
+  // Normalize gear to its two slots so the capacity checks see real holes.
+  const newLoadout = { ...loadout, gear: [loadout.gear?.[0] ?? null, loadout.gear?.[1] ?? null] };
   let returnToHand: Card | null = null;
   if (isWeapon) {
+    // Equipping over a weapon swaps the old one back to hand.
     if (newLoadout.weapon) returnToHand = CATALOG.find(c => c.name === newLoadout.weapon!.name) ?? null;
     newLoadout.weapon = equippedItem;
   } else if (isHeavy) {
+    if (newLoadout.gear.some(Boolean)) return game; // heavy needs BOTH gear slots — never overwrite an item
     newLoadout.gear = [equippedItem, equippedItem];
   } else {
     const emptyIdx = newLoadout.gear.findIndex(g => !g);
-    if (emptyIdx >= 0) newLoadout.gear[emptyIdx] = equippedItem;
-    else newLoadout.gear = [equippedItem, newLoadout.gear[1] ?? null];
+    if (emptyIdx < 0) return game; // gear full — never overwrite (the displaced item would vanish)
+    newLoadout.gear[emptyIdx] = equippedItem;
   }
   const g = updateEntity(game, entityId, { loadout: newLoadout });
   const newHand = g[lp].hand.filter(c => c.id !== card.id);
@@ -1616,7 +1686,7 @@ export const useGameStore = create<GameStoreState>()(
     conn: { ...EMPTY_CONN, mode: 'solo', code: 'SANDBOX' },
     game: makeNewGame(p1Name, p1Cards, p2Name, p2Cards),
     localPlayer: 'p1',
-    pending: null, pendingPlay: null,
+    ...LOCAL_PROMPTS_CLEARED,
     // Setup is driven by the synced game.setupQueue (seeded in makeNewGame); modalQueue
     // is only for mid-game modals (oathsworn).
     modalQueue: [],
@@ -1629,7 +1699,7 @@ export const useGameStore = create<GameStoreState>()(
       conn: { ...EMPTY_CONN, mode, code },
       game: makeNewGame('You', p1Cards, 'Opponent', p2Cards),
       localPlayer,
-      pending: null, pendingPlay: null,
+      ...LOCAL_PROMPTS_CLEARED,
       // Setup is serialized via the synced game.setupQueue (seeded in makeNewGame); each
       // peer acts only on the steps it owns. modalQueue is for mid-game modals only.
       modalQueue: [],
@@ -1664,7 +1734,7 @@ export const useGameStore = create<GameStoreState>()(
       playPhase: 'lobby',
       conn: EMPTY_CONN,
       localPlayer: 'p1',
-      pending: null, pendingPlay: null,
+      ...LOCAL_PROMPTS_CLEARED,
       modalQueue: [], oathContext: null, _broadcast: null,
     });
   },
@@ -1693,12 +1763,7 @@ export const useGameStore = create<GameStoreState>()(
   // ── Switch sides (sandbox) ─────────────────────────────────────────────────
   switchSides: () => set(s => ({
     localPlayer: s.localPlayer === 'p1' ? 'p2' : 'p1',
-    pending: null,
-    pendingPlay: null,
-    pendingTrigger: null,
-    pendingKit: null,
-    pendingActionTarget: null,
-    pendingEquipPick: null,
+    ...LOCAL_PROMPTS_CLEARED,
     // Cross-client prompts live in `game` and persist across a sandbox side-switch.
     game: { ...s.game, selected: null },
   })),
@@ -1745,6 +1810,16 @@ export const useGameStore = create<GameStoreState>()(
       const id = ++toastId;
       setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 3000);
       return { toasts: [...s.toasts, { id, msg: `${loc.ent.name} has already finished its activation this turn.` }] };
+    }
+
+    // Slot capacity: 1 weapon (equipping swaps the old one back to hand) + 2 gear
+    // (heavy takes both). Without this gate equipOnto no-ops and the Minor action
+    // would be spent for nothing.
+    const prof = itemProfileOf(card);
+    if (!prof.isWeapon && !canHoldItem(loc.ent, false, prof.isHeavy)) {
+      const id = ++toastId;
+      setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 3000);
+      return { toasts: [...s.toasts, { id, msg: `${loc.ent.name} has no free gear slot for ${card.name}.` }] };
     }
 
     let g = equipOnto(s.game, lp, entityId, card);
@@ -1917,7 +1992,7 @@ export const useGameStore = create<GameStoreState>()(
         const moved = Math.min(count, srcLoc.ent.anchors ?? 0);
         g = updateEntity(g, targetId, { anchors: (dstLoc.ent.anchors ?? 0) + moved });
         const srcNext = (srcLoc.ent.anchors ?? 0) - moved;
-        if (srcNext <= 0) { g = removeEntity(g, pa.firstId); msgs.push(`${srcLoc.ent.name} loses its last anchor — sacrificed!`); }
+        if (srcNext <= 0) { g = destroyEntity(g, pa.firstId); msgs.push(`${srcLoc.ent.name} loses its last anchor — sacrificed!`); }
         else g = updateEntity(g, pa.firstId, { anchors: srcNext });
         msgs.push(`Moved ${moved} anchor${moved !== 1 ? 's' : ''} ${srcLoc.ent.name} → ${dstLoc.ent.name}`);
       }
@@ -2131,9 +2206,17 @@ export const useGameStore = create<GameStoreState>()(
     const dp = s.game.pendingDeadPick;
     if (!dp) return s;
     const ps = s.game[dp.lp];
-    const card = ps.dead[idx];
-    if (!card) return s;
-    let g: GameState = { ...s.game, [dp.lp]: { ...ps, dead: ps.dead.filter((_, i) => i !== idx), hand: [...ps.hand, card] } };
+    // Options capture their index at arm time; an earlier pick in the queue may have
+    // shifted the dead array since — re-locate the chosen card by identity.
+    const expected = dp.options.find(o => o.idx === idx)?.card;
+    if (!expected) return s;
+    const liveIdx = ps.dead[idx]?.id === expected.id ? idx : ps.dead.findIndex(c => c.id === expected.id);
+    const card = liveIdx >= 0 ? ps.dead[liveIdx] : undefined;
+    if (!card) { // the card is no longer in the Dead Zone — skip and advance the queue
+      const [next, ...rest] = s.game.pendingDeadPickQueue;
+      return { game: { ...s.game, pendingDeadPick: next ?? null, pendingDeadPickQueue: rest } };
+    }
+    let g: GameState = { ...s.game, [dp.lp]: { ...ps, dead: ps.dead.filter((_, i) => i !== liveIdx), hand: [...ps.hand, card] } };
     const msgs = [`Returned ${card.name} from the Dead Zone to hand`];
     // Run "if you do" effects (e.g. exhaust the source construct) now a card was taken.
     if (dp.postEffects.length) { const r = resolveActionEffects(g, dp.lp, dp.source, dp.postEffects, undefined, dp.sourceId); g = r.game; msgs.push(...r.msgs); }
@@ -2213,9 +2296,11 @@ export const useGameStore = create<GameStoreState>()(
       ...sg,
       currentActor: sg.currentActor ?? null, finishedActors: sg.finishedActors ?? [],
       setupQueue: sg.setupQueue ?? [],
+      // Old saves stored a winner NAME in gameOver; only the side form is valid now.
+      gameOver: sg.gameOver === 'p1' || sg.gameOver === 'p2' ? sg.gameOver : null,
       pendingPeek: null, pendingPeekQueue: [], pendingDeadPick: null, pendingDeadPickQueue: [], pendingPoison: null, pendingArmor: null, pendingAttackChoice: null,
     };
-    return { game, playPhase: 'game', conn: { ...EMPTY_CONN, mode: 'solo', code: 'RESUMED' }, localPlayer: 'p1' as const };
+    return { game, playPhase: 'game', conn: { ...EMPTY_CONN, mode: 'solo', code: 'RESUMED' }, localPlayer: 'p1' as const, ...LOCAL_PROMPTS_CLEARED };
   }),
   clearSavedGame: () => set({ savedGame: null }),
 
@@ -2310,7 +2395,8 @@ export const useGameStore = create<GameStoreState>()(
     if (ent.exhausted) return { ...toast('This character is exhausted.') };
 
     // Summoning sickness — fresh companions cannot attack unless Zealous
-    if (ent.fresh && !ent.keywords.includes('Zealous')) {
+    // (effectiveKeywords: item-granted Zealous counts, suppressed Zealous doesn't).
+    if (ent.fresh && !effectiveKeywords(ent, s.game).includes('Zealous')) {
       return { ...toast('Just entered — cannot attack until next turn (no Zealous).') };
     }
 
@@ -2471,7 +2557,7 @@ export const useGameStore = create<GameStoreState>()(
     } else {
       const next = Math.max(0, cur - pt.n);
       if (next <= 0) {
-        game = removeEntity(game, targetId);
+        game = destroyEntity(game, targetId);
         msg = `${pt.sourceName} dismantles ${loc.ent.name} — no anchors left, sacrificed!`;
       } else {
         game = updateEntity(game, targetId, { anchors: next });
@@ -2810,17 +2896,11 @@ export const useGameStore = create<GameStoreState>()(
     const loc = findEntityAnywhere(s.game, entityId);
     if (!loc) return s;
     const newHp = Math.max(0, Math.min(effectiveMaxHp(loc.ent, s.game), loc.ent.hp + delta));
-    let newGame = updateEntity(s.game, entityId, { hp: newHp });
-    // Mirror the PC's HP onto the PlayerState headline (stats pane).
-    if (loc.ent.kind === 'pc') newGame = { ...newGame, [loc.player]: { ...newGame[loc.player], hp: newHp } };
-    // Win condition: PC at 0 HP
-    if (newHp === 0 && loc.ent.kind === 'pc') {
-      const winner = loc.player === 'p1' ? 'p2' : 'p1';
-      const winName = newGame[winner].name;
-      const id = ++toastId;
-      // Don't auto-dismiss — this is a game over toast
-      return { game: newGame, toasts: [...s.toasts, { id, msg: `💀 ${winName} wins! PC defeated.` }] };
-    }
+    // The PC entity is the HP source of truth — setPcHp mirrors the headline and ends
+    // the game at 0 (GameOverScreen replaces the old winner toast).
+    const newGame = loc.ent.kind === 'pc'
+      ? setPcHp(s.game, loc.player, entityId, newHp)
+      : updateEntity(s.game, entityId, { hp: newHp });
     return { game: newGame };
   }),
 
@@ -2840,6 +2920,11 @@ export const useGameStore = create<GameStoreState>()(
       // Master of Foundations: this player's Physical Constructs skip anchor decay.
       const noPhysicalDecay = controlsPreventAnchorDecay(ps);
       const newBoard: Board = {};
+      // Entities that leave during ready (decayed constructs, fleeing companions) go to
+      // the Dead Zone with their items; a tucked Oathsworn card returns to hand.
+      const buried: Card[] = [];
+      const returnedSworn: Card[] = [];
+      const bury = (ent: BoardEntity) => { buried.push(...deadCardsOf(ent)); if (ent.sworn) returnedSworn.push(ent.sworn); };
       for (const [slot, ent] of Object.entries(ps.board)) {
         if (!ent) continue;
         // Anchor decay for constructs (also ready them: clear exhaust/tap + once-per-turn
@@ -2847,7 +2932,7 @@ export const useGameStore = create<GameStoreState>()(
         if (ent.kind === 'construct') {
           const skipDecay = noPhysicalDecay && isPhysicalConstruct(ent);
           const newAnchors = skipDecay ? (ent.anchors ?? 0) : (ent.anchors ?? 0) - 1;
-          if (newAnchors <= 0) continue; // sacrificed — moves to dead zone below
+          if (newAnchors <= 0) { bury(ent); continue; } // last anchor decayed — sacrificed
           newBoard[slot as SlotId] = {
             ...ent, anchors: newAnchors, acts: freshActs(), tapped: 'none' as TapState, exhausted: false,
             statuses: ent.statuses.filter(st => !st.startsWith('ability-used:')),
@@ -2855,14 +2940,16 @@ export const useGameStore = create<GameStoreState>()(
           continue;
         }
         // Companion fleeing: level > effective willpower
-        if (ent.kind === 'companion' && ent.level > effWP) continue;
+        if (ent.kind === 'companion' && ent.level > effWP) { bury(ent); continue; }
         // Ready the entity (drop unused Hit & Run marker + once-per-turn ability markers)
         newBoard[slot as SlotId] = {
           ...ent, tapped: 'none' as TapState, exhausted: false, fresh: false, acts: freshActs(),
           statuses: ent.statuses.filter(st => st !== HIT_RUN_STATUS && !st.startsWith('ability-used:')),
         };
       }
-      return { ...ps, classZone: newCZ, willpower: newWillpower, board: newBoard };
+      return { ...ps, classZone: newCZ, willpower: newWillpower, board: newBoard,
+        dead: buried.length ? [...ps.dead, ...buried] : ps.dead,
+        hand: returnedSworn.length ? [...ps.hand, ...returnedSworn] : ps.hand };
     };
 
     const readied = readyPlayer(g[nextPlayer]);
@@ -2889,8 +2976,8 @@ export const useGameStore = create<GameStoreState>()(
     }
     const nextPlayerState = { ...readied, deck: drawnDeck, hand: drawnHand };
 
-    const winnerOnDeckOut = deckOutLoser
-      ? (nextPlayer === 'p1' ? g.p2.name : g.p1.name)
+    const winnerOnDeckOut: 'p1' | 'p2' | null = deckOutLoser
+      ? (nextPlayer === 'p1' ? 'p2' : 'p1')
       : null;
 
     let newGame: GameState = recomputeStatics({

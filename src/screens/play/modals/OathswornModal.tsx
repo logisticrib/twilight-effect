@@ -2,32 +2,47 @@ import { useState, type CSSProperties } from 'react';
 import { ModalShell, md } from './ModalShell';
 import { CardFace } from '../../../components/CardFace';
 import { useGameStore } from '../../../store/gameStore';
+import { CATALOG } from '../../../data/catalog';
 import { TBL, CLASSCLR } from '../../../tokens';
 
 interface Props { onClose: () => void; }
 
 export function OathswornModal({ onClose }: Props) {
-  const { game, oathContext, setGame, setOathContext } = useGameStore();
+  // The Oathsworn trigger belongs to whoever placed the permanent — the LOCAL player
+  // (never a hardcoded side: in multiplayer/sandbox-switched games p1 may be the
+  // opponent, and their hand must not be shown or mutated here).
+  const { game, localPlayer, oathContext, setGame, setOathContext } = useGameStore();
   const [tucked, setTucked] = useState<string | null>(null);
 
   const permName = oathContext?.name ?? 'Oathsworn Permanent';
-  const hand = game.p1.hand;
+  const hand = game[localPlayer].hand;
 
   const finish = (sacrifice: boolean) => {
     if (oathContext) {
+      const lp = localPlayer;
       setGame(g => {
-        const board = { ...g.p1.board };
-        let newHand = [...g.p1.hand];
+        const ps = g[lp];
+        const board = { ...ps.board };
+        let newHand = [...ps.hand];
+        let newDead = ps.dead;
         // Find the permanent on the board
         const slotKey = Object.keys(board).find(k => board[k as keyof typeof board]?.id === oathContext.permanentId);
         if (sacrifice) {
-          if (slotKey) delete board[slotKey as keyof typeof board];
+          if (slotKey) {
+            const ent = board[slotKey as keyof typeof board];
+            delete board[slotKey as keyof typeof board];
+            const c = ent && CATALOG.find(cc => cc.name === ent.name);
+            if (c) newDead = [...ps.dead, c]; // sacrificed permanents go to the Dead Zone
+          }
         } else if (tucked && slotKey) {
+          // Capture the sworn card BEFORE filtering it out of the hand (filtering
+          // first meant `sworn` was always tucked as null).
+          const swornCard = newHand.find(c => c.id === tucked) ?? null;
           newHand = newHand.filter(c => c.id !== tucked);
           const ent = board[slotKey as keyof typeof board];
-          if (ent) board[slotKey as keyof typeof board] = { ...ent, sworn: newHand.find(c => c.id === tucked) ?? null };
+          if (ent) board[slotKey as keyof typeof board] = { ...ent, sworn: swornCard };
         }
-        return { ...g, p1: { ...g.p1, board, hand: newHand } };
+        return { ...g, [lp]: { ...ps, board, hand: newHand, dead: newDead } };
       });
       setOathContext(null);
     }
