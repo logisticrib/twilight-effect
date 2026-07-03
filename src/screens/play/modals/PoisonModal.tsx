@@ -2,7 +2,6 @@ import { useState, useMemo, useEffect, type CSSProperties } from 'react';
 import { ModalShell, md } from './ModalShell';
 import { useGameStore } from '../../../store/gameStore';
 import { TBL, CLASSCLR, GLYPH } from '../../../tokens';
-import type { BoardEntity } from '../../../types/card';
 
 interface PoisonChar {
   id: string;
@@ -18,7 +17,7 @@ interface PoisonChar {
 interface Props { player?: 'p1' | 'p2'; onClose: () => void; }
 
 export function PoisonModal({ player = 'p1', onClose }: Props) {
-  const { game, setGame } = useGameStore();
+  const { game, setGame, resolvePoison } = useGameStore();
   const willpower = Math.max(game[player].willpower, 1);
 
   const initial = useMemo<PoisonChar[]>(() => {
@@ -61,27 +60,9 @@ export function PoisonModal({ player = 'p1', onClose }: Props) {
   };
 
   const commit = () => {
-    setGame(g => {
-      const ps = g[player];
-      const board = { ...ps.board };
-      for (const ch of chars) {
-        const slotKey = Object.keys(board).find(k => {
-          const ent = board[k as keyof typeof board] as BoardEntity | undefined;
-          return ent?.id === ch.id;
-        });
-        if (!slotKey) continue;
-        const ent = board[slotKey as keyof typeof board]!;
-        board[slotKey as keyof typeof board] = ch.cleansed
-          ? { ...ent, poison: 0, statuses: ent.statuses.filter(s => s !== 'Poisoned'), exhausted: false, tapped: 'none' as const }
-          : ent;
-      }
-      // Poison damage hits the player: write the PC board entity (the HP source of
-      // truth), mirror the headline, and end the game if it reached 0.
-      const pcKey = Object.keys(board).find(k => (board[k as keyof typeof board] as BoardEntity | undefined)?.kind === 'pc');
-      if (pcKey) board[pcKey as keyof typeof board] = { ...board[pcKey as keyof typeof board]!, hp: playerHp };
-      const gameOver = playerHp <= 0 ? (player === 'p1' ? 'p2' as const : 'p1' as const) : g.gameOver;
-      return { ...g, [player]: { ...ps, board, hp: playerHp }, pendingPoison: null, gameOver };
-    });
+    // The store applies the outcomes (cleanse/ready or PC damage via setPcHp) and clears
+    // pendingPoison. Un-rolled characters ("Resolve later") are omitted — no cleanse, no damage.
+    resolvePoison(player, chars.filter(c => c.done).map(c => ({ id: c.id, cleansed: !!c.cleansed })));
     onClose();
   };
 

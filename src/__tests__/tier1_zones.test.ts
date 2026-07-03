@@ -127,6 +127,52 @@ describe('item 4: PC HP single source of truth (payHP via Mara)', () => {
   });
 });
 
+describe('item 4: poison routes through setPcHp (resolvePoison)', () => {
+  function seedPoisonBoard(pcHp: number) {
+    freshGame();
+    const cleanser = mkComp('po-a', compCard.name, { poison: 2, statuses: ['Poisoned'], exhausted: true, tapped: 'major' });
+    const holder = mkComp('po-b', compCard2.name, { poison: 3, statuses: ['Poisoned'], exhausted: true, tapped: 'major' });
+    const pc = mkPc('po-pc', { hp: pcHp });
+    gs.setState(s => ({ game: { ...s.game, pendingPoison: 'p1',
+      p1: { ...s.game.p1, board: { f1: cleanser, f2: holder, b1: pc }, hp: pcHp },
+    } }));
+  }
+
+  it('failed checks damage the PC per counter — entity and headline stay married', () => {
+    seedPoisonBoard(20);
+    gs.getState().resolvePoison('p1', [{ id: 'po-a', cleansed: true }, { id: 'po-b', cleansed: false }]);
+    const g = gs.getState().game;
+    expect(g.p1.board.b1?.hp, 'PC entity took 3 (the failed unit counters)').toBe(17);
+    expect(g.p1.hp, 'headline mirrored').toBe(17);
+    const cleansed = g.p1.board.f1!;
+    expect(cleansed.poison, 'cleansed unit loses its counters').toBe(0);
+    expect(cleansed.statuses, 'Poisoned status removed').not.toContain('Poisoned');
+    expect(cleansed.exhausted, 'cleansed unit readies').toBe(false);
+    const failed = g.p1.board.f2!;
+    expect(failed.poison, 'failed unit keeps its counters').toBe(3);
+    expect(failed.exhausted, 'failed unit stays exhausted').toBe(true);
+    expect(g.pendingPoison, 'prompt cleared').toBeNull();
+  });
+
+  it('lethal poison ends the game with the winning SIDE', () => {
+    seedPoisonBoard(2);
+    gs.getState().resolvePoison('p1', [{ id: 'po-b', cleansed: false }]);
+    const g = gs.getState().game;
+    expect(g.p1.board.b1?.hp, 'PC at 0').toBe(0);
+    expect(g.p1.hp, 'headline at 0').toBe(0);
+    expect(g.gameOver, 'gameOver = opposing SIDE, never a name').toBe('p2');
+  });
+
+  it('un-rolled units (Resolve later) are skipped entirely', () => {
+    seedPoisonBoard(20);
+    gs.getState().resolvePoison('p1', []);
+    const g = gs.getState().game;
+    expect(g.p1.hp, 'no damage').toBe(20);
+    expect(g.p1.board.f1?.poison, 'counters untouched').toBe(2);
+    expect(g.pendingPoison, 'prompt still cleared').toBeNull();
+  });
+});
+
 describe('item 5: slot capacity', () => {
   const pikestaff = CATALOG.find(c => c.name === 'Pikestaff')!;
 

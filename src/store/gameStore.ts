@@ -1652,6 +1652,12 @@ interface GameStoreState {
   // HP nudge (playtesting)
   adjustHp: (entityId: string, delta: number) => void;
 
+  /** Apply the ready-phase Poison check outcomes (PoisonModal): a cleansed unit loses its
+   *  counters and readies; each failed unit deals 1 damage per counter to the owner's PC
+   *  (via setPcHp — entity + headline stay married, game ends at 0). Un-rolled units are
+   *  simply omitted. Clears `pendingPoison`. */
+  resolvePoison: (player: 'p1' | 'p2', outcomes: { id: string; cleansed: boolean }[]) => void;
+
   // Turn
   endTurn: () => void;
 
@@ -2907,6 +2913,27 @@ export const useGameStore = create<GameStoreState>()(
     const finishedActors = s.game.finishedActors.filter(x => x !== entityId);
     const currentActor = s.game.currentActor === entityId ? null : s.game.currentActor;
     return { game: { ...updateEntity(s.game, entityId, { acts: freshActs(), tapped: 'none', exhausted: false }), finishedActors, currentActor } };
+  }),
+
+  // ── Poison check resolution (ready phase) ──────────────────────────────────
+  resolvePoison: (player, outcomes) => set(s => {
+    let g = s.game;
+    let dmg = 0;
+    for (const o of outcomes) {
+      const loc = findEntityAnywhere(g, o.id);
+      if (!loc || loc.player !== player) continue;
+      if (o.cleansed) {
+        g = updateEntity(g, o.id, { poison: 0, statuses: loc.ent.statuses.filter(st => st !== 'Poisoned'), exhausted: false, tapped: 'none' as TapState });
+      } else {
+        dmg += loc.ent.poison ?? 0; // failed check: the unit keeps its counters and stays exhausted
+      }
+    }
+    if (dmg > 0) {
+      const pcId = pcIdOf(g, player);
+      const pcLoc = pcId ? findEntityAnywhere(g, pcId) : null;
+      if (pcLoc) g = setPcHp(g, player, pcLoc.ent.id, Math.max(0, pcLoc.ent.hp - dmg));
+    }
+    return { game: { ...g, pendingPoison: null } };
   }),
 
   // ── HP nudge ──────────────────────────────────────────────────────────────

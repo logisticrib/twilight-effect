@@ -35,11 +35,17 @@ Two resolved owner rulings from `tasks/test_seed_plan.md` applied, then Phase 0 
   dead-pick skips departed cards; all lifecycle prompt resets + cancel-leak), and
   `tier1_combat.test.ts` (armor: single auto/2+ pause/resolveArmor resume/Cleave chain/
   non-combat armorSink defer/Reckless bypasses armor; Binding Sigil suppresses printed+
-  granted keywords, positional). **Suite: 6 files / 59 tests, ~680ms; tsc ZERO errors.**
-  helpers.ts gained `mkCz`. OPEN sliver: item 4's poison path is PoisonModal component
-  logic — needs jsdom/React (only Tier-1 piece not store-testable).
+  granted keywords, positional). **Suite: 6 files / 62 tests; tsc ZERO errors.**
+  helpers.ts gained `mkCz`.
+- **Poison sliver CLOSED by extraction (same day):** PoisonModal.commit was hand-duplicating
+  the PC-HP write (manual board+headline+gameOver) — the exact bug shape item 4 guards. NEW
+  store action **`resolvePoison(player, outcomes)`**: cleansed → counters cleared + readied;
+  failed → counter-count damage to the PC **via setPcHp**; un-rolled omitted; clears
+  pendingPoison. Modal now calls it (rolls/display stay component-side). +3 store tests, AND
+  preview-verified through the real modal (temp __gs hook removed after): roll 1 cleansed /
+  roll 5 held → PC entity 17 == headline 17, pendingPoison null. Tier 1 = 12/12 closed.
 - NOT started (next session candidates): audit batch 4 guest-deck-in-READY (H3), Tier 2–4
-  of the seed plan, PoisonModal component test, quality refactors (§d).
+  of the seed plan, quality refactors (§d).
 
 ## Previous session (2026-07-02, latest) — keyboard a11y on click flows
 Last §UI M item done. NEW `lib/a11y.ts` `btnProps(onClick, disabled?)` — spread onto clickable divs
