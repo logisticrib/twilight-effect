@@ -87,6 +87,7 @@ Unlike items, constructs are not attached to characters—they occupy COMMAND ZO
 
 - Constructs always enter the encounter with a number of Anchor counters, representing their connection to the field—whether through magic, tactics, or voice
 - Remove one counter at the beginning of each turn; sacrifice when last removed — the sacrificed construct is placed in its owner's Dead Zone
+- Anchor counters and their decay are universal: Physical and Magic Constructs alike enter with Anchor counters and lose one at the start of each of their controller's turns, identically. Only card effects can alter decay, and only for the constructs they name
 - Constructs can be targeted by card effects but cannot be attacked
 - Constructs occupy COMMAND ZONE slots (count toward 6-character limit per player)
 - Constructs can be played directly to any empty COMMAND ZONE slot (Front or Back Line)

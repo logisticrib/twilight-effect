@@ -7,11 +7,10 @@ Two resolved owner rulings from `tasks/test_seed_plan.md` applied, then Phase 0 
 - **Ruling 1 (fled/decayed → Dead Zone, CONFIRMED):** wording added to the parent
   `Game_Rules_Updated.md` AND `twilight-app/docs/Game_Rules_Updated.md` (Constructs §, Dead Zone §
   incl. recursion-recoverability, Ready Phase step). Engine already correct since Batch 2.
-  ⚠ FLAG for owner: the plan's canonical parenthetical defined fleeing as "Willpower drops below
-  the number of companions you control" — that contradicts the rules doc (L186/188), the engine
-  (`readyPlayer`: level > effective willpower), and prior rulings, so the docs keep the established
-  level-based wording; same for "Physical Construct" → "Construct" (ALL constructs decay). Say the
-  word if the flee rule itself was meant to change.
+  RESOLVED same day: owner confirmed the flee rule did NOT change (the plan's "WP < companion
+  count" parenthetical was an error — corrected in place in test_seed_plan.md so it can't be
+  re-imported) and confirmed decay is UNIVERSAL (all Constructs, Physical and Magical, carry
+  Anchor counters and decay identically — an explicit line now states this in both rules docs).
 - **Ruling 2 (Stone Rampart → anchors):** re-authored in `wizard_builder_50.json` — interim heal
   REMOVED, now "onEnter: anchor +1 ownPhysicalConstructs", text updated. The `anchor` group op
   (gameStore) now EXCLUDES the source (`x.id !== sourceId`) — self-exclusion is the default per the
