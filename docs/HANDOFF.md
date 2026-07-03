@@ -44,7 +44,17 @@ Two resolved owner rulings from `tasks/test_seed_plan.md` applied, then Phase 0 
   pendingPoison. Modal now calls it (rolls/display stay component-side). +3 store tests, AND
   preview-verified through the real modal (temp __gs hook removed after): roll 1 cleansed /
   roll 5 held → PC entity 17 == headline 17, pendingPoison null. Tier 1 = 12/12 closed.
-- NOT started (next session candidates): audit batch 4 guest-deck-in-READY (H3), Tier 2–4
+- **Tier 2 DONE (same day):** all six locked rulings codified. NEW `tier2_rulings.test.ts`
+  (no-HP-buffs data contract + all-100-cards effectiveMaxHp behavior loop — NOTE the
+  documented floor-at-1 for 0-HP constructs; Conflagration self vs Wrath damageSelfPC,
+  shared-die relationship asserted; Translocation Circle own-only/oncePerTurn/ready-clears;
+  no Initiative/Exile anywhere; entry restriction incl. Zealous-attacks-only) and
+  `tier2_classbonus.test.tsx` — the FIRST COMPONENT TEST: jsdom + @testing-library/react
+  installed (devDeps), vitest include now `.test.{ts,tsx}`, jsdom opt-in per file via a
+  `@vitest-environment jsdom` docblock (store tests stay node). It proves the ClassBonus
+  offer set locks at mount: applying Gear Up! swaps a Sorcerer card into the live CZ
+  (store-verified) and Elemental Fury still never appears. **Suite: 8 files / 73 tests.**
+- NOT started (next session candidates): audit batch 4 guest-deck-in-READY (H3), Tier 3–4
   of the seed plan, quality refactors (§d).
 
 ## Previous session (2026-07-02, latest) — keyboard a11y on click flows
