@@ -54,8 +54,21 @@ Two resolved owner rulings from `tasks/test_seed_plan.md` applied, then Phase 0 
   `@vitest-environment jsdom` docblock (store tests stay node). It proves the ClassBonus
   offer set locks at mount: applying Gear Up! swaps a Sorcerer card into the live CZ
   (store-verified) and Elemental Fury still never appears. **Suite: 8 files / 73 tests.**
-- NOT started (next session candidates): audit batch 4 guest-deck-in-READY (H3), Tier 3–4
-  of the seed plan, quality refactors (§d).
+- **Tier 3 DONE (same day) — and it caught a REAL MP DEADLOCK.** NEW `tier3_mp_wire.test.ts`
+  (jsdom renderHook over the real useMultiplayer subscription; MultiplayerSession faked as
+  a recorder): wire-level reactiveHold incl. selectEntity clicks, guest pre-sync silence +
+  wholesale apply preserving local `selected` + no echo, STATE_SYNC shape check. Items
+  2/4/6 were already in multiplayer.test.ts.
+  **BUG FIXED (useMultiplayer.ts): the wire hold also suppressed the snapshot that ARMS an
+  opponent-owned prompt** — the armer is always the non-owner, so the owner never learned
+  their armor/dead-pick existed; armer stuck behind ReactiveHoldBanner forever; self-heal
+  can't rescue it (skipped sends never bump sentSeq). FIX: `armedHoldRef` sends the arming
+  snapshot exactly ONCE per hold source, suppresses the rest of the hold window, re-derives
+  from applied remote snapshots, resets on host/join/disconnect. This was invisible to
+  batch-3's session-level tests and would have hit the first live two-peer armor/Memory-
+  Stone moment. **Suite: 9 files / 77 tests; tsc ZERO errors.**
+- NOT started (next session candidates): audit batch 4 guest-deck-in-READY (H3), Tier 4
+  (schema-op coverage + deck validator → future mint-gate), quality refactors (§d).
 
 ## Previous session (2026-07-02, latest) — keyboard a11y on click flows
 Last §UI M item done. NEW `lib/a11y.ts` `btnProps(onClick, disabled?)` — spread onto clickable divs

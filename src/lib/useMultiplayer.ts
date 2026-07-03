@@ -16,6 +16,10 @@ export function useMultiplayer() {
   // been applied: the guest's independently-shuffled local game must never broadcast
   // over the host's (a click or Escape in that window used to overwrite it).
   const syncedRef = useRef(true);
+  // The hold source whose ARMING snapshot has already been sent (or was received from
+  // the peer). The snapshot that arms an opponent-owned prompt is how the owner learns
+  // the prompt exists — it must go out; only the traffic AFTER it is suppressed.
+  const armedHoldRef = useRef<string | null>(null);
   // Unsubscribe handle for the game-state broadcast subscription.
   const unsubGameRef = useRef<(() => void) | null>(null);
   // Actions only, selected individually (stable references) — a whole-store
@@ -48,7 +52,17 @@ export function useMultiplayer() {
         // re-arming their modal and double-applying the effect. The store-level
         // reactiveHold no-ops the action mutators; THIS is the wire-level gate that
         // covers everything else (selection clicks, modal setGame, future mutators).
-        if (reactiveHold(g, useGameStore.getState().localPlayer)) return;
+        // EXCEPTION: the snapshot that ARMS the prompt is sent exactly once — the
+        // owner only learns their prompt exists from that snapshot (suppressing it
+        // deadlocked the match: owner never prompted, armer held forever).
+        const hold = reactiveHold(g, useGameStore.getState().localPlayer);
+        if (hold) {
+          if (armedHoldRef.current === hold) return;
+          armedHoldRef.current = hold;
+          session.sendStateSync(g);
+          return;
+        }
+        armedHoldRef.current = null;
         session.sendStateSync(g);
       }
     );
@@ -93,6 +107,10 @@ export function useMultiplayer() {
               applyingRemoteRef.current = false;
             }
             syncedRef.current = true; // first host snapshot received — guest may broadcast
+            // Re-derive the hold marker from the applied state: a received snapshot
+            // that still carries the prompt was sent by its owner (no re-send needed);
+            // a resolved snapshot clears the marker so the next same-named arm sends.
+            armedHoldRef.current = reactiveHold(st, useGameStore.getState().localPlayer);
           }
         },
         onLatency: (ms) => setConn({ latency: ms }),
@@ -111,6 +129,7 @@ export function useMultiplayer() {
     const session = getSession();
     const code = await session.host(playerName, avatarLetter);
     syncedRef.current = true; // the host's game IS the authoritative one
+    armedHoldRef.current = null;
     startStateSync(session);
     startMultiplayer('host', code, 'p1', p1Cards, p2Cards);
     // When opponent connects and is ready, send them the current game state
@@ -130,6 +149,7 @@ export function useMultiplayer() {
   const join = useCallback(async (code: string, p1Cards: import('../types/card').Card[], p2Cards: import('../types/card').Card[]): Promise<void> => {
     const session = getSession();
     syncedRef.current = false; // silent until the host's first snapshot arrives
+    armedHoldRef.current = null;
     await session.join(code, playerName, avatarLetter);
     startStateSync(session);
     startMultiplayer('join', code, 'p2', p1Cards, p2Cards);
@@ -142,6 +162,7 @@ export function useMultiplayer() {
     sessionRef.current?.destroy();
     sessionRef.current = null;
     syncedRef.current = true;
+    armedHoldRef.current = null;
     clearBroadcast();
     backToLobby();
   }, [clearBroadcast, backToLobby]);
