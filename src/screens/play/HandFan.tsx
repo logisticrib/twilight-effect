@@ -12,7 +12,12 @@ const OVERLAP = CARD_W * 0.42;
 const SPREAD_DEG = 14;
 
 export function HandFan() {
-  const { game, localPlayer, pendingPlay, beginPlay, setHovered, pushToast } = useGameStore();
+  const game        = useGameStore(s => s.game);
+  const localPlayer = useGameStore(s => s.localPlayer);
+  const pendingPlay = useGameStore(s => s.pendingPlay);
+  const beginPlay   = useGameStore(s => s.beginPlay);
+  const setHovered  = useGameStore(s => s.setHovered);
+  const pushToast   = useGameStore(s => s.pushToast);
   const cards = game[localPlayer].hand;
   const [hovIdx, setHovIdx] = useState<number | null>(null);
 

@@ -8,7 +8,11 @@ import { TBL, CLASSCLR, GLYPH, Z } from '../../tokens';
  * before the Action phase begins. Any choice auto-advances.
  */
 export function CZExchangePanel() {
-  const { game, localPlayer, czToHand, handToCz, completeCzPhase } = useGameStore();
+  const game            = useGameStore(s => s.game);
+  const localPlayer     = useGameStore(s => s.localPlayer);
+  const czToHand        = useGameStore(s => s.czToHand);
+  const handToCz        = useGameStore(s => s.handToCz);
+  const completeCzPhase = useGameStore(s => s.completeCzPhase);
   // Must be before any early return — Rules of Hooks
   const [mode, setMode] = useState<'choose' | 'cz-to-hand' | 'hand-to-cz'>('choose');
 

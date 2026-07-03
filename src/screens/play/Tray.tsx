@@ -8,7 +8,7 @@ const PILE_SCALE = 0.2;  // mini card-pile size in the CZ panel (40×56)
 
 // ─── Shared CZ card slot renderer ─────────────────────────────────────────────
 function CzSlot({ cz, who, i }: { cz: ClassZoneCard | undefined; who: string; i: number }) {
-  const { setHovered } = useGameStore();
+  const setHovered = useGameStore(s => s.setHovered);
   if (!cz) {
     return (
       <div key={`cz-empty-${i}`} style={{
@@ -69,7 +69,7 @@ interface StatsPanelProps {
 }
 
 function StatsContent({ player, who, active }: StatsPanelProps) {
-  const { localPlayer } = useGameStore();
+  const localPlayer = useGameStore(s => s.localPlayer);
   const isYou = who === localPlayer;
   const color = isYou ? TBL.violet : TBL.amber;
   // The PC entity is the single source of truth for the player's HP (combat damages
@@ -145,7 +145,9 @@ interface CZPanelProps {
 }
 
 function CZContent({ player, who }: CZPanelProps) {
-  const { game, localPlayer, openPile } = useGameStore();
+  const game        = useGameStore(s => s.game);
+  const localPlayer = useGameStore(s => s.localPlayer);
+  const openPile    = useGameStore(s => s.openPile);
   const isYou = who === localPlayer;
   const handN = isYou ? player.hand.length : (player.handCount ?? player.hand.length);
   const topDead = player.dead[player.dead.length - 1] ?? null;

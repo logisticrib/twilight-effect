@@ -6,7 +6,10 @@ import { useGameStore, seatName } from '../../store/gameStore';
 const CARD_SCALE = 0.62;
 
 export function PileViewer() {
-  const { pileView, game, closePile, localPlayer } = useGameStore();
+  const pileView    = useGameStore(s => s.pileView);
+  const game        = useGameStore(s => s.game);
+  const closePile   = useGameStore(s => s.closePile);
+  const localPlayer = useGameStore(s => s.localPlayer);
   const [search, setSearch] = useState('');
 
   const player = pileView ? game[pileView.player] : null;

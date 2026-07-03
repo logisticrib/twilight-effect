@@ -75,7 +75,7 @@ function Toasts() {
 
 // ─── Playmat ──────────────────────────────────────────────────────────────────
 export function Playmat() {
-  const { game } = useGameStore();
+  const game = useGameStore(s => s.game);
   const matRef = useRef<HTMLDivElement>(null);
   const bsRef = useRef(0.52);
   const rafRef = useRef(0);

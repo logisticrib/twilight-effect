@@ -143,7 +143,7 @@ function actionPips(ent: BoardEntity, sealed: boolean, moveOk: boolean, minorOk:
 
 // ─── A single equipped-item slot rendered as a small, hoverable card ───────────
 function ItemSlot({ item, slotName, owner }: { item: EquippedItem | null; slotName: string; owner: string }) {
-  const { setHovered } = useGameStore();
+  const setHovered = useGameStore(s => s.setHovered);
   const w = 200 * ITEM_SCALE, h = 280 * ITEM_SCALE;
 
   if (!item) {
@@ -210,9 +210,22 @@ const cancelBtn: CSSProperties = {
 
 // ─── Control surface: character status + loadout + actions (local right slot) ──
 export function LoadoutPanel() {
-  const { game, localPlayer, pending, pendingPlay,
-          cancelPending, cancelPlay, beginMove, beginAttack, markAction, resetActions,
-          adjustHp, selectEntity, pushToast, equipItem, playAction, activateAbility } = useGameStore();
+  const game            = useGameStore(s => s.game);
+  const localPlayer     = useGameStore(s => s.localPlayer);
+  const pending         = useGameStore(s => s.pending);
+  const pendingPlay     = useGameStore(s => s.pendingPlay);
+  const cancelPending   = useGameStore(s => s.cancelPending);
+  const cancelPlay      = useGameStore(s => s.cancelPlay);
+  const beginMove       = useGameStore(s => s.beginMove);
+  const beginAttack     = useGameStore(s => s.beginAttack);
+  const markAction      = useGameStore(s => s.markAction);
+  const resetActions    = useGameStore(s => s.resetActions);
+  const adjustHp        = useGameStore(s => s.adjustHp);
+  const selectEntity    = useGameStore(s => s.selectEntity);
+  const pushToast       = useGameStore(s => s.pushToast);
+  const equipItem       = useGameStore(s => s.equipItem);
+  const playAction      = useGameStore(s => s.playAction);
+  const activateAbility = useGameStore(s => s.activateAbility);
 
   const pendingCard = pendingPlay
     ? game[localPlayer].hand.find(c => c.id === pendingPlay.cardId)

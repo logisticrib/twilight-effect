@@ -18,11 +18,15 @@ export function useMultiplayer() {
   const syncedRef = useRef(true);
   // Unsubscribe handle for the game-state broadcast subscription.
   const unsubGameRef = useRef<(() => void) | null>(null);
-  const {
-    setBroadcast, clearBroadcast,
-    setConn, backToLobby, startMultiplayer,
-    pushToast,
-  } = useGameStore();
+  // Actions only, selected individually (stable references) — a whole-store
+  // subscription here would re-render Play(), the root of every play view, on
+  // every store change (including each hover).
+  const setBroadcast     = useGameStore(s => s.setBroadcast);
+  const clearBroadcast   = useGameStore(s => s.clearBroadcast);
+  const setConn          = useGameStore(s => s.setConn);
+  const backToLobby      = useGameStore(s => s.backToLobby);
+  const startMultiplayer = useGameStore(s => s.startMultiplayer);
+  const pushToast        = useGameStore(s => s.pushToast);
   const { playerName, avatarLetter } = useSettingsStore();
 
   /**

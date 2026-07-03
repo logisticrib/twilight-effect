@@ -2,7 +2,20 @@
 
 Self-contained context for continuing the card-effect engine work in a fresh session.
 
-## Latest session (2026-07-02, later still) — CardPickModal extraction
+## Latest session (2026-07-02, latest) — selector-based store subscriptions
+Hover no longer re-renders the board (audit §UI M item). Every hot-path Play component now uses
+individual `useGameStore(s => s.x)` selectors instead of a bare `useGameStore()` whole-store
+subscription; **GameView + useMultiplayer subscribe to nothing** (keyboard handler + MP hook read
+via `useGameStore.getState()` — the keydown listener also now registers ONCE). Converted:
+CommandZone, Playmat, HandFan, LoadoutPanel(+ItemSlot), Tray(CzSlot/StatsContent/CZContent),
+PhaseRail, PileViewer, CZExchangePanel, ModalHost, useMultiplayer, GameView. Cold-path setup modals
+left bare deliberately. CONVENTION: in Play-screen components, never call `useGameStore()` bare —
+select fields/actions individually (actions are referentially stable). Verified: 20 hover changes →
+0 CommandZone/Playmat re-renders (temp counters, removed); full real-UI setup→move flow + Tab/Esc/
+Enter still work. GOTCHA: synthetic KeyboardEvents must be dispatched from document.body (window
+target has no tagName → dies in the input guard). Remaining §UI M item: keyboard a11y.
+
+## Previous session (2026-07-02, later still) — CardPickModal extraction
 The six copy-pasted inline modals in Play.tsx (Kit-item / Peek / DeadPick / AttackChoice / Armor /
 EquipPick) now share ModalShell chrome. NEW `modals/CardPickModal.tsx` (ModalShell + clickable
 CardFace row; picks {key,name,card?,caption?}, onPick, optional cancel footer) hosts the four pure

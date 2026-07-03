@@ -3,7 +3,14 @@ import { useGameStore } from '../../store/gameStore';
 import { TBL, PHASES } from '../../tokens';
 
 export function PhaseRail() {
-  const { game, endTurn, endTurnToEndPhase, advancePhase, backToLobby, conn, localPlayer, switchSides } = useGameStore();
+  const game             = useGameStore(s => s.game);
+  const endTurn          = useGameStore(s => s.endTurn);
+  const endTurnToEndPhase = useGameStore(s => s.endTurnToEndPhase);
+  const advancePhase     = useGameStore(s => s.advancePhase);
+  const backToLobby      = useGameStore(s => s.backToLobby);
+  const conn             = useGameStore(s => s.conn);
+  const localPlayer      = useGameStore(s => s.localPlayer);
+  const switchSides      = useGameStore(s => s.switchSides);
   const isSandbox = conn.mode === 'solo';
   const idx = PHASES.findIndex(p => p.id === game.currentPhase);
   const isMyTurn = game.activePlayer === localPlayer;

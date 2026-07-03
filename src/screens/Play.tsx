@@ -15,13 +15,17 @@ import { CardPickModal } from './play/modals/CardPickModal';
 import { PoisonModal } from './play/modals/PoisonModal';
 
 function GameView() {
-  const store = useGameStore();
-  const { game, localPlayer, endTurn, endTurnToEndPhase, advancePhase, selectEntity, cancelPending, cancelPlay, cancelTrigger, cancelKit, cancelActionTarget, cancelPeek, pileView, closePile } = store;
-
+  // Deliberately NO store subscription here: GameView is the root of the whole board
+  // tree, so a subscription would re-render everything on every store change (each
+  // hover sets `hovered`). The keyboard handler reads fresh state via getState()
+  // instead — registered once, always current.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      const s = useGameStore.getState();
+      const { game, localPlayer } = s;
+
       // Pile viewer takes Escape first (even while its search box is focused)
-      if (e.key === 'Escape' && pileView) { closePile(); return; }
+      if (e.key === 'Escape' && s.pileView) { s.closePile(); return; }
 
       const tag = (e.target as HTMLElement).tagName.toLowerCase();
       if (tag === 'input' || tag === 'textarea') return;
@@ -32,23 +36,22 @@ function GameView() {
           .filter((c): c is NonNullable<typeof c> => !!c)
           .map(c => c.id);
         if (yours.length === 0) return;
-        const cur = game.selected;
-        const idx = yours.indexOf(cur ?? '');
-        selectEntity(yours[(idx + 1) % yours.length]);
+        const idx = yours.indexOf(game.selected ?? '');
+        s.selectEntity(yours[(idx + 1) % yours.length]);
         return;
       }
-      if (e.key === 'Escape') { selectEntity(null); cancelPending(); cancelPlay(); cancelTrigger(); cancelKit(); cancelActionTarget(); cancelPeek(); return; }
+      if (e.key === 'Escape') { s.selectEntity(null); s.cancelPending(); s.cancelPlay(); s.cancelTrigger(); s.cancelKit(); s.cancelActionTarget(); s.cancelPeek(); return; }
       if (e.key === 'Enter' && game.activePlayer === localPlayer) {
         const ph = game.currentPhase;
-        if (ph === 'draw') advancePhase();
+        if (ph === 'draw') s.advancePhase();
         // CZ phase: Enter does nothing — player must use the CZExchangePanel to choose or pass
-        else if (ph === 'action') endTurnToEndPhase();
-        else if (ph === 'end') endTurn();
+        else if (ph === 'action') s.endTurnToEndPhase();
+        else if (ph === 'end') s.endTurn();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [game.selected, game.activePlayer, game.currentPhase, localPlayer, game.p1.board, game.p2.board, endTurn, advancePhase, selectEntity, cancelPending, cancelPlay, cancelTrigger, cancelKit, cancelActionTarget, cancelPeek, pileView, closePile]);
+  }, []);
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>

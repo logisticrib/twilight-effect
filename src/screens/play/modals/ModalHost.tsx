@@ -38,8 +38,12 @@ function SetupWaiting({ step }: { step: string }) {
 }
 
 export function ModalHost() {
-  const { modalQueue, advanceModal, advanceSetup, game, localPlayer, conn } = useGameStore();
-  const isSolo = conn.mode === 'solo';
+  const modalQueue   = useGameStore(s => s.modalQueue);
+  const advanceModal = useGameStore(s => s.advanceModal);
+  const advanceSetup = useGameStore(s => s.advanceSetup);
+  const game         = useGameStore(s => s.game);
+  const localPlayer  = useGameStore(s => s.localPlayer);
+  const isSolo       = useGameStore(s => s.conn.mode === 'solo');
 
   // ── Setup sequence (serialized via the synced game.setupQueue) ──────────────
   const setupHead = game.setupQueue[0];

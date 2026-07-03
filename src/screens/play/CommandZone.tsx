@@ -94,9 +94,28 @@ interface CommandZoneProps {
 }
 
 export function CommandZone({ player, owner, flip, boardScale = DEFAULT_BOARD_SCALE }: CommandZoneProps) {
-  const store = useGameStore();
-  const { game, pending, pendingPlay, pendingTrigger, pendingKit, pendingActionTarget, localPlayer, selectEntity, setHovered,
-          resolveMove, resolveAttack, placeCard, placePc, equipItem, cancelPlay, resolveTrigger, resolveKit, resolveActionTarget, resolveActionSlot } = store;
+  // Individual selectors (not a whole-store subscription) — the board grid is the
+  // heaviest render in the app and must not re-render on hover/toast changes.
+  // Actions are referentially stable; `game` re-renders only on real game changes.
+  const game                = useGameStore(s => s.game);
+  const pending             = useGameStore(s => s.pending);
+  const pendingPlay         = useGameStore(s => s.pendingPlay);
+  const pendingTrigger      = useGameStore(s => s.pendingTrigger);
+  const pendingKit          = useGameStore(s => s.pendingKit);
+  const pendingActionTarget = useGameStore(s => s.pendingActionTarget);
+  const localPlayer         = useGameStore(s => s.localPlayer);
+  const selectEntity        = useGameStore(s => s.selectEntity);
+  const setHovered          = useGameStore(s => s.setHovered);
+  const resolveMove         = useGameStore(s => s.resolveMove);
+  const resolveAttack       = useGameStore(s => s.resolveAttack);
+  const placeCard           = useGameStore(s => s.placeCard);
+  const placePc             = useGameStore(s => s.placePc);
+  const equipItem           = useGameStore(s => s.equipItem);
+  const cancelPlay          = useGameStore(s => s.cancelPlay);
+  const resolveTrigger      = useGameStore(s => s.resolveTrigger);
+  const resolveKit          = useGameStore(s => s.resolveKit);
+  const resolveActionTarget = useGameStore(s => s.resolveActionTarget);
+  const resolveActionSlot   = useGameStore(s => s.resolveActionSlot);
   const oppPlayer: 'p1' | 'p2' = localPlayer === 'p1' ? 'p2' : 'p1';
 
   // PC placement mode: show placement slots only for the player whose serialized
