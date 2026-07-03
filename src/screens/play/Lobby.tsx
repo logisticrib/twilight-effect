@@ -34,12 +34,14 @@ const lb = {
     justifyContent: 'center', padding: '0 26px', gap: 0,
   } as CSSProperties,
   opts: { display: 'grid', gridTemplateColumns: 'repeat(3, 252px)', gap: 12 } as CSSProperties,
-  opt: (primary: boolean): CSSProperties => ({
+  // `clickable` only for cards whose whole body is a click target (Sandbox) —
+  // Host/Join act through their inner button/input, so a card-wide pointer lies.
+  opt: (primary: boolean, clickable = false): CSSProperties => ({
     background: primary ? 'rgba(214,160,80,0.07)' : 'rgba(0,0,0,0.25)',
     border: `1px solid ${primary ? TBL.matLine2 : TBL.matLine}`,
     borderRadius: 10, padding: 18,
     display: 'flex', flexDirection: 'column', gap: 7,
-    cursor: 'pointer', transition: 'border-color .15s',
+    cursor: clickable ? 'pointer' : 'default', transition: 'border-color .15s',
   }),
   optGlyph: (c: string): CSSProperties => ({
     width: 34, height: 34, borderRadius: 7,
@@ -93,6 +95,7 @@ export function Lobby({ host, join }: LobbyProps) {
   const [oppDeckId, setOppDeckId] = useState(decks[1]?.id ?? decks[0]?.id ?? '');
   const [joinCode,  setJoinCode]  = useState('');
   const [hosting,   setHosting]   = useState(false);
+  const [joining,   setJoining]   = useState(false);
   const [nameEdit,  setNameEdit]  = useState(false);
   const [nameVal,   setNameVal]   = useState(playerName);
   const [error,     setError]     = useState('');
@@ -116,10 +119,10 @@ export function Lobby({ host, join }: LobbyProps) {
   };
 
   const handleJoin = async () => {
-    if (joinCode.length !== 6 || !myCards.length) return;
-    setError('');
+    if (joining || joinCode.length !== 6 || !myCards.length) return;
+    setJoining(true); setError('');
     try { await join(joinCode, myCards, oppCards.length ? oppCards : myCards); }
-    catch (e) { setError(`Couldn't join: ${String(e)}`); }
+    catch (e) { setError(`Couldn't join: ${String(e)}`); setJoining(false); }
   };
 
   const saveName = () => {
@@ -197,13 +200,15 @@ export function Lobby({ host, join }: LobbyProps) {
                 onKeyDown={e => { if (e.key === 'Enter' && joinCode.length === 6) handleJoin(); }}
               />
               {joinCode.length > 0 && (
-                <button style={lb.codeBtn(joinCode.length === 6)} onClick={handleJoin}>Join</button>
+                <button style={lb.codeBtn(joinCode.length === 6 && !joining)} onClick={handleJoin} disabled={joining}>
+                  {joining ? '…' : 'Join'}
+                </button>
               )}
             </div>
           </div>
 
           {/* Sandbox */}
-          <div style={lb.opt(false)} onClick={handleSandbox}>
+          <div style={lb.opt(false, true)} onClick={handleSandbox}>
             <div style={lb.optGlyph(TBL.good)}>◐</div>
             <div style={lb.optTitle}>Sandbox solo</div>
             <div style={lb.optDesc}>Play both sides locally — test rules, combos, and edge cases with your chosen decks.</div>

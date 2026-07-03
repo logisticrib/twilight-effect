@@ -2,7 +2,22 @@
 
 Self-contained context for continuing the card-effect engine work in a fresh session.
 
-## Latest session (2026-07-02) — Fable audit + fix batches 1-3
+## Latest session (2026-07-02, later) — aesthetic quick-win batch
+Owner-directed visual polish (six §UI audit slices, all preview-verified; tsc + build green;
+`tasks/todo.md` Review has full detail): Action cards render a Minor/Major/Special cost chip on the
+type line (actionTypeOf-driven); ready-phase flee/decay emit toasts (perspective-prefixed, store-local
+like the draw toast); `czSwapById` keeps `cardData`/`faceDown` (swapped CZ slot keeps hover preview +
+caption); NEW `Z` layering table in `tokens.ts` for all fixed Play-screen layers (PileViewer 380 now
+explicitly BELOW GameOverScreen 400; use `Z.*`, never a magic z-index); `index.css :root` pruned to
+the 2 consumed vars (palette source of truth = TBL) and legacy `App.css` deleted; Lobby pointer-cursor
+honesty + `handleJoin` in-flight guard; MulliganModal CZ resolution prefers `cz.cardData` and drops
+misses (no more `?? CATALOG[0]`), gameStore `shuffle` EXPORTED and reused (mulligan redeal + Bard —
+never reintroduce `sort(() => Math.random()-0.5)`). TOOLING: `.claude/launch.json` `autoPort: true` +
+`start-dev.js` honors the launcher's `PORT` env, so a second CC session can preview on its own port
+while another chat holds 5173. NOT DONE (M, ask owner first): shared `CardPickModal` extraction,
+selector-based store subscriptions, keyboard a11y on div-onClick controls.
+
+## Previous session (2026-07-02) — Fable audit + fix batches 1-3
 A 4-agent codebase audit produced **`tasks/audit_2026-07-02.md`** (~50 findings, file:line refs,
 severities, ranked batch plan) — read it before proposing engine/MP work. Three fix batches landed:
 - **Batch 1 (build-green)**: all 10 "pre-existing" TS errors fixed — they were failing `tsc -b`, so

@@ -3,7 +3,7 @@ import { CardFace, BASE_W } from '../../components/CardFace';
 import { useGameStore } from '../../store/gameStore';
 import { canPlayActionCard, playWillpower } from '../../store/keywords';
 import { handlePreviewWheel } from './previewScroll';
-import { TBL } from '../../tokens';
+import { TBL, Z } from '../../tokens';
 
 const HAND_SCALE = 0.54;
 const CARD_W = BASE_W * HAND_SCALE;
@@ -34,7 +34,7 @@ export function HandFan() {
       position: 'absolute', left: 0, right: 120, bottom: 0, height: ZONE_H,
       display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
       paddingBottom: 6, boxSizing: 'border-box',
-      pointerEvents: 'none', zIndex: 40,
+      pointerEvents: 'none', zIndex: Z.handFan,
     }}>
       <div style={{
         position: 'relative',

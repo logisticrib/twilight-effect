@@ -7,7 +7,7 @@ import { LoadoutPanel } from './LoadoutPanel';
 import { CZExchangePanel } from './CZExchangePanel';
 import { useGameStore } from '../../store/gameStore';
 import { previewScrollRef } from './previewScroll';
-import { TBL } from '../../tokens';
+import { TBL, Z } from '../../tokens';
 
 const SIDE_SLOT_W = 320;  // right-column width — matches the combined left SidePanel
 const LOADOUT_W = 440;    // local-row loadout/control panel width (wider, intentionally asymmetric)
@@ -55,7 +55,7 @@ function Toasts() {
     <div style={{
       position: 'absolute', bottom: 200, left: '50%', transform: 'translateX(-50%)',
       display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center',
-      pointerEvents: 'none', zIndex: 70,
+      pointerEvents: 'none', zIndex: Z.toast,
     }}>
       {toasts.map(t => (
         <div key={t.id} style={{

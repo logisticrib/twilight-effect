@@ -1,9 +1,9 @@
 import type { CSSProperties, ReactNode } from 'react';
-import { TBL } from '../../../tokens';
+import { TBL, Z } from '../../../tokens';
 
 export const md = {
   scrim: {
-    position: 'fixed', inset: 0, zIndex: 300,
+    position: 'fixed', inset: 0, zIndex: Z.modal,
     display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
     background: 'radial-gradient(ellipse at center, rgba(10,8,5,0.7), rgba(6,5,3,0.9))',
     backdropFilter: 'blur(7px)',

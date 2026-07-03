@@ -2,7 +2,8 @@ import type { CSSProperties, Ref, WheelEvent } from 'react';
 import type { BoardEntity, Card, TapState } from '../types/card';
 import { TBL, CLASSCLR, CLASSDARK, GLYPH } from '../tokens';
 import { useGameStore } from '../store/gameStore';
-import { effectiveAttack, effectiveMaxHp } from '../store/keywords';
+import { effectiveAttack, effectiveMaxHp, actionTypeOf } from '../store/keywords';
+import type { ActionCost } from '../store/keywords';
 
 // ─── Fixed card canvas ───────────────────────────────────────────────────────
 const BASE_W = 200;
@@ -176,6 +177,14 @@ const s = {
     letterSpacing: '0.06em', textTransform: 'uppercase',
     border: '1px solid #fff5', boxShadow: '0 1px 3px rgba(0,0,0,0.5)',
   } as CSSProperties,
+  costBadge(col: string): CSSProperties {
+    return {
+      flexShrink: 0,
+      padding: '1px 5px', borderRadius: 3,
+      background: `${col}26`, border: `1px solid ${col}66`,
+      color: col, fontWeight: 700, letterSpacing: '0.07em',
+    };
+  },
   itemRibbon(cls: string): CSSProperties {
     return {
       display: 'flex', alignItems: 'center', gap: 4,
@@ -325,6 +334,11 @@ export function CardFace({
 
   const low = isCompanion && hp != null && maxHp != null && (hp / maxHp) < 0.5;
 
+  // Action cards surface their rules-live Minor/Major/Special cost (actionTypeOf —
+  // the same read the play gate charges) as a tinted chip on the type line.
+  const actionCost = rawType === 'Action' ? actionTypeOf(data as Card) : null;
+  const costCol: Record<ActionCost, string> = { Major: TBL.amber, Minor: TBL.good, Special: TBL.violet };
+
   return (
     <div style={s.wrap(scale, rot, hoverable)}
       onClick={onClick} onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave} onWheel={onWheel}>
@@ -354,9 +368,10 @@ export function CardFace({
           {/* Type line — single line; long subtypes ellipsis-truncate so the rules
               textbox below keeps its height (companions are tight with the stat block). */}
           <div style={s.typeLine(cls)}>
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
+            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
               {rawType || (isConstruct ? 'Construct' : isCompanion ? 'Companion' : 'Card')}{subtype ? ` · ${subtype}` : ''}
             </span>
+            {actionCost && <span style={s.costBadge(costCol[actionCost])}>{actionCost}</span>}
             <span style={{ flexShrink: 0 }}>L{level}</span>
           </div>
 

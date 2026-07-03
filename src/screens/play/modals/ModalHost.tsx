@@ -1,5 +1,5 @@
 import { useGameStore } from '../../../store/gameStore';
-import { TBL } from '../../../tokens';
+import { TBL, Z } from '../../../tokens';
 import { MulliganModal }    from './MulliganModal';
 import { ClassBonusModal }  from './ClassBonusModal';
 import { OathswornModal }   from './OathswornModal';
@@ -19,7 +19,7 @@ function SetupWaiting({ step }: { step: string }) {
   const label = step === 'mulligan' ? 'mulligan' : step === 'classbonus' ? 'choose class bonuses' : 'place their Player Character';
   return (
     <div style={{
-      position: 'fixed', inset: 0, zIndex: 360, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      position: 'fixed', inset: 0, zIndex: Z.setup, display: 'flex', alignItems: 'center', justifyContent: 'center',
       background: 'radial-gradient(ellipse at center, rgba(10,8,5,0.78), rgba(5,4,2,0.92))',
     }}>
       <div style={{

@@ -1,6 +1,6 @@
 import { useEffect, type CSSProperties } from 'react';
 import { useGameStore, seatName } from '../../../store/gameStore';
-import { TBL } from '../../../tokens';
+import { TBL, Z } from '../../../tokens';
 
 interface Props { player?: 'p1' | 'p2'; onClose: () => void; }
 
@@ -31,7 +31,7 @@ export function PCPlacementModal({ player = 'p1', onClose }: Props) {
     top: 52,           // just below the top bar
     left: '50%',
     transform: 'translateX(-50%)',
-    zIndex: 200,       // above the board but below full modals
+    zIndex: Z.overlay, // above the board but below full modals
     pointerEvents: 'none',   // let clicks pass through to the board
     display: 'flex',
     flexDirection: 'column',

@@ -3,7 +3,7 @@ import { useGameStore } from '../store/gameStore';
 import { useMultiplayer } from '../lib/useMultiplayer';
 import { CardFace } from '../components/CardFace';
 import { CATALOG } from '../data/catalog';
-import { TBL } from '../tokens';
+import { TBL, Z } from '../tokens';
 import { Lobby } from './play/Lobby';
 import { Matching } from './play/Matching';
 import { PhaseRail } from './play/PhaseRail';
@@ -75,7 +75,7 @@ function GameView() {
 function PromptBanner({ tag, text, onCancel }: { tag: string; text: string; onCancel: () => void }) {
   return (
     <div className="prompt-pulse" style={{
-      position: 'fixed', top: 54, left: '50%', transform: 'translateX(-50%)', zIndex: 250,
+      position: 'fixed', top: 54, left: '50%', transform: 'translateX(-50%)', zIndex: Z.prompt,
       display: 'flex', alignItems: 'center', gap: 14, padding: '9px 16px', borderRadius: 9,
       background: 'rgba(36,29,19,0.96)', border: `1px solid ${TBL.amber2}`,
       fontFamily: "'Inter', sans-serif", fontSize: 13, color: TBL.ink,
@@ -122,7 +122,7 @@ function KitItemModal() {
 
   return (
     <div style={{
-      position: 'fixed', inset: 0, zIndex: 360, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      position: 'fixed', inset: 0, zIndex: Z.setup, display: 'flex', alignItems: 'center', justifyContent: 'center',
       background: 'radial-gradient(ellipse at center, rgba(10,8,5,0.8), rgba(5,4,2,0.93))',
     }}>
       <div style={{
@@ -192,7 +192,7 @@ function PeekModal() {
 
   return (
     <div style={{
-      position: 'fixed', inset: 0, zIndex: 360, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      position: 'fixed', inset: 0, zIndex: Z.setup, display: 'flex', alignItems: 'center', justifyContent: 'center',
       background: 'radial-gradient(ellipse at center, rgba(10,8,5,0.8), rgba(5,4,2,0.93))',
     }}>
       <div style={{
@@ -265,7 +265,7 @@ function ReactiveHoldBanner() {
   if (!source) return null;
   return (
     <div style={{
-      position: 'fixed', top: 52, left: '50%', transform: 'translateX(-50%)', zIndex: 210,
+      position: 'fixed', top: 52, left: '50%', transform: 'translateX(-50%)', zIndex: Z.holdBanner,
       background: 'rgba(18,14,10,0.96)', border: `1px solid ${TBL.amber}`, borderRadius: 10,
       padding: '10px 20px', boxShadow: `0 4px 24px rgba(0,0,0,0.6), 0 0 0 1px ${TBL.amber}33`,
       fontFamily: "'Newsreader', serif", fontSize: 15, color: TBL.ink, whiteSpace: 'nowrap',
@@ -292,7 +292,7 @@ function DeadPickModal() {
 
   return (
     <div style={{
-      position: 'fixed', inset: 0, zIndex: 360, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      position: 'fixed', inset: 0, zIndex: Z.setup, display: 'flex', alignItems: 'center', justifyContent: 'center',
       background: 'radial-gradient(ellipse at center, rgba(10,8,5,0.8), rgba(5,4,2,0.93))',
     }}>
       <div style={{
@@ -335,7 +335,7 @@ function AttackChoiceModal() {
 
   return (
     <div style={{
-      position: 'fixed', inset: 0, zIndex: 360, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      position: 'fixed', inset: 0, zIndex: Z.setup, display: 'flex', alignItems: 'center', justifyContent: 'center',
       background: 'radial-gradient(ellipse at center, rgba(10,8,5,0.8), rgba(5,4,2,0.93))',
     }}>
       <div style={{
@@ -370,7 +370,7 @@ function ArmorModal() {
 
   return (
     <div style={{
-      position: 'fixed', inset: 0, zIndex: 360, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      position: 'fixed', inset: 0, zIndex: Z.setup, display: 'flex', alignItems: 'center', justifyContent: 'center',
       background: 'radial-gradient(ellipse at center, rgba(10,8,5,0.8), rgba(5,4,2,0.93))',
     }}>
       <div style={{
@@ -418,7 +418,7 @@ function EquipPickModal() {
 
   return (
     <div style={{
-      position: 'fixed', inset: 0, zIndex: 360, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      position: 'fixed', inset: 0, zIndex: Z.setup, display: 'flex', alignItems: 'center', justifyContent: 'center',
       background: 'radial-gradient(ellipse at center, rgba(10,8,5,0.8), rgba(5,4,2,0.93))',
     }}>
       <div style={{

@@ -1389,7 +1389,9 @@ function kitDests(game: GameState, controller: 'p1' | 'p2', exceptId: string, is
 }
 
 // ─── Game initialization ──────────────────────────────────────────────────────
-function shuffle<T>(arr: T[]): T[] {
+// Fisher-Yates; exported for UI shuffles (mulligan redeal, Bard's Encore!) so no
+// component reinvents it with the biased sort(() => Math.random() - 0.5) trick.
+export function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -2925,6 +2927,10 @@ export const useGameStore = create<GameStoreState>()(
     const nextPlayer: 'p1' | 'p2' = g.activePlayer === 'p1' ? 'p2' : 'p1';
     const nextTurn = nextPlayer === 'p1' ? g.turn + 1 : g.turn;
 
+    // Cards leaving the board at ready phase used to vanish silently — surface each one.
+    const readyNotices: string[] = [];
+    const whose = nextPlayer === s.localPlayer ? 'Your' : "Opponent's";
+
     const readyPlayer = (ps: PlayerState): PlayerState => {
       // Flip CZ cards face-up → recalculate willpower
       const newCZ = ps.classZone.map(c => ({ ...c, faceDown: false }));
@@ -2946,7 +2952,11 @@ export const useGameStore = create<GameStoreState>()(
         if (ent.kind === 'construct') {
           const skipDecay = noPhysicalDecay && isPhysicalConstruct(ent);
           const newAnchors = skipDecay ? (ent.anchors ?? 0) : (ent.anchors ?? 0) - 1;
-          if (newAnchors <= 0) { bury(ent); continue; } // last anchor decayed — sacrificed
+          if (newAnchors <= 0) { // last anchor decayed — sacrificed
+            bury(ent);
+            readyNotices.push(`${whose} ${ent.name} crumbles — its last Anchor decayed.`);
+            continue;
+          }
           newBoard[slot as SlotId] = {
             ...ent, anchors: newAnchors, acts: freshActs(), tapped: 'none' as TapState, exhausted: false,
             statuses: ent.statuses.filter(st => !st.startsWith('ability-used:')),
@@ -2954,7 +2964,11 @@ export const useGameStore = create<GameStoreState>()(
           continue;
         }
         // Companion fleeing: level > effective willpower
-        if (ent.kind === 'companion' && ent.level > effWP) { bury(ent); continue; }
+        if (ent.kind === 'companion' && ent.level > effWP) {
+          bury(ent);
+          readyNotices.push(`${whose} ${ent.name} flees — Level ${ent.level} exceeds Willpower ${effWP}.`);
+          continue;
+        }
         // Ready the entity (drop unused Hit & Run marker + once-per-turn ability markers)
         newBoard[slot as SlotId] = {
           ...ent, tapped: 'none' as TapState, exhausted: false, fresh: false, acts: freshActs(),
@@ -3024,7 +3038,7 @@ export const useGameStore = create<GameStoreState>()(
 
     const drawId = ++toastId;
     setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== drawId) })), 4000);
-    const sotToasts = sot.msgs.map(msg => {
+    const sotToasts = [...readyNotices, ...sot.msgs].map(msg => {
       const tid = ++toastId;
       setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== tid) })), 4000);
       return { id: tid, msg };

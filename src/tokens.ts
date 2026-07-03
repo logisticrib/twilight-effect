@@ -20,6 +20,20 @@ export const TBL = {
   textbox:  '#15111d',
 } as const;
 
+// Play-screen stacking order — every fixed full-screen/floating layer takes its
+// z-index from here so relative order is explicit (no more accidental ties).
+export const Z = {
+  handFan:    40,  // hand hover-lift zone (above board cards)
+  toast:      70,  // Playmat toast stack
+  overlay:   200,  // CZ-exchange / PC-placement floating panels
+  holdBanner:210,  // multiplayer "waiting for opponent" banner
+  prompt:    250,  // armed-prompt banner (choose a target…)
+  modal:     300,  // ModalShell dialogs
+  setup:     360,  // serialized setup sequence + forced pick modals
+  pileView:  380,  // full-screen Dead-Zone browser
+  gameOver:  400,  // final overlay — outranks everything
+} as const;
+
 export const CLASSCLR: Record<string, string> = {
   Warrior:   '#c25450',
   Rogue:     '#9c9893',

@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, type CSSProperties } from 'react';
 import { CardFace } from '../../components/CardFace';
-import { TBL } from '../../tokens';
+import { TBL, Z } from '../../tokens';
 import { useGameStore, seatName } from '../../store/gameStore';
 
 const CARD_SCALE = 0.62;
@@ -28,7 +28,7 @@ export function PileViewer() {
     <div
       onClick={closePile}
       style={{
-        position: 'fixed', inset: 0, zIndex: 400,
+        position: 'fixed', inset: 0, zIndex: Z.pileView,
         background: 'rgba(8,6,4,0.86)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         padding: 28,

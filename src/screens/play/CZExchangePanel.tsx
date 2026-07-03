@@ -1,6 +1,6 @@
 import { useState, type CSSProperties } from 'react';
 import { useGameStore } from '../../store/gameStore';
-import { TBL, CLASSCLR, GLYPH } from '../../tokens';
+import { TBL, CLASSCLR, GLYPH, Z } from '../../tokens';
 
 /**
  * Floating panel shown during the Class Zone Exchange phase.
@@ -35,7 +35,7 @@ export function CZExchangePanel() {
     top: 52,
     left: '50%',
     transform: 'translateX(-50%)',
-    zIndex: 200,
+    zIndex: Z.overlay,
     background: 'rgba(18,14,10,0.96)',
     backdropFilter: 'blur(12px)',
     border: `1px solid ${TBL.matLine2}`,

@@ -1,7 +1,7 @@
 import { useState, type CSSProperties } from 'react';
 import { ModalShell, md } from './ModalShell';
 import { CardFace } from '../../../components/CardFace';
-import { useGameStore, seatName, type GameState, type PlayerState } from '../../../store/gameStore';
+import { useGameStore, seatName, shuffle, type GameState, type PlayerState } from '../../../store/gameStore';
 import { CATALOG } from '../../../data/catalog';
 import { TBL, CLASSCLR, GLYPH } from '../../../tokens';
 import type { Card, BoardEntity } from '../../../types/card';
@@ -53,8 +53,10 @@ function czSwapById(g: GameState, player: 'p1' | 'p2', handCard: Card, czCardId:
   if (czIdx === -1) return { g, result: 'CZ card not found' };
 
   const leaving = ps.classZone[czIdx];
+  // Same shape as handToCz: keep cardData/faceDown so the slot retains its hover
+  // preview and type/level caption after the swap.
   const newCZ   = ps.classZone.map((c, i) =>
-    i === czIdx ? { id: c.id, cls: handCard.class1, name: handCard.name } : c
+    i === czIdx ? { id: c.id, cls: handCard.class1 || 'Classless', name: handCard.name, faceDown: false, cardData: handCard } : c
   );
   const retCard = CATALOG.find(c => c.name === leaving.name)
     ?? ({ ...handCard, id: `cz-ret-${Date.now()}`, name: leaving.name, class1: leaving.cls, cls: leaving.cls } as Card);
@@ -167,7 +169,7 @@ const BONUSES: Record<string, BonusDef> = {
       if (!card) return { g, result: 'Skipped' };
       const ps = g[p];
       const hand = ps.hand.filter(c => c.id !== card.id);
-      const pile = [...ps.deck, card].sort(() => Math.random() - 0.5);
+      const pile = shuffle([...ps.deck, card]);
       const [drawn, ...rest] = pile;
       return { g: { ...g, [p]: { ...ps, hand: [...hand, drawn], deck: rest } }, result: `Shuffled in ${card.name}, drew ${drawn.name}` };
     },

@@ -1,25 +1,12 @@
 @import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600;700&display=swap');
 @import "tailwindcss";
 
+/* The palette lives in src/tokens.ts (TBL) — components style inline from there.
+   Only the two values the base page styles need are mirrored here; keep them in
+   sync with TBL.mat0 / TBL.ink. */
 :root {
   --mat0: #16130d;
-  --mat1: #1d1810;
-  --mat2: #241d13;
   --ink:  #ece7da;
-  --ink2: #b3ab97;
-  --ink3: #7c745f;
-  --ink4: #544d3d;
-  --amber:  #d6a050;
-  --amber2: #f0c074;
-  --violet: #8a7ad6;
-  --good:   #74c08a;
-  --danger: #e06a6a;
-  --mat-line:  rgba(214,176,108,0.20);
-  --mat-line2: rgba(214,176,108,0.40);
-  --stock:     #211c2b;
-  --stock2:    #171320;
-  --stock-edge:#0d0b14;
-  --textbox:   #15111d;
 }
 
 * { box-sizing: border-box; }

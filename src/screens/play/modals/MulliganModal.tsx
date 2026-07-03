@@ -1,19 +1,10 @@
 import { useState, type CSSProperties } from 'react';
 import { ModalShell, md } from './ModalShell';
 import { CardFace } from '../../../components/CardFace';
-import { useGameStore, seatName } from '../../../store/gameStore';
+import { useGameStore, seatName, shuffle } from '../../../store/gameStore';
 import { CATALOG } from '../../../data/catalog';
 import { TBL } from '../../../tokens';
 import type { Card } from '../../../types/card';
-
-function shuffleArr<T>(arr: T[]): T[] {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
 
 interface Props { onClose: () => void; isSequence?: boolean; player?: 'p1' | 'p2'; }
 
@@ -23,10 +14,11 @@ export function MulliganModal({ onClose, isSequence, player = 'p1' }: Props) {
   const localPlayer = useGameStore(s => s.localPlayer);
   const ps = game[player];
 
-  // Resolve full Card objects for initial CZ (ClassZoneCard only stores name/class)
-  const initialCzCards: Card[] = ps.classZone.map(
-    cz => CATALOG.find(c => c.name === cz.name) ?? CATALOG[0]
-  );
+  // Resolve full Card objects for the initial CZ — prefer the entry's own cardData,
+  // fall back to a catalog lookup, and DROP misses (never substitute a wrong card).
+  const initialCzCards: Card[] = ps.classZone
+    .map(cz => cz.cardData ?? CATALOG.find(c => c.name === cz.name))
+    .filter((c): c is Card => !!c);
 
   // All working state tracks the player's real deck — not the global catalog.
   // Initial deck = remaining draw pile after PC + CZ + hand were dealt (41 cards).
@@ -44,7 +36,7 @@ export function MulliganModal({ onClose, isSequence, player = 'p1' }: Props) {
 
   const doMulligan = () => {
     // Return current hand + CZ to the deck, shuffle, redeal 3 CZ + 5 hand
-    const pile = shuffleArr([...workingDeck, ...workingHand, ...workingCZ]);
+    const pile = shuffle([...workingDeck, ...workingHand, ...workingCZ]);
     const newCZ   = pile.splice(0, 3);
     const newHand = pile.splice(0, 5);
     setWorkingDeck(pile);

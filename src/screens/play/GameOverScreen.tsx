@@ -1,6 +1,6 @@
 import { useState, type CSSProperties } from 'react';
 import { useGameStore, seatName } from '../../store/gameStore';
-import { TBL } from '../../tokens';
+import { TBL, Z } from '../../tokens';
 
 /**
  * Full-screen victory/defeat overlay. Shown when `game.gameOver` (the winning SIDE,
@@ -62,7 +62,7 @@ function Stat({ label, value, hi }: { label: string; value: string; hi: boolean 
 
 const S: Record<string, CSSProperties> = {
   scrim: {
-    position: 'fixed', inset: 0, zIndex: 400,
+    position: 'fixed', inset: 0, zIndex: Z.gameOver,
     display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
     background: 'radial-gradient(ellipse at center, rgba(10,8,5,0.82), rgba(5,4,2,0.94))',
   },
