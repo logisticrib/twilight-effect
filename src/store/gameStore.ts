@@ -872,10 +872,12 @@ function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceName: stri
         break;
       }
       case 'anchor': {
-        // Group: add/remove anchors on every Physical Construct you control (Grudrik).
+        // Group: add/remove anchors on every OTHER Physical Construct you control (Grudrik,
+        // Stone Rampart). The source excludes itself — owner ruling 2026-07-03: a construct
+        // buffing its own group on enter would just be hidden printed-anchor inflation.
         if (e.target === 'ownPhysicalConstructs') {
           const ids = (Object.values(g[lp].board) as (BoardEntity | undefined)[])
-            .filter((x): x is BoardEntity => !!x && isPhysicalConstruct(x)).map(x => x.id);
+            .filter((x): x is BoardEntity => !!x && isPhysicalConstruct(x) && x.id !== sourceId).map(x => x.id);
           let touched = 0;
           for (const id of ids) {
             const loc = findEntityAnywhere(g, id);

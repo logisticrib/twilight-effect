@@ -2,7 +2,35 @@
 
 Self-contained context for continuing the card-effect engine work in a fresh session.
 
-## Latest session (2026-07-02, latest) — keyboard a11y on click flows
+## Latest session (2026-07-03) — owner rulings applied + test suite seeded (Phase 0)
+Two resolved owner rulings from `tasks/test_seed_plan.md` applied, then Phase 0 executed.
+- **Ruling 1 (fled/decayed → Dead Zone, CONFIRMED):** wording added to the parent
+  `Game_Rules_Updated.md` AND `twilight-app/docs/Game_Rules_Updated.md` (Constructs §, Dead Zone §
+  incl. recursion-recoverability, Ready Phase step). Engine already correct since Batch 2.
+  ⚠ FLAG for owner: the plan's canonical parenthetical defined fleeing as "Willpower drops below
+  the number of companions you control" — that contradicts the rules doc (L186/188), the engine
+  (`readyPlayer`: level > effective willpower), and prior rulings, so the docs keep the established
+  level-based wording; same for "Physical Construct" → "Construct" (ALL constructs decay). Say the
+  word if the flee rule itself was meant to change.
+- **Ruling 2 (Stone Rampart → anchors):** re-authored in `wizard_builder_50.json` — interim heal
+  REMOVED, now "onEnter: anchor +1 ownPhysicalConstructs", text updated. The `anchor` group op
+  (gameStore) now EXCLUDES the source (`x.id !== sourceId`) — self-exclusion is the default per the
+  ruling; Grudrik (companion source) regression-verified unaffected.
+- **Vitest 4.1.9 installed** (dedupes against vite 8). NEW `src/__tests__/`: `helpers.ts`
+  (mkComp/mkPc/mkConstruct/mkItem/freshGame), `gameplay.test.ts` (batch-2's 23 assertions),
+  `multiplayer.test.ts` (batch-3's 19 — peerjs `vi.mock`'d; private `conn`/`_wireConn` reached via
+  a typed `internals()` cast), `rulings.test.ts` (Stone Rampart + self-exclusion + Grudrik).
+  Tests import the store DIRECTLY — no `__gs` window hook, no ssrLoadModule. `vitest.config.ts`
+  (node env, standalone — keeps React/Tailwind plugins out). `npm test` + `npm run typecheck`
+  scripts added. **19 tests green, typecheck ZERO errors.**
+- **CI:** `.github/workflows/ci.yml` (push/PR → npm ci → typecheck → vitest run). Untested until
+  the owner's next push — check the Actions tab then.
+- The old scratchpads were recovered from the PREVIOUS session's temp scratchpad directory (temp
+  dirs get wiped eventually — this nearly lost the suite).
+- NOT started (next session candidates): audit batch 4 guest-deck-in-READY (H3), Tier 1 tests from
+  the seed plan, quality refactors (§d).
+
+## Previous session (2026-07-02, latest) — keyboard a11y on click flows
 Last §UI M item done. NEW `lib/a11y.ts` `btnProps(onClick, disabled?)` — spread onto clickable divs
 for role/tabIndex/aria-disabled + Enter/Space activation (stopPropagation so the game-level Enter/
 Tab handler never doubles up). Applied to ActBtn, CommandZone slots (tab order only while clickable,
@@ -211,6 +239,9 @@ w.cards.forEach(c=>{if(E[c.name])c.effects=E[c.name];});fs.writeFileSync(p,JSON.
 (sorcerer_warrior is a raw array; wizard_builder is `{cards:[...]}`.) Both files are 2-space indent.
 
 ## Verification workflow (IMPORTANT — every slice was verified this way)
+**Since 2026-07-03 there is a Vitest suite (`src/__tests__/`, `npm test`): store/protocol behavior
+should be verified with a COMMITTED test (import the store directly — no `__gs` hook needed), not a
+throwaway script. The preview workflow below remains for UI/DOM verification.**
 1. Add a temp hook at the very end of gameStore.ts (after the store `create`):
    `if (import.meta.env.DEV) (window as unknown as Record<string,unknown>).__gs = useGameStore;`
    (expose extra helpers as `__ea`/`__ek`/`__emh` as needed).
@@ -440,4 +471,7 @@ owner-ruling flags in OPEN QUESTIONS.
 - Keep `tasks/todo.md` review sections + the memory file (`memory/project_state.md`) updated
   per slice. Follow the user's global CLAUDE.md (plan-first, verify-before-done, simplicity).
 - One slice at a time, verify in preview, remove temp hook, typecheck, update memory.
+- **Every slice's verification script gets COMMITTED as a Vitest test (`src/__tests__/`,
+  `npm test`), never run-and-discarded** (test_seed_plan.md Phase 0 rule, 2026-07-03). CI
+  (`.github/workflows/ci.yml`) runs typecheck + tests on every push.
 - Don't touch pre-existing unrelated TS errors.

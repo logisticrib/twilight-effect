@@ -1,0 +1,20 @@
+# CI gate: the build was silently broken for weeks before 2026-07-02 because nothing
+# ran tsc or tests automatically. Every push now typechecks and runs the Vitest suite.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test

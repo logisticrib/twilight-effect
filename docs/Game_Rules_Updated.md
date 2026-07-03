@@ -86,7 +86,7 @@ Each item is always considered attached to a single character. There is no "free
 Unlike items, constructs are not attached to characters—they occupy COMMAND ZONE slots and degrade over time.
 
 - Constructs always enter the encounter with a number of Anchor counters, representing their connection to the field—whether through magic, tactics, or voice
-- Remove one counter at the beginning of each turn; sacrifice when last removed
+- Remove one counter at the beginning of each turn; sacrifice when last removed — the sacrificed construct is placed in its owner's Dead Zone
 - Constructs can be targeted by card effects but cannot be attacked
 - Constructs occupy COMMAND ZONE slots (count toward 6-character limit per player)
 - Constructs can be played directly to any empty COMMAND ZONE slot (Front or Back Line)
@@ -147,6 +147,7 @@ The supertype determines whether a Two-Handed weapon prevents the action from be
 - Destroyed, sacrificed, or used cards
 - Cards in Dead Zone are face-up and public
 - Can be targeted by certain effects
+- When a companion flees (its Level exceeds your Willpower at the start of your turn) or a Construct's last Anchor counter is removed at the start of your turn, that card is placed in its owner's Dead Zone along with any items attached to it — exactly as if it had been destroyed. Fled and decayed cards are therefore recoverable by Dead Zone recursion effects (e.g., Memory Stone, Library of Memory) like any other card there
 
 **Encounter:**
 - The active play area where characters and constructs exist
@@ -259,7 +260,7 @@ Movement does not exhaust the character and does not produce a visible state cha
 **1. Ready Phase**
    - Ready all exhausted permanents you control
    - Flip all face-down Class Zone cards face-up
-   - Remove one Anchor counter from each Construct
+   - Remove one Anchor counter from each Construct (a Construct whose last Anchor counter is removed is sacrificed and placed in its owner's Dead Zone)
 
 **2. Draw Phase**
    - Draw one card (exception: the player going first skips their Turn-1 draw as the first-player handicap)

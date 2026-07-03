@@ -1096,18 +1096,18 @@
       "actionPM": "",
       "itemKind": "",
       "keywords": [],
-      "text": "When this enters play, restore 1 HP to each companion you control.",
+      "text": "When Stone Rampart enters the encounter, add one Anchor counter to each of your other Physical Constructs.",
       "flavor": "",
       "createdAt": "2026-05-16T19:02:21.324501Z",
-      "updatedAt": "2026-05-16T19:02:21.324503Z",
+      "updatedAt": "2026-07-03T00:00:00.000000Z",
       "effects": [
         {
           "trigger": "onEnter",
           "effects": [
             {
-              "op": "heal",
-              "amount": 1,
-              "target": "ownParty"
+              "op": "anchor",
+              "delta": 1,
+              "target": "ownPhysicalConstructs"
             }
           ]
         }
