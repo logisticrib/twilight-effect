@@ -2,7 +2,18 @@
 
 Self-contained context for continuing the card-effect engine work in a fresh session.
 
-## Latest session (2026-07-02, later) — aesthetic quick-win batch
+## Latest session (2026-07-02, later still) — CardPickModal extraction
+The six copy-pasted inline modals in Play.tsx (Kit-item / Peek / DeadPick / AttackChoice / Armor /
+EquipPick) now share ModalShell chrome. NEW `modals/CardPickModal.tsx` (ModalShell + clickable
+CardFace row; picks {key,name,card?,caption?}, onPick, optional cancel footer) hosts the four pure
+pickers; Peek + AttackChoice sit on ModalShell directly with custom bodies. ModalShell: `footer` now
+OPTIONAL (forced picks render no foot bar), `width` override added, and the scrim's
+`backdropFilter: blur` was REMOVED (documented preview-tooling hang + GPU cost; gradient darkened to
+compensate). Pickers render at Z.modal (300); Z.setup (360) is now only the SetupWaiting overlay.
+Play.tsx 468→366 lines. All six DOM-verified in preview incl. Peek's maxHand Confirm gate and
+Mulligan regression. Remaining §UI M items: selector-based store subscriptions, keyboard a11y.
+
+## Previous session (2026-07-02, later) — aesthetic quick-win batch
 Owner-directed visual polish (six §UI audit slices, all preview-verified; tsc + build green;
 `tasks/todo.md` Review has full detail): Action cards render a Minor/Major/Special cost chip on the
 type line (actionTypeOf-driven); ready-phase flee/decay emit toasts (perspective-prefixed, store-local

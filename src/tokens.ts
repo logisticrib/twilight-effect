@@ -28,8 +28,8 @@ export const Z = {
   overlay:   200,  // CZ-exchange / PC-placement floating panels
   holdBanner:210,  // multiplayer "waiting for opponent" banner
   prompt:    250,  // armed-prompt banner (choose a target…)
-  modal:     300,  // ModalShell dialogs
-  setup:     360,  // serialized setup sequence + forced pick modals
+  modal:     300,  // ModalShell dialogs (setup modals + in-game pickers)
+  setup:     360,  // setup-sequence waiting overlay (above the acting peer's modal)
   pileView:  380,  // full-screen Dead-Zone browser
   gameOver:  400,  // final overlay — outranks everything
 } as const;

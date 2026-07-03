@@ -5,8 +5,9 @@ export const md = {
   scrim: {
     position: 'fixed', inset: 0, zIndex: Z.modal,
     display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
-    background: 'radial-gradient(ellipse at center, rgba(10,8,5,0.7), rgba(6,5,3,0.9))',
-    backdropFilter: 'blur(7px)',
+    // No backdropFilter blur: full-screen blur hangs the preview tooling (see
+    // memory gotcha) and costs GPU over a live board — the dark gradient carries it.
+    background: 'radial-gradient(ellipse at center, rgba(10,8,5,0.78), rgba(6,5,3,0.93))',
   } as CSSProperties,
   panel: {
     width: 'min(880px, 94vw)', maxHeight: '90vh', display: 'flex', flexDirection: 'column',
@@ -78,14 +79,17 @@ interface ModalShellProps {
   title: string;
   sub?: string;
   children: ReactNode;
-  footer: ReactNode;
+  /** Omit for footer-less dialogs (e.g. forced picks) — no empty foot bar renders. */
+  footer?: ReactNode;
+  /** Override the default min(880px, 94vw) panel width for compact dialogs. */
+  width?: string;
   onScrimClick?: () => void;
 }
 
-export function ModalShell({ glyph, color, eyebrow, title, sub, children, footer, onScrimClick }: ModalShellProps) {
+export function ModalShell({ glyph, color, eyebrow, title, sub, children, footer, width, onScrimClick }: ModalShellProps) {
   return (
     <div style={md.scrim} onClick={onScrimClick}>
-      <div style={md.panel} onClick={e => e.stopPropagation()}>
+      <div style={width ? { ...md.panel, width } : md.panel} onClick={e => e.stopPropagation()}>
         <div style={md.head}>
           <div style={md.glyph(color)}>{glyph}</div>
           <div style={{ flex: 1 }}>
@@ -95,7 +99,7 @@ export function ModalShell({ glyph, color, eyebrow, title, sub, children, footer
           </div>
         </div>
         <div style={md.body}>{children}</div>
-        <div style={md.foot}>{footer}</div>
+        {footer != null && <div style={md.foot}>{footer}</div>}
       </div>
     </div>
   );

@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { useMultiplayer } from '../lib/useMultiplayer';
 import { CardFace } from '../components/CardFace';
-import { CATALOG } from '../data/catalog';
 import { TBL, Z } from '../tokens';
 import { Lobby } from './play/Lobby';
 import { Matching } from './play/Matching';
@@ -11,6 +10,8 @@ import { Playmat } from './play/Playmat';
 import { PileViewer } from './play/PileViewer';
 import { GameOverScreen } from './play/GameOverScreen';
 import { ModalHost } from './play/modals/ModalHost';
+import { ModalShell, md } from './play/modals/ModalShell';
+import { CardPickModal } from './play/modals/CardPickModal';
 import { PoisonModal } from './play/modals/PoisonModal';
 
 function GameView() {
@@ -121,39 +122,13 @@ function KitItemModal() {
   if (!pk || pk.step !== 'item' || !pk.items) return null;
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: Z.setup, display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'radial-gradient(ellipse at center, rgba(10,8,5,0.8), rgba(5,4,2,0.93))',
-    }}>
-      <div style={{
-        background: 'linear-gradient(180deg, #221b12, #14100a)', border: `1px solid ${TBL.matLine2}`,
-        borderRadius: 14, padding: '22px 24px', maxWidth: '92vw', maxHeight: '86vh', overflowY: 'auto', boxShadow: '0 30px 80px rgba(0,0,0,0.7)',
-      }}>
-        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.2em', color: TBL.amber2, textTransform: 'uppercase', marginBottom: 4 }}>
-          {pk.sourceName} — Kit-Master: choose an item to move
-        </div>
-        <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 12, color: TBL.ink2, marginBottom: 14 }}>
-          Pick which item to move to another character.
-        </div>
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center', maxWidth: 720 }}>
-          {pk.items.map(it => {
-            const card = CATALOG.find(c => c.name === it.name) ?? null;
-            return (
-              <button key={it.id} onClick={() => pickKitItem(it.id)}
-                style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer', borderRadius: 8 }}
-                title={`Move ${it.name}`}>
-                {card
-                  ? <CardFace data={card} scale={0.62} />
-                  : <span style={{ display: 'inline-block', padding: '14px 18px', border: `1px solid ${TBL.matLine2}`, borderRadius: 8, color: TBL.ink, fontFamily: "'Inter', sans-serif", fontSize: 13 }}>{it.name}</span>}
-              </button>
-            );
-          })}
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 18 }}>
-          <button onClick={cancelKit} style={{ padding: '9px 16px', borderRadius: 7, cursor: 'pointer', fontSize: 13, fontWeight: 600, background: 'rgba(255,255,255,0.05)', color: TBL.ink2, border: `1px solid ${TBL.matLine2}`, fontFamily: "'Inter', sans-serif" }}>Cancel</button>
-        </div>
-      </div>
-    </div>
+    <CardPickModal glyph="⇄" eyebrow={`Kit-Master · ${pk.sourceName}`}
+      title="Choose an item to move" sub="Pick which item to move to another character."
+      picks={pk.items.map(it => ({ key: it.id, name: it.name }))}
+      onPick={id => pickKitItem(id as string)}
+      pickTitle={n => `Move ${n}`}
+      cancel={{ label: 'Cancel', onClick: cancelKit }}
+    />
   );
 }
 
@@ -191,48 +166,40 @@ function PeekModal() {
   const DEST_LABEL: Record<string, string> = { hand: 'Hand', top: 'Top', bottom: 'Bottom' };
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: Z.setup, display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'radial-gradient(ellipse at center, rgba(10,8,5,0.8), rgba(5,4,2,0.93))',
-    }}>
-      <div style={{
-        background: 'linear-gradient(180deg, #221b12, #14100a)', border: `1px solid ${TBL.matLine2}`,
-        borderRadius: 14, padding: '22px 24px', maxWidth: '92vw', boxShadow: '0 30px 80px rgba(0,0,0,0.7)',
-      }}>
-        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.2em', color: TBL.amber2, textTransform: 'uppercase', marginBottom: 4 }}>
-          {pk.source} — look at {pk.cards.length}
-        </div>
-        <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 12, color: TBL.ink2, marginBottom: 14 }}>
-          Assign a destination to each card{pk.maxHand != null ? ` (up to ${pk.maxHand} to hand)` : ''}.
-        </div>
-        <div style={{ display: 'flex', gap: 16, justifyContent: 'center' }}>
-          {pk.cards.map((c, i) => (
-            <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-              <CardFace data={c} scale={0.62} />
-              <div style={{ display: 'flex', gap: 4 }}>
-                {pk.dests.map(d => (
-                  <button key={d} onClick={() => setAssign(a => a.map((x, j) => j === i ? d : x))}
-                    style={{
-                      padding: '4px 9px', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 600,
-                      fontFamily: "'Inter', sans-serif",
-                      background: assign[i] === d ? TBL.amber : 'rgba(255,255,255,0.05)',
-                      color: assign[i] === d ? '#1a1208' : TBL.ink2,
-                      border: `1px solid ${assign[i] === d ? TBL.amber : TBL.matLine2}`,
-                    }}>{DEST_LABEL[d]}</button>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-        <div style={{ display: 'flex', gap: 10, marginTop: 18, justifyContent: 'flex-end' }}>
-          <button onClick={cancelPeek} style={{ padding: '9px 16px', borderRadius: 7, cursor: 'pointer', fontSize: 13, fontWeight: 600, background: 'rgba(255,255,255,0.05)', color: TBL.ink2, border: `1px solid ${TBL.matLine2}`, fontFamily: "'Inter', sans-serif" }}>Cancel</button>
+    <ModalShell glyph="☾" eyebrow={pk.source}
+      title={`Look at ${pk.cards.length} card${pk.cards.length !== 1 ? 's' : ''}`}
+      sub={`Assign a destination to each card${pk.maxHand != null ? ` (up to ${pk.maxHand} to hand)` : ''}.`}
+      width="min(760px, 94vw)"
+      footer={
+        <>
+          <div style={md.spacer} />
+          <button style={md.btn('ghost')} onClick={cancelPeek}>Cancel</button>
           <button disabled={overHand} onClick={() => resolvePeek(assign)}
-            style={{ padding: '9px 18px', borderRadius: 7, cursor: overHand ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600, background: overHand ? 'rgba(214,160,80,0.4)' : TBL.amber, color: '#1a1208', border: `1px solid ${TBL.amber}`, fontFamily: "'Inter', sans-serif" }}>
+            style={overHand ? { ...md.btn('primary'), opacity: 0.5, cursor: 'not-allowed' } : md.btn('primary')}>
             Confirm
           </button>
-        </div>
+        </>
+      }>
+      <div style={{ display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap' }}>
+        {pk.cards.map((c, i) => (
+          <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+            <CardFace data={c} scale={0.62} />
+            <div style={{ display: 'flex', gap: 4 }}>
+              {pk.dests.map(d => (
+                <button key={d} onClick={() => setAssign(a => a.map((x, j) => j === i ? d : x))}
+                  style={{
+                    padding: '4px 9px', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 600,
+                    fontFamily: "'Inter', sans-serif",
+                    background: assign[i] === d ? TBL.amber : 'rgba(255,255,255,0.05)',
+                    color: assign[i] === d ? '#1a1208' : TBL.ink2,
+                    border: `1px solid ${assign[i] === d ? TBL.amber : TBL.matLine2}`,
+                  }}>{DEST_LABEL[d]}</button>
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
-    </div>
+    </ModalShell>
   );
 }
 
@@ -291,36 +258,14 @@ function DeadPickModal() {
   if (!dp || !owned || pendingPeek) return null; // let any start-of-turn peek resolve first
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: Z.setup, display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'radial-gradient(ellipse at center, rgba(10,8,5,0.8), rgba(5,4,2,0.93))',
-    }}>
-      <div style={{
-        background: 'linear-gradient(180deg, #221b12, #14100a)', border: `1px solid ${TBL.matLine2}`,
-        borderRadius: 14, padding: '22px 24px', maxWidth: '92vw', maxHeight: '86vh', overflowY: 'auto', boxShadow: '0 30px 80px rgba(0,0,0,0.7)',
-      }}>
-        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.2em', color: TBL.amber2, textTransform: 'uppercase', marginBottom: 4 }}>
-          {dp.source} — return a card from your Dead Zone
-        </div>
-        <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 12, color: TBL.ink2, marginBottom: 14 }}>
-          Pick a card to return to your hand{dp.optional ? ', or skip.' : '.'}
-        </div>
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center', maxWidth: 720 }}>
-          {dp.options.map(({ card, idx }) => (
-            <button key={idx} onClick={() => resolveDeadPick(idx)}
-              style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer', borderRadius: 8 }}
-              title={`Return ${card.name}`}>
-              <CardFace data={card} scale={0.62} />
-            </button>
-          ))}
-        </div>
-        {dp.optional && (
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 18 }}>
-            <button onClick={cancelDeadPick} style={{ padding: '9px 16px', borderRadius: 7, cursor: 'pointer', fontSize: 13, fontWeight: 600, background: 'rgba(255,255,255,0.05)', color: TBL.ink2, border: `1px solid ${TBL.matLine2}`, fontFamily: "'Inter', sans-serif" }}>Skip</button>
-          </div>
-        )}
-      </div>
-    </div>
+    <CardPickModal glyph="☠" eyebrow={dp.source}
+      title="Return a card from your Dead Zone"
+      sub={`Pick a card to return to your hand${dp.optional ? ', or skip.' : '.'}`}
+      picks={dp.options.map(({ card, idx }) => ({ key: idx, name: card.name, card }))}
+      onPick={idx => resolveDeadPick(idx as number)}
+      pickTitle={n => `Return ${n}`}
+      cancel={dp.optional ? { label: 'Skip', onClick: cancelDeadPick } : undefined}
+    />
   );
 }
 
@@ -334,26 +279,19 @@ function AttackChoiceModal() {
   if (!pac || (!isSolo && pac.lp !== localPlayer)) return null;
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: Z.setup, display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'radial-gradient(ellipse at center, rgba(10,8,5,0.8), rgba(5,4,2,0.93))',
-    }}>
-      <div style={{
-        background: 'linear-gradient(180deg, #221b12, #14100a)', border: `1px solid ${TBL.matLine2}`,
-        borderRadius: 14, padding: '22px 26px', maxWidth: 420, boxShadow: '0 30px 80px rgba(0,0,0,0.7)',
-      }}>
-        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.2em', color: TBL.amber2, textTransform: 'uppercase', marginBottom: 6 }}>
-          {pac.sourceName} attacks
-        </div>
-        <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 13, color: TBL.ink, marginBottom: 16 }}>
-          Pay {pac.payHP} HP from your Player Character to deal {pac.bonus} additional damage?
-        </div>
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-          <button onClick={() => resolve(false)} style={{ padding: '9px 16px', borderRadius: 7, cursor: 'pointer', fontSize: 13, fontWeight: 600, background: 'rgba(255,255,255,0.05)', color: TBL.ink2, border: `1px solid ${TBL.matLine2}`, fontFamily: "'Inter', sans-serif" }}>No</button>
-          <button onClick={() => resolve(true)} style={{ padding: '9px 16px', borderRadius: 7, cursor: 'pointer', fontSize: 13, fontWeight: 600, background: TBL.amber, color: '#1a1208', border: `1px solid ${TBL.amber}`, fontFamily: "'Inter', sans-serif" }}>Pay {pac.payHP} HP</button>
-        </div>
+    <ModalShell glyph="⚔" eyebrow="Optional ability" title={`${pac.sourceName} attacks`}
+      width="min(460px, 92vw)"
+      footer={
+        <>
+          <div style={md.spacer} />
+          <button style={md.btn('ghost')} onClick={() => resolve(false)}>No</button>
+          <button style={md.btn('primary')} onClick={() => resolve(true)}>Pay {pac.payHP} HP</button>
+        </>
+      }>
+      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: TBL.ink }}>
+        Pay {pac.payHP} HP from your Player Character to deal {pac.bonus} additional damage?
       </div>
-    </div>
+    </ModalShell>
   );
 }
 
@@ -369,43 +307,24 @@ function ArmorModal() {
   if (!pa || (!isSolo && pa.defender !== localPlayer)) return null;
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: Z.setup, display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'radial-gradient(ellipse at center, rgba(10,8,5,0.8), rgba(5,4,2,0.93))',
-    }}>
-      <div style={{
-        background: 'linear-gradient(180deg, #221b12, #14100a)', border: `1px solid ${TBL.matLine2}`,
-        borderRadius: 14, padding: '22px 24px', maxWidth: '92vw', maxHeight: '86vh', overflowY: 'auto', boxShadow: '0 30px 80px rgba(0,0,0,0.7)',
-      }}>
-        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.2em', color: TBL.amber2, textTransform: 'uppercase', marginBottom: 4 }}>
-          {pa.entityName} is hit — choose which armor absorbs it
-        </div>
-        <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 12, color: TBL.ink2, marginBottom: 14 }}>
-          The chosen armor prevents the damage and takes a counter (sacrificed at its limit).
-        </div>
-        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center', maxWidth: 720 }}>
-          {pa.candidates.map(c => {
-            const card = CATALOG.find(x => x.name === c.name) ?? null;
-            const next = c.counters + 1;
-            const willBreak = next >= c.armor;
-            return (
-              <div key={c.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                <button onClick={() => resolveArmor(c.id)}
-                  style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer', borderRadius: 8 }}
-                  title={`${c.name} absorbs the hit`}>
-                  {card
-                    ? <CardFace data={card} scale={0.62} />
-                    : <span style={{ display: 'inline-block', padding: '14px 18px', border: `1px solid ${TBL.matLine2}`, borderRadius: 8, color: TBL.ink, fontFamily: "'Inter', sans-serif", fontSize: 13 }}>{c.name}</span>}
-                </button>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: willBreak ? TBL.amber : TBL.ink2 }}>
-                  {next}/{c.armor} counters{willBreak ? ' — breaks!' : ''}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
+    <CardPickModal glyph="✚" eyebrow={`${pa.entityName} is hit`}
+      title="Choose which armor absorbs it"
+      sub="The chosen armor prevents the damage and takes a counter (sacrificed at its limit)."
+      picks={pa.candidates.map(c => {
+        const next = c.counters + 1;
+        const willBreak = next >= c.armor;
+        return {
+          key: c.id, name: c.name,
+          caption: (
+            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: willBreak ? TBL.amber : TBL.ink2 }}>
+              {next}/{c.armor} counters{willBreak ? ' — breaks!' : ''}
+            </span>
+          ),
+        };
+      })}
+      onPick={id => resolveArmor(id as string)}
+      pickTitle={n => `${n} absorbs the hit`}
+    />
   );
 }
 
@@ -417,34 +336,14 @@ function EquipPickModal() {
   if (!ep) return null;
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: Z.setup, display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'radial-gradient(ellipse at center, rgba(10,8,5,0.8), rgba(5,4,2,0.93))',
-    }}>
-      <div style={{
-        background: 'linear-gradient(180deg, #221b12, #14100a)', border: `1px solid ${TBL.matLine2}`,
-        borderRadius: 14, padding: '22px 24px', maxWidth: '92vw', maxHeight: '86vh', overflowY: 'auto', boxShadow: '0 30px 80px rgba(0,0,0,0.7)',
-      }}>
-        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.2em', color: TBL.amber2, textTransform: 'uppercase', marginBottom: 4 }}>
-          {ep.source} — equip an item from your hand
-        </div>
-        <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 12, color: TBL.ink2, marginBottom: 14 }}>
-          Pick an item to equip to this character, or skip.
-        </div>
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center', maxWidth: 720 }}>
-          {ep.items.map(card => (
-            <button key={card.id} onClick={() => resolveEquipPick(card.id)}
-              style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer', borderRadius: 8 }}
-              title={`Equip ${card.name}`}>
-              <CardFace data={card} scale={0.62} />
-            </button>
-          ))}
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 18 }}>
-          <button onClick={cancelEquipPick} style={{ padding: '9px 16px', borderRadius: 7, cursor: 'pointer', fontSize: 13, fontWeight: 600, background: 'rgba(255,255,255,0.05)', color: TBL.ink2, border: `1px solid ${TBL.matLine2}`, fontFamily: "'Inter', sans-serif" }}>Skip</button>
-        </div>
-      </div>
-    </div>
+    <CardPickModal glyph="⚒" eyebrow={ep.source}
+      title="Equip an item from your hand"
+      sub="Pick an item to equip to this character, or skip."
+      picks={ep.items.map(card => ({ key: card.id, name: card.name, card }))}
+      onPick={id => resolveEquipPick(id as string)}
+      pickTitle={n => `Equip ${n}`}
+      cancel={{ label: 'Skip', onClick: cancelEquipPick }}
+    />
   );
 }
 
