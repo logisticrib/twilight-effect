@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import { CardFace, BASE_W, BASE_H } from '../../components/CardFace';
 import { TBL } from '../../tokens';
+import { btnProps } from '../../lib/a11y';
 import { useGameStore, ADJ, type SlotId, type PlayerState, type Board, type GameState } from '../../store/gameStore';
 import { effectiveKeywords, wardedLines } from '../../store/keywords';
 import { handlePreviewWheel } from './previewScroll';
@@ -222,6 +223,11 @@ export function CommandZone({ player, owner, flip, boardScale = DEFAULT_BOARD_SC
             // "choose a target" step is hard to miss (matches the prompt banner pulse).
             const pulseTarget = state === 'attack-target' || state === 'trigger-target'
               || state === 'move-target' || state === 'pc-placement';
+
+            // Keyboard: a slot joins the tab order only while it actually responds
+            // to a click (a target of some pending action, or an own card to select).
+            const slotInteractive = pulseTarget || state === 'play-target'
+              || (!!card && owner === localPlayer);
             const pulseCol = state === 'attack-target' ? 'rgba(224,106,106,0.65)'
               : state === 'pc-placement' ? 'rgba(138,122,214,0.65)'
               : 'rgba(240,192,116,0.65)';
@@ -234,7 +240,8 @@ export function CommandZone({ player, owner, flip, boardScale = DEFAULT_BOARD_SC
                   ...(pulseTarget ? ({ ['--pulse-col']: pulseCol } as CSSProperties) : {}),
                   ...(isCurrentActor ? { boxShadow: `0 0 0 2px ${TBL.good}, 0 0 18px 3px rgba(116,192,138,0.5)` } : {}),
                   ...(isSealedActor ? { opacity: 0.5, filter: 'grayscale(0.55)' } : {}),
-                }} onClick={handleClick}>
+                }} {...btnProps(handleClick, !slotInteractive)}
+                aria-label={card ? `${sid.toUpperCase()}: ${card.name}` : `Empty slot ${sid.toUpperCase()}`}>
                 {card ? (
                   <CardFace
                     data={card}

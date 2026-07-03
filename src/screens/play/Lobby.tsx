@@ -4,6 +4,7 @@ import { useDeckStore } from '../../store/deckStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { CATALOG } from '../../data/catalog';
 import { TBL } from '../../tokens';
+import { btnProps } from '../../lib/a11y';
 import type { Card } from '../../types/card';
 
 interface LobbyProps {
@@ -243,10 +244,10 @@ export function Lobby({ host, join }: LobbyProps) {
                 style={{ background: 'rgba(0,0,0,0.4)', color: TBL.ink, border: `1px solid ${TBL.matLine2}`, borderRadius: 4, padding: '3px 7px', fontSize: 11, outline: 'none', fontFamily: "'Inter', sans-serif", width: 110 }}
                 autoFocus
               />
-              <span onClick={saveName} style={{ cursor: 'pointer', color: TBL.amber2 }}>✓</span>
+              <span {...btnProps(saveName)} style={{ cursor: 'pointer', color: TBL.amber2 }}>✓</span>
             </>
           ) : (
-            <span onClick={() => { setNameEdit(true); setNameVal(playerName); }} style={{ cursor: 'pointer' }}>
+            <span {...btnProps(() => { setNameEdit(true); setNameVal(playerName); })} style={{ cursor: 'pointer' }}>
               {avatarLetter} {playerName} · edit name
             </span>
           )}

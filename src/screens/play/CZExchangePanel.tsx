@@ -1,6 +1,7 @@
 import { useState, type CSSProperties } from 'react';
 import { useGameStore } from '../../store/gameStore';
 import { TBL, CLASSCLR, GLYPH, Z } from '../../tokens';
+import { btnProps } from '../../lib/a11y';
 
 /**
  * Floating panel shown during the Class Zone Exchange phase.
@@ -109,17 +110,13 @@ export function CZExchangePanel() {
             {ps.classZone.length >= 5 && <span style={{ color: TBL.amber2 }}> CZ is full (5/5) — can only move out.</span>}
           </div>
           <div style={btnRow}>
-            <div style={choiceBtn}
-              onClick={() => setMode('cz-to-hand')}>
+            <div style={choiceBtn} {...btnProps(() => setMode('cz-to-hand'))}>
               ← CZ → Hand
             </div>
-            <div
-              style={choiceBtn}
-              onClick={() => ps.classZone.length < 5 ? setMode('hand-to-cz') : undefined}
-            >
+            <div style={choiceBtn} {...btnProps(() => setMode('hand-to-cz'), ps.classZone.length >= 5)}>
               Hand → CZ →
             </div>
-            <div style={choiceBtn} onClick={doPass}>
+            <div style={choiceBtn} {...btnProps(doPass)}>
               Pass
             </div>
           </div>
@@ -137,7 +134,7 @@ export function CZExchangePanel() {
               return (
                 <div
                   key={cz.id}
-                  onClick={() => canMove && doExchangeCzToHand(cz.id)}
+                  {...btnProps(() => doExchangeCzToHand(cz.id), !canMove)}
                   title={canMove ? `Return ${cz.name} to hand` : cz.faceDown ? 'Spent this turn' : 'Last CZ card — cannot remove'}
                   style={{
                     ...cardPill(clr),
@@ -153,8 +150,8 @@ export function CZExchangePanel() {
             })}
           </div>
           <div style={btnRow}>
-            <div style={choiceBtn} onClick={() => setMode('choose')}>← Back</div>
-            <div style={choiceBtn} onClick={doPass}>Pass</div>
+            <div style={choiceBtn} {...btnProps(() => setMode('choose'))}>← Back</div>
+            <div style={choiceBtn} {...btnProps(doPass)}>Pass</div>
           </div>
         </>
       )}
@@ -177,7 +174,7 @@ export function CZExchangePanel() {
               return (
                 <div
                   key={card.id}
-                  onClick={() => doExchangeHandToCz(card.id)}
+                  {...btnProps(() => doExchangeHandToCz(card.id))}
                   title={`Add ${card.name} to Class Zone`}
                   style={cardPill(clr)}
                   onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = `${clr}30`}
@@ -191,8 +188,8 @@ export function CZExchangePanel() {
             })}
           </div>
           <div style={btnRow}>
-            <div style={choiceBtn} onClick={() => setMode('choose')}>← Back</div>
-            <div style={choiceBtn} onClick={doPass}>Pass</div>
+            <div style={choiceBtn} {...btnProps(() => setMode('choose'))}>← Back</div>
+            <div style={choiceBtn} {...btnProps(doPass)}>Pass</div>
           </div>
         </>
       )}

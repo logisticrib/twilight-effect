@@ -31,6 +31,16 @@ html, body, #root {
 .tcard-scroll { scrollbar-width: none; -ms-overflow-style: none; }
 .tcard-scroll::-webkit-scrollbar { width: 0; height: 0; display: none; }
 
+/* Keyboard focus — a visible ring on every focusable control. !important because
+   some cards set an inline outline (armed hand card) or outline:none. #f0c074 = TBL.amber2. */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid #f0c074 !important;
+  outline-offset: 2px;
+}
+
 /* Targeting prompt banner — pulse so a "choose a target" step is hard to miss. */
 @keyframes promptPulse {
   0%, 100% { box-shadow: 0 8px 28px rgba(0,0,0,0.5), 0 0 0 0 rgba(240,192,116,0); }

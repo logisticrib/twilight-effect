@@ -4,6 +4,7 @@ import { useGameStore } from '../../store/gameStore';
 import { canPlayActionCard, playWillpower } from '../../store/keywords';
 import { handlePreviewWheel } from './previewScroll';
 import { TBL, Z } from '../../tokens';
+import { btnProps } from '../../lib/a11y';
 
 const HAND_SCALE = 0.54;
 const CARD_W = BASE_W * HAND_SCALE;
@@ -99,9 +100,12 @@ export function HandFan() {
                 borderRadius: 8,
                 position: 'relative',
               }}
-              onClick={handleClick}
+              {...btnProps(handleClick, !playable)}
+              aria-label={`${card.name}${blocked ? ` (blocked: ${blockReason})` : ''}`}
               onMouseEnter={() => { setHovIdx(i); setHovered({ data: card, owner: localPlayer }); }}
               onMouseLeave={() => { setHovIdx(null); setHovered(null); }}
+              onFocus={() => { setHovIdx(i); setHovered({ data: card, owner: localPlayer }); }}
+              onBlur={() => { setHovIdx(null); setHovered(null); }}
               onWheel={handlePreviewWheel}
             >
               <CardFace data={card} scale={HAND_SCALE} />

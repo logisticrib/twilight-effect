@@ -3,6 +3,7 @@ import { CardFace, CardBack } from '../../components/CardFace';
 import { TBL, CLASSCLR, GLYPH } from '../../tokens';
 import { useGameStore, seatName, type PlayerState, type ClassZoneCard } from '../../store/gameStore';
 import { handlePreviewWheel } from './previewScroll';
+import { btnProps } from '../../lib/a11y';
 
 const PILE_SCALE = 0.2;  // mini card-pile size in the CZ panel (40×56)
 
@@ -187,7 +188,7 @@ function CZContent({ player, who }: CZPanelProps) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center' }}>
           <span style={pileLabel}>Dead ⌕</span>
           <div
-            onClick={() => openPile(who, 'dead')}
+            {...btnProps(() => openPile(who, 'dead'))}
             title={`Click to search ${seatName(who, localPlayer) === 'You' ? 'your' : "the opponent's"} Dead Zone (${player.dead.length})`}
             style={{
               position: 'relative', width: pileW, height: pileH, cursor: 'pointer',

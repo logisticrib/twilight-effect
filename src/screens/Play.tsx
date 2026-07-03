@@ -30,7 +30,16 @@ function GameView() {
       const tag = (e.target as HTMLElement).tagName.toLowerCase();
       if (tag === 'input' || tag === 'textarea') return;
 
+      // While a modal dialog is up, Tab must traverse ITS buttons (not cycle units)
+      // and Enter must not advance the phase underneath it. Escape stays live — it
+      // cancels/skips prompts by design.
+      const modalUp = game.setupQueue.length > 0 || s.modalQueue.length > 0
+        || !!game.pendingPeek || !!game.pendingDeadPick || !!game.pendingArmor
+        || !!game.pendingAttackChoice || !!game.pendingPoison || !!game.gameOver
+        || !!s.pendingEquipPick || s.pendingKit?.step === 'item' || !!s.pileView;
+
       if (e.key === 'Tab') {
+        if (modalUp) return;                 // let focus traverse the dialog
         e.preventDefault();
         const yours = Object.values(game[localPlayer].board)
           .filter((c): c is NonNullable<typeof c> => !!c)
@@ -41,7 +50,7 @@ function GameView() {
         return;
       }
       if (e.key === 'Escape') { s.selectEntity(null); s.cancelPending(); s.cancelPlay(); s.cancelTrigger(); s.cancelKit(); s.cancelActionTarget(); s.cancelPeek(); return; }
-      if (e.key === 'Enter' && game.activePlayer === localPlayer) {
+      if (e.key === 'Enter' && !modalUp && game.activePlayer === localPlayer) {
         const ph = game.currentPhase;
         if (ph === 'draw') s.advancePhase();
         // CZ phase: Enter does nothing — player must use the CZExchangePanel to choose or pass

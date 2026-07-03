@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react';
 import { CardFace } from '../../components/CardFace';
 import { CATALOG } from '../../data/catalog';
 import { TBL, CLASSCLR, GLYPH } from '../../tokens';
+import { btnProps } from '../../lib/a11y';
 import { useGameStore, gatherActivated, abilityUsedTag, type GameState } from '../../store/gameStore';
 import { canPlayActionCard } from '../../store/keywords';
 import { handlePreviewWheel } from './previewScroll';
@@ -58,7 +59,7 @@ function ActBtn({ label: text, icon, state, title, onClick }: {
     boxShadow: state === 'pending' ? `0 0 12px 1px rgba(240,192,116,0.5)` : 'none',
   };
   return (
-    <div style={style} title={title} onClick={state !== 'used' ? onClick : undefined}>
+    <div style={style} title={title} {...btnProps(onClick, state === 'used')}>
       <span>{icon}</span>{text && <span>{text}</span>}
     </div>
   );

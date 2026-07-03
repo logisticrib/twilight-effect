@@ -2,7 +2,20 @@
 
 Self-contained context for continuing the card-effect engine work in a fresh session.
 
-## Latest session (2026-07-02, latest) — selector-based store subscriptions
+## Latest session (2026-07-02, latest) — keyboard a11y on click flows
+Last §UI M item done. NEW `lib/a11y.ts` `btnProps(onClick, disabled?)` — spread onto clickable divs
+for role/tabIndex/aria-disabled + Enter/Space activation (stopPropagation so the game-level Enter/
+Tab handler never doubles up). Applied to ActBtn, CommandZone slots (tab order only while clickable,
+aria-labels), HandFan cards (focus drives the preview pane), CZExchangePanel, Tray dead-pile, Lobby
+name spans. Global handler fixes: while ANY modal is up, Tab yields to focus traversal and Enter no
+longer advances the phase underneath (latent bug); Escape stays live (skips prompts). Global
+`:focus-visible` amber ring in index.css. Verified: full keyboard loop (place PC → pass CZ →
+Tab-cycle → arm Move → move), modal gates, disabled controls out of tab order. FLAG for owner: Tab
+in plain board view still cycles units (documented UX) — full board traversal would need rebinding.
+HARNESS GOTCHA: preview window has no OS focus — element.focus() fires no focus events; dispatch
+`focusin` to test onFocus. Convention: use `btnProps` for any new clickable div.
+
+## Previous session (2026-07-02) — selector-based store subscriptions
 Hover no longer re-renders the board (audit §UI M item). Every hot-path Play component now uses
 individual `useGameStore(s => s.x)` selectors instead of a bare `useGameStore()` whole-store
 subscription; **GameView + useMultiplayer subscribe to nothing** (keyboard handler + MP hook read
