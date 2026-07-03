@@ -26,8 +26,20 @@ Two resolved owner rulings from `tasks/test_seed_plan.md` applied, then Phase 0 
   the owner's next push — check the Actions tab then.
 - The old scratchpads were recovered from the PREVIOUS session's temp scratchpad directory (temp
   dirs get wiped eventually — this nearly lost the suite).
-- NOT started (next session candidates): audit batch 4 guest-deck-in-READY (H3), Tier 1 tests from
-  the seed plan, quality refactors (§d).
+- **Tier 1 DONE (same day, follow-on):** all 12 owner-caught regressions codified — NEW
+  `tier1_economy.test.ts` (WP survives Special Actions via real placeCard; WP≥Level gates;
+  Patient Study charges Minor through real playAction; ability consumes Major, constructs
+  exempt; activation lock; skip-draw handicap + no Turn-1 Major), `tier1_zones.test.ts`
+  (Reckless recoil buries + fires Memory Stone; Dismantle/moveAnchor sacrifices; sworn→hand;
+  heavy dedupe; Mara payHP→setPcHp mirror; canHoldItem/Kit-Master caps; weapon swap;
+  dead-pick skips departed cards; all lifecycle prompt resets + cancel-leak), and
+  `tier1_combat.test.ts` (armor: single auto/2+ pause/resolveArmor resume/Cleave chain/
+  non-combat armorSink defer/Reckless bypasses armor; Binding Sigil suppresses printed+
+  granted keywords, positional). **Suite: 6 files / 59 tests, ~680ms; tsc ZERO errors.**
+  helpers.ts gained `mkCz`. OPEN sliver: item 4's poison path is PoisonModal component
+  logic — needs jsdom/React (only Tier-1 piece not store-testable).
+- NOT started (next session candidates): audit batch 4 guest-deck-in-READY (H3), Tier 2–4
+  of the seed plan, PoisonModal component test, quality refactors (§d).
 
 ## Previous session (2026-07-02, latest) — keyboard a11y on click flows
 Last §UI M item done. NEW `lib/a11y.ts` `btnProps(onClick, disabled?)` — spread onto clickable divs

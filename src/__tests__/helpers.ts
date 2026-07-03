@@ -33,6 +33,10 @@ export const mkConstruct = (id: string, name: string, anchors: number, over: Par
 export const mkItem = (id: string, name: string, over: Partial<EquippedItem> = {}): EquippedItem =>
   ({ id, name, sub: '', hands: 1, counters: 0, text: '', ...over });
 
+/** Class Zone entry from a catalog card; `cls` override lets tests satisfy classInZone. */
+export const mkCz = (card: Card, cls?: string, id?: string) =>
+  ({ id: id ?? card.id, cls: cls ?? (card.class1 || 'Warrior'), name: card.name, faceDown: false, cardData: card });
+
 /** Fresh solo game fast-forwarded past setup: action phase, p1 active. */
 export function freshGame() {
   gs.getState().startSolo(deckCards, deckCards);
