@@ -67,8 +67,21 @@ Two resolved owner rulings from `tasks/test_seed_plan.md` applied, then Phase 0 
   from applied remote snapshots, resets on host/join/disconnect. This was invisible to
   batch-3's session-level tests and would have hit the first live two-peer armor/Memory-
   Stone moment. **Suite: 9 files / 77 tests; tsc ZERO errors.**
-- NOT started (next session candidates): audit batch 4 guest-deck-in-READY (H3), Tier 4
-  (schema-op coverage + deck validator → future mint-gate), quality refactors (§d).
+- **Tier 4 DONE (same day) — the whole test_seed_plan Tier 0–4 is now closed.** NEW
+  `src/data/validateCards.ts`: the REUSABLE deck validator (the future generation-pipeline
+  MINT-GATE). Runtime mirrors of every schema union, honest both ways at compile time
+  (`satisfies` + exported `AssertNever<Exclude<…>>` aliases — effects.ts cannot grow a
+  member the validator ignores). **CATALOG validates CLEAN (all 100 cards).**
+  `tier4_validator.test.ts` proves 11 mistake classes are caught (bad op/trigger/target/
+  amount/cost/condition/keyword, costless activated, dup id/name, per-type fields).
+  `tier4_ops.test.ts` (30) = happy+edge per op through the real store paths, mocked d6 for
+  die ops. GOTCHAS reconfirmed: zone moves are CATALOG-name-keyed (synthetic entities that
+  change zones need real names); a caster's Minor is spent per cast (resetActions between
+  synthetic plays). ENGINE NOTES: `perControlled` ignores its spec value (always counts
+  companions); discard/mill/sacrifice/sacrificeItem/search/modal/gainControl are
+  schema-valid interpreter NO-OPS. **Suite: 11 files / 119 tests; tsc ZERO errors.**
+- NOT started (next session candidates): audit batch 4 guest-deck-in-READY (H3), Phase 2
+  replay recorder (the seed plan's last item), quality refactors (§d), live two-peer playtest.
 
 ## Previous session (2026-07-02, latest) — keyboard a11y on click flows
 Last §UI M item done. NEW `lib/a11y.ts` `btnProps(onClick, disabled?)` — spread onto clickable divs
