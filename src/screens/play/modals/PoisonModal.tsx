@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, type CSSProperties } from 'react';
 import { ModalShell, md } from './ModalShell';
 import { useGameStore } from '../../../store/gameStore';
+import { currentWillpower } from '../../../store/keywords';
 import { TBL, CLASSCLR, GLYPH } from '../../../tokens';
 
 interface PoisonChar {
@@ -18,7 +19,10 @@ interface Props { player?: 'p1' | 'p2'; onClose: () => void; }
 
 export function PoisonModal({ player = 'p1', onClose }: Props) {
   const { game, setGame, resolvePoison } = useGameStore();
-  const willpower = Math.max(game[player].willpower, 1);
+  // THE current Willpower (Dismayed-adjusted — owner ruling 2026-07-04). No floor:
+  // at current WP 0 a d6 can never cleanse, which is the ruled consequence of the
+  // one-Willpower rule (the old raw read also floored at 1 — both were wrong).
+  const willpower = currentWillpower(game[player]);
 
   const initial = useMemo<PoisonChar[]>(() => {
     const out: PoisonChar[] = [];

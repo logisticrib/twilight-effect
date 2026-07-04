@@ -5,7 +5,7 @@
 // (by default) never sees the card — the PendingPeek is owned by the controller (lp) and
 // the placing player is reactive-held until it resolves.
 import { describe, it, expect, beforeEach } from 'vitest';
-import { gs, freshGame, mkComp, mkConstruct, mkCz } from './helpers';
+import { gs, freshGame, mkComp, mkConstruct, mkPc, mkCz } from './helpers';
 import { reactiveHold } from '../store/gameStore';
 import { CATALOG } from '../data/catalog';
 
@@ -110,6 +110,64 @@ describe('Paranoia — non-triggers', () => {
     seed(emberAdept, { b2: watcher('par-back') }, { f2: mkConstruct('sig', 'Binding Sigil', 2, { subtype: 'Incantation' }) });
     play(emberAdept);
     expect(gs.getState().game.pendingPeek?.lp).toBe('p2');
+  });
+});
+
+describe('Paranoia — trigger order & "plays a Companion" scope (owner rulings 2026-07-04)', () => {
+  // Ruling (a): when the placed companion has its own on-enter scry, the PLACER's
+  // effect resolves first and the opponent's Paranoia peek arms after it.
+  it("placer's own on-enter scry resolves first; the Paranoia peek follows", () => {
+    const apprentice = CATALOG.find(c => c.name === 'Tower Apprentice')!;
+    seed(apprentice, { f1: watcher('par-1') });
+    play(apprentice);
+    let g = gs.getState().game;
+    expect([g.pendingPeek?.source, g.pendingPeek?.lp, g.pendingPeek?.deckSide],
+      'own scry is the active prompt').toEqual(['Tower Apprentice', 'p1', 'p1']);
+    expect(g.pendingPeekQueue, 'Paranoia queued behind it').toHaveLength(1);
+
+    gs.getState().resolvePeek(['top']);
+    g = gs.getState().game;
+    expect([g.pendingPeek?.source, g.pendingPeek?.lp, g.pendingPeek?.deckSide],
+      "Paranoia resolves last, over the PLACER's deck").toEqual(['Watcher-par-1', 'p2', 'p1']);
+    gs.getState().resolvePeek(['top']);
+    expect(gs.getState().game.pendingPeek, 'all resolved').toBeNull();
+  });
+
+  // Ruling (b): "plays a Companion" = from hand only.
+  it('PC placement is not "playing a Companion" — no trigger', () => {
+    freshGame();
+    gs.setState(s => ({ game: { ...s.game,
+      setupQueue: ['place-pc:p1'],
+      p1: { ...s.game.p1, _pc: mkPc('pc-1'), board: {} },
+      p2: { ...s.game.p2, board: { f1: watcher('par-1') } },
+    } }));
+    gs.getState().placePc('b1', 'p1');
+    const g = gs.getState().game;
+    expect(g.p1.board.b1?.kind, 'PC placed').toBe('pc');
+    expect(g.pendingPeek, 'no Paranoia peek').toBeNull();
+  });
+
+  it('an Animate Magic conversion is not "playing a Companion" — no trigger', () => {
+    freshGame();
+    const animateAction = {
+      id: 'an-1', name: 'Synthetic Animation', level: 1, type: 'Action', subtype: '', rarity: '',
+      class1: '', class2: '', attack: 0, hp: 0, anchor: null, actionSub: '', actionPM: 'Minor',
+      itemKind: '', keywords: [], text: '', flavor: '', cls: '',
+      effects: [{ trigger: 'onPlay', effects: [{ op: 'animate', atk: 2, hp: 2, target: 'magicalConstruct' }] }],
+    } as unknown as (typeof emberAdept);
+    gs.setState(s => ({ game: { ...s.game, selected: 'caster',
+      p1: { ...s.game.p1, willpower: 9, hand: [animateAction], board: {
+        f1: mkComp('caster', 'Synthetic Caster'),
+        f2: mkConstruct('inc-1', 'Existing Incantation', 2, { subtype: 'Incantation' }),
+      } },
+      p2: { ...s.game.p2, board: { f1: watcher('par-1') } },
+    } }));
+    gs.getState().playAction(animateAction.id);
+    gs.getState().resolveActionTarget('inc-1');
+    const g = gs.getState().game;
+    expect(g.p1.board.f2?.kind, 'construct became a companion').toBe('companion');
+    expect(g.p1.board.f2?.subtype, 'a Manifest one').toBe('Manifest');
+    expect(g.pendingPeek, 'a companion ENTERING by conversion is not one being PLAYED — no peek').toBeNull();
   });
 });
 

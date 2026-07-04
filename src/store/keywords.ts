@@ -37,7 +37,7 @@ function controlsKeyword(ps: PlayerState, kw: string): boolean {
  * Recompute all static auras from current board state. Idempotent — returns the
  * same reference when nothing changed so callers can wrap returns cheaply.
  *
- * Dismay: a player is Dismayed (−1 Willpower, via effectiveWillpower) while the
+ * Dismay: a player is Dismayed (−1 Willpower, via currentWillpower) while the
  * OPPONENT controls one or more permanents with the Dismay keyword.
  */
 export function recomputeStatics(game: GameState): GameState {
@@ -383,10 +383,16 @@ export function hasTwoHanded(ent: BoardEntity): boolean {
   return ent.loadout?.weapon?.hands === 2;
 }
 
-/** Effective Willpower for the play-from-hand level requirement: total Class Zone
- *  card count (player.willpower) minus Dismayed. Spending a Special Action flips a card
- *  face-down as a used-marker but does not lower this. */
-export function playWillpower(player: PlayerState): number {
+/**
+ * THE one "current Willpower" (owner ruling 2026-07-04): the Class-Zone card count
+ * (player.willpower — face-down cards still count; Special Actions don't lower it)
+ * minus 1 while Dismayed, floored at 0. EVERY Willpower reader goes through this
+ * accessor — the play-from-hand level gate, the Poison check, the fleeing check, and
+ * card conditions (willpowerAtLeast). Never read player.willpower raw in a check;
+ * that field is the base stat, not the current value. A consequence the owner ruled
+ * intended: Dismay pressure alone can push companions over the fleeing threshold.
+ */
+export function currentWillpower(player: PlayerState): number {
   return Math.max(0, player.willpower - (player.dismayed ? 1 : 0));
 }
 
@@ -424,7 +430,7 @@ export function canPlayActionCard(
     return { ok: false, reason: `Needs ${need} in Class Zone` };
   }
   // Willpower requirement: must have Willpower ≥ the card's Level to play it.
-  const wp = playWillpower(game[lp]);
+  const wp = currentWillpower(game[lp]);
   if (wp < card.level) return { ok: false, reason: `Willpower ${wp} < level ${card.level}` };
   // Two-Handed weapon blocks Magic Actions (Major or Special).
   if (card.subtype === 'Magic' && hasTwoHanded(ent)) {

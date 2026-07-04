@@ -183,6 +183,7 @@ The supertype determines whether a Two-Handed weapon prevents the action from be
 - Determines the number of Special Actions you may take per turn
 - You may only play a card from your hand if your Willpower is at least the card's Level
 - Spending a Special Action flips a Class Zone card face-down as a "used this turn" marker; this does NOT reduce your Willpower. The card flips back face-up at the start of your next turn.
+- **Rules Note (ruled 2026-07-04):** There is exactly ONE "current Willpower": the number of cards in your Class Zone, minus 1 while you are Dismayed (never below 0). Every Willpower reference reads this single value — the play-from-hand gate (Willpower ≥ Level), the Poison check, the fleeing check, and card conditions ("if your Willpower is at least N"). An intended consequence: Dismay pressure alone can push a companion's Level above your current Willpower and cause it to flee at the start of your turn.
 
 **Companion Fleeing:**
 Companions whose Level exceeds your current Willpower flee at the start of your turn. Fleeing sends the companion to your Dead Zone.

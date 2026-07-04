@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { CardFace, BASE_W } from '../../components/CardFace';
 import { useGameStore } from '../../store/gameStore';
-import { canPlayActionCard, playWillpower } from '../../store/keywords';
+import { canPlayActionCard, currentWillpower } from '../../store/keywords';
 import { handlePreviewWheel } from './previewScroll';
 import { TBL, Z } from '../../tokens';
 import { btnProps } from '../../lib/a11y';
@@ -26,8 +26,8 @@ export function HandFan() {
   const selectedEnt = game.selected
     ? Object.values(game[localPlayer].board).find(e => e?.id === game.selected) ?? null
     : null;
-  // Effective Willpower for the play-from-hand level requirement.
-  const wp = playWillpower(game[localPlayer]);
+  // THE current Willpower for the play-from-hand level requirement.
+  const wp = currentWillpower(game[localPlayer]);
 
   const n = cards.length;
   const mid = (n - 1) / 2;

@@ -2,7 +2,7 @@
 // Each broke in a real playtest; tested exactly as it failed.
 import { describe, it, expect } from 'vitest';
 import { gs, freshGame, mkComp, mkConstruct, mkItem, mkCz } from './helpers';
-import { canPlayActionCard, playWillpower } from '../store/keywords';
+import { canPlayActionCard, currentWillpower } from '../store/keywords';
 import { isSealed, abilityUsedTag, gatherActivated } from '../store/gameStore';
 import type { Card } from '../types/card';
 import { CATALOG } from '../data/catalog';
@@ -38,12 +38,12 @@ describe('item 1: Willpower survives Special Actions (was 3→2→1)', () => {
     g = gs.getState().game;
     expect(g.p1.board.b2?.name, 'second companion placed').toBe(compB.name);
     expect(g.p1.willpower, 'WP after 2 Special Actions').toBe(3);
-    expect(playWillpower(g.p1), 'playWillpower = total CZ − Dismayed').toBe(3);
+    expect(currentWillpower(g.p1), 'currentWillpower = total CZ − Dismayed').toBe(3);
   });
 
-  it('Dismayed subtracts 1 from playWillpower but not from the stat', () => {
+  it('Dismayed subtracts 1 from currentWillpower but not from the stat', () => {
     const g = gs.getState().game;
-    expect(playWillpower({ ...g.p1, dismayed: true })).toBe(2);
+    expect(currentWillpower({ ...g.p1, dismayed: true })).toBe(2);
     expect(g.p1.willpower).toBe(3);
   });
 

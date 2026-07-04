@@ -6,7 +6,7 @@ import { CATALOG, SORCERER_WARRIOR_CARDS, WIZARD_BUILDER_CARDS } from '../data/c
 import { recomputeStatics, isImmuneToSplash, grantHitRun, HIT_RUN_STATUS,
          isPhysicalConstruct, parseEnterTrigger, type EnterTriggerKind,
          isCharacter, firstItemOf, allItemsOf, canHoldItem, effectiveAttack, effectiveKeywords, hasModifier, effectiveMaxHp, wardedLines,
-         canPlayActionCard, actionTypeOf, playWillpower, parseBanes, isBaneTarget,
+         canPlayActionCard, actionTypeOf, currentWillpower, parseBanes, isBaneTarget,
          poisonHitPatch, POISONED_STATUS, parseAnimateMagic } from './keywords';
 
 export type Phase = 'ready' | 'draw' | 'cz' | 'action' | 'end';
@@ -735,7 +735,7 @@ function conditionMet(game: GameState, lp: 'p1' | 'p2', cond: Condition): boolea
       const n = Object.values(game[lp].board).filter(e => e && (cond.of === 'companions' ? e.kind === 'companion' : e.kind === 'construct')).length;
       return n >= cond.min;
     }
-    case 'willpowerAtLeast': return game[lp].willpower >= cond.value;
+    case 'willpowerAtLeast': return currentWillpower(game[lp]) >= cond.value;
     default: return true;
   }
 }
@@ -1462,10 +1462,8 @@ export function computeWillpower(classZone: ClassZoneCard[]): number {
   return classZone.length;
 }
 
-/** Effective willpower used for all checks (fleeing, level gating). Accounts for Dismayed. */
-export function effectiveWillpower(ps: PlayerState): number {
-  return Math.max(0, ps.willpower - (ps.dismayed ? 1 : 0));
-}
+// (There is exactly ONE "current Willpower" — see currentWillpower in store/keywords.ts.
+//  Every check reads it; player.willpower is only the base Class-Zone-count stat.)
 
 /**
  * Build a fresh PlayerState from a shuffled 50-card deck.
@@ -1859,7 +1857,7 @@ export const useGameStore = create<GameStoreState>()(
     if (!loc) return s;
 
     // Willpower requirement: must have Willpower ≥ the item's Level to play it.
-    const wp = playWillpower(s.game[lp]);
+    const wp = currentWillpower(s.game[lp]);
     if (wp < card.level) {
       const id = ++toastId;
       setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 3000);
@@ -2762,7 +2760,7 @@ export const useGameStore = create<GameStoreState>()(
     if (!card) return s;
 
     // Willpower requirement: must have Willpower ≥ the card's Level to play it.
-    const wp = playWillpower(game[lp]);
+    const wp = currentWillpower(game[lp]);
     if (wp < card.level) {
       const id = ++toastId;
       setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 3000);
@@ -3155,8 +3153,10 @@ export const useGameStore = create<GameStoreState>()(
       // Flip CZ cards face-up → recalculate willpower
       const newCZ = ps.classZone.map(c => ({ ...c, faceDown: false }));
       const newWillpower = computeWillpower(newCZ);
-      // Effective willpower for fleeing checks (accounts for Dismayed)
-      const effWP = Math.max(0, newWillpower - (ps.dismayed ? 1 : 0));
+      // Fleeing checks read THE current Willpower (Dismayed-adjusted), evaluated
+      // against the just-recomputed base. Dismay pressure can cause fleeing — intended
+      // (owner ruling 2026-07-04).
+      const effWP = currentWillpower({ ...ps, willpower: newWillpower });
       // Master of Foundations: this player's Physical Constructs skip anchor decay.
       const noPhysicalDecay = controlsPreventAnchorDecay(ps);
       const newBoard: Board = {};
