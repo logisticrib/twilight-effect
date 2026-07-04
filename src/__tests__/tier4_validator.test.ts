@@ -59,6 +59,11 @@ describe('the validator catches each class of authoring mistake (mint-gate behav
     expectCaught(clone({ keywords: ['Cleeve'] }), 'typo keyword');
   });
 
+  it("parameterized Bane — \"Goblin's Bane\" resolves to the Bane contract entry", () => {
+    expect(validateCards([clone({ keywords: ["Goblin's Bane"] })]), 'named Bane accepted').toEqual([]);
+    expectCaught(clone({ keywords: ["Goblin's Banes"] }), 'malformed Bane suffix stays unknown');
+  });
+
   it('bad per-type fields: Action cost domain, Item classification, Construct anchor, Companion hp, level range', () => {
     expectCaught(clone({ type: 'Action', actionPM: 'Huge' }), 'bad actionPM');
     expectCaught(clone({ type: 'Item', itemKind: '' }), 'unclassified item');

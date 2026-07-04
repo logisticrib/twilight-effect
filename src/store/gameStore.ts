@@ -6,7 +6,8 @@ import { CATALOG, SORCERER_WARRIOR_CARDS, WIZARD_BUILDER_CARDS } from '../data/c
 import { recomputeStatics, isImmuneToSplash, grantHitRun, HIT_RUN_STATUS,
          isPhysicalConstruct, parseEnterTrigger, type EnterTriggerKind,
          isCharacter, firstItemOf, allItemsOf, canHoldItem, effectiveAttack, effectiveKeywords, hasModifier, effectiveMaxHp, wardedLines,
-         canPlayActionCard, actionTypeOf, playWillpower } from './keywords';
+         canPlayActionCard, actionTypeOf, playWillpower, parseBanes, isBaneTarget,
+         poisonHitPatch, POISONED_STATUS, parseAnimateMagic, parseParanoia } from './keywords';
 
 export type Phase = 'ready' | 'draw' | 'cz' | 'action' | 'end';
 export type PlayPhase = 'lobby' | 'setup' | 'game';
@@ -79,6 +80,10 @@ export interface GameState {
   /** The player who must resolve a start-of-turn Poison check, or null. Routed to
    *  that player's client (the modal renders only when localPlayer === pendingPoison). */
   pendingPoison: 'p1' | 'p2' | null;
+  /** Coercion prompt: an opposing Coercion companion entered — the VICTIM chooses to
+   *  discard a card or sacrifice a permanent. Routed to the victim's client; the
+   *  acting player is held (see `reactiveHold`) until it resolves. */
+  pendingCoercion: PendingCoercion | null;
   /** Mid-combat Armor choice — when an attack hits a character with 2+ armor pieces,
    *  combat PAUSES and the DEFENDER picks which piece absorbs the hit (rules: "the
    *  controlling player chooses which armor prevents the damage"). Carries the
@@ -186,6 +191,15 @@ export interface PendingEquipPick {
   items: Card[];      // the equippable items in hand
 }
 
+/** Coercion (on-enter keyword): the opponent of the entering companion must discard
+ *  a card or sacrifice a permanent — the VICTIM makes the choice (Game Rules,
+ *  "Inactive Player Restrictions"). Their PC is not a legal sacrifice: a forced
+ *  game loss is not a cost, so only companions/constructs qualify. */
+export interface PendingCoercion {
+  source: string;       // the Coercion companion's name
+  victim: 'p1' | 'p2';  // who chooses and pays
+}
+
 /** A Dead-Zone recovery prompt: pick one of `options` to return to hand (or skip if
  *  optional). `postEffects` run only if a card is taken (e.g. Library's self-exhaust). */
 export interface PendingDeadPick {
@@ -195,6 +209,8 @@ export interface PendingDeadPick {
   options: { card: Card; idx: number }[]; // eligible dead cards + their index in the dead array
   postEffects: Effect[];
   optional: boolean;
+  /** Scavenger: the recovered ITEM is attached to this entity instead of going to hand. */
+  attachTo?: { id: string; name: string };
 }
 
 /** Kit-Master's targeting: pick a source character holding an item; if it holds
@@ -221,6 +237,8 @@ export interface AttackCtx {
   attackerName: string;
   attackerPlayer: 'p1' | 'p2';
   dmg: number;                 // per-hit damage (same for primary + every Cleave hit)
+  banes: string[];             // "X's Bane" subjects — hits double vs matching companions
+  poison: boolean;             // attacker has Poison — damaged characters are exhausted + countered
   hitQueue: string[];          // entity ids still to be damaged (head = current)
   phase: 'damage' | 'after';
   reckless: boolean;
@@ -483,17 +501,30 @@ function applyCombatHit(game: GameState, ctx: AttackCtx, armorPieceId?: string):
   const beforeLoc = findEntityAnywhere(game, entityId);
   if (!beforeLoc) { ctx.hitQueue.shift(); return game; }
   const before = beforeLoc.ent;
-  const r = applyDamage(game, entityId, ctx.dmg, ctx.attackerName, ctx.attackerPlayer, ctx.deadSink, armorPieceId);
+  // Bane doubles per hit (primary AND Cleave splash), keyed off each defender.
+  const bane = isBaneTarget(ctx.banes, before);
+  const dmg = bane ? ctx.dmg * 2 : ctx.dmg;
+  if (bane) ctx.msgs.push(`${ctx.attackerName} strikes ${before.name} for double damage (Bane)`);
+  const r = applyDamage(game, entityId, dmg, ctx.attackerName, ctx.attackerPlayer, ctx.deadSink, armorPieceId);
   ctx.msgs.push(...r.msgs);
   const after = findEntityAnywhere(r.game, entityId);
   const tookDamage = !after || after.ent.hp < before.hp; // armor-blocked hits don't count
-  if (ctx.dmg > 0 && tookDamage) ctx.events.push({
+  if (dmg > 0 && tookDamage) ctx.events.push({
     id: entityId, kind: before.kind, owner: beforeLoc.player,
     physical: before.kind === 'construct' && isPhysicalConstruct(before),
     destroyed: !after,
   });
+  let g = r.game;
+  // Poison (attacker keyword): a damaged CHARACTER that survives is exhausted and
+  // gains a counter — the ready-phase Poison check takes it from there. Armor-blocked
+  // hits deal no damage, so they don't poison; constructs aren't characters.
+  if (ctx.poison && dmg > 0 && tookDamage && after && isCharacter(after.ent)) {
+    const n = (after.ent.poison ?? 0) + 1;
+    g = updateEntity(g, entityId, poisonHitPatch(after.ent));
+    ctx.msgs.push(`${after.ent.name} is Poisoned — exhausted (${n} counter${n === 1 ? '' : 's'})`);
+  }
   ctx.hitQueue.shift();
-  return r.game;
+  return g;
 }
 
 /** Drive a (possibly resumed) attack to completion, or pause for an Armor choice.
@@ -605,9 +636,10 @@ function commitAttack(game: GameState, charId: string, targetEntityId: string, b
 
   const newGame = updateEntity(game, charId, { tapped: 'major', exhausted: true, acts: { ...attacker.acts, major: true } });
   const dmg = effectiveAttack(attacker, game) + attackDamageBonus(attacker, game, attLoc.player) + bonusDmg;
+  const attackerKws = effectiveKeywords(attacker, game);
   const hitQueue = [targetEntityId];
   const acroMsgs: string[] = [];
-  if (effectiveKeywords(attacker, game).includes('Cleave')) {
+  if (attackerKws.includes('Cleave')) {
     const tgtSlot = findSlot(game[oppPlayer].board, targetEntityId);
     if (tgtSlot) for (const ls of (isFront(tgtSlot as SlotId) ? FRONT_SLOTS : BACK_SLOTS)) {
       const lineEnt = newGame[oppPlayer].board[ls];
@@ -618,8 +650,10 @@ function commitAttack(game: GameState, charId: string, targetEntityId: string, b
   }
   const ctx: AttackCtx = {
     charId, attackerName: attacker.name, attackerPlayer: attLoc.player, dmg, hitQueue, phase: 'damage',
-    reckless: effectiveKeywords(attacker, game).includes('Reckless'),
-    hitRun: effectiveKeywords(attacker, game).includes('Hit & Run'),
+    banes: parseBanes(attackerKws),
+    poison: attackerKws.includes('Poison'),
+    reckless: attackerKws.includes('Reckless'),
+    hitRun: attackerKws.includes('Hit & Run'),
     msgs: acroMsgs, events: [], deadSink: [], armorSink: [],
   };
   const res = driveAttack(newGame, ctx);
@@ -1140,6 +1174,15 @@ function armPrompts(game: GameState, deadSink: PendingDeadPick[], armorSink: Arm
 export function reactiveHold(game: GameState, localPlayer: 'p1' | 'p2'): string | null {
   const dp = game.pendingDeadPick;
   if (dp && dp.lp !== localPlayer) return dp.source;
+  // A Coercion prompt is the VICTIM's decision — the player who played the coercer
+  // (and anyone else) waits for it.
+  const co = game.pendingCoercion;
+  if (co && co.victim !== localPlayer) return `${co.source} (Coercion)`;
+  // A deck-peek owned by the other player: normally their own-turn scry (holding the
+  // inactive peer is harmless), but with Paranoia the ACTIVE player pushed a peek
+  // onto the opponent and must wait for the top-or-bottom decision.
+  const pk = game.pendingPeek;
+  if (pk && pk.lp !== localPlayer) return pk.source;
   // A mid-combat Armor choice owned by the opponent (defender) holds the attacker
   // until it resolves, so the attacker's broadcasts don't clobber the resolution.
   const pa = game.pendingArmor;
@@ -1501,6 +1544,7 @@ export function makeNewGame(
     pendingDeadPick: null,
     pendingDeadPickQueue: [],
     pendingPoison: null,
+    pendingCoercion: null,
     pendingArmor: null,
     pendingAttackChoice: null,
     setupQueue: [...SETUP_SEQUENCE],
@@ -1657,6 +1701,10 @@ interface GameStoreState {
    *  (via setPcHp — entity + headline stay married, game ends at 0). Un-rolled units are
    *  simply omitted. Clears `pendingPoison`. */
   resolvePoison: (player: 'p1' | 'p2', outcomes: { id: string; cleansed: boolean }[]) => void;
+  /** Coercion: the victim discards the chosen hand card to their Dead Zone. */
+  resolveCoercionDiscard: (cardId: string) => void;
+  /** Coercion: the victim sacrifices the chosen permanent (never their PC). */
+  resolveCoercionSacrifice: (entityId: string) => void;
 
   // Turn
   endTurn: () => void;
@@ -2235,8 +2283,25 @@ export const useGameStore = create<GameStoreState>()(
       const [next, ...rest] = s.game.pendingDeadPickQueue;
       return { game: { ...s.game, pendingDeadPick: next ?? null, pendingDeadPickQueue: rest } };
     }
-    let g: GameState = { ...s.game, [dp.lp]: { ...ps, dead: ps.dead.filter((_, i) => i !== liveIdx), hand: [...ps.hand, card] } };
-    const msgs = [`Returned ${card.name} from the Dead Zone to hand`];
+    const taken: GameState = { ...s.game, [dp.lp]: { ...ps, dead: ps.dead.filter((_, i) => i !== liveIdx), hand: [...ps.hand, card] } };
+    let g = taken;
+    const msgs: string[] = [];
+    if (dp.attachTo) {
+      // Scavenger: the recovered item attaches to the wearer instead of going to hand.
+      // The card routes THROUGH the hand so equipOnto's hand-removal applies. If the
+      // wearer left the board or lost capacity since the prompt armed, skip the pick
+      // like a stale option (the item stays in the Dead Zone).
+      const wearer = findEntityAnywhere(s.game, dp.attachTo.id);
+      const { isWeapon, isHeavy } = itemProfileOf(card);
+      if (!wearer || !canHoldItem(wearer.ent, isWeapon, isHeavy)) {
+        const [next, ...rest] = s.game.pendingDeadPickQueue;
+        return { game: { ...s.game, pendingDeadPick: next ?? null, pendingDeadPickQueue: rest } };
+      }
+      g = equipOnto(taken, dp.lp, dp.attachTo.id, card);
+      msgs.push(`Returned ${card.name} from the Dead Zone — attached to ${wearer.ent.name}`);
+    } else {
+      msgs.push(`Returned ${card.name} from the Dead Zone to hand`);
+    }
     // Run "if you do" effects (e.g. exhaust the source construct) now a card was taken.
     if (dp.postEffects.length) { const r = resolveActionEffects(g, dp.lp, dp.source, dp.postEffects, undefined, dp.sourceId); g = r.game; msgs.push(...r.msgs); }
     const id = ++toastId;
@@ -2322,7 +2387,7 @@ export const useGameStore = create<GameStoreState>()(
       setupQueue: sg.setupQueue ?? [],
       // Old saves stored a winner NAME in gameOver; only the side form is valid now.
       gameOver: sg.gameOver === 'p1' || sg.gameOver === 'p2' ? sg.gameOver : null,
-      pendingPeek: null, pendingPeekQueue: [], pendingDeadPick: null, pendingDeadPickQueue: [], pendingPoison: null, pendingArmor: null, pendingAttackChoice: null,
+      pendingPeek: null, pendingPeekQueue: [], pendingDeadPick: null, pendingDeadPickQueue: [], pendingPoison: null, pendingCoercion: null, pendingArmor: null, pendingAttackChoice: null,
     };
     return { game, playPhase: 'game', conn: { ...EMPTY_CONN, mode: 'solo', code: 'RESUMED' }, localPlayer: 'p1' as const, ...LOCAL_PROMPTS_CLEARED };
   }),
@@ -2800,6 +2865,76 @@ export const useGameStore = create<GameStoreState>()(
       }
     }
 
+    // Scavenger (on-enter, optional): return an Item card from your Dead Zone and
+    // attach it to this companion. Rides the existing Dead-Zone prompt with an attach
+    // destination (resolveDeadPick equips instead of returning to hand). No items in
+    // the Dead Zone → fizzles with a note rather than blocking.
+    let scavengerPick: PendingDeadPick | null = null;
+    if (isCompanion && card.keywords.includes('Scavenger')) {
+      const options = game[lp].dead
+        .map((c, idx) => ({ card: c, idx }))
+        .filter(o => o.card.type === 'Item');
+      if (options.length > 0) {
+        scavengerPick = { source: card.name, lp, options, postEffects: [], optional: true,
+          attachTo: { id: newEnt.id, name: card.name } };
+        enterMsg = `${card.name}: Scavenger — you may return an item from your Dead Zone.`;
+      } else {
+        enterMsg = `${card.name} enters — no item in the Dead Zone (Scavenger).`;
+      }
+    }
+
+    // Animate Magic X (on-enter): choose a Magical (Incantation) Construct you
+    // control — it becomes an X/X Manifest companion via the interpreter's existing
+    // 'animate' op. No Magical Construct → fizzles with a note.
+    let animatePick: PendingActionTarget | null = null;
+    const animateX = parseAnimateMagic(card.keywords);
+    if (animateX != null) {
+      const eligibleIds = (Object.values(game[lp].board) as (BoardEntity | undefined)[])
+        .filter((e): e is BoardEntity => !!e && e.kind === 'construct' && e.subtype === 'Incantation')
+        .map(e => e.id);
+      if (eligibleIds.length > 0) {
+        animatePick = { source: 'enter', sourceName: card.name, lp,
+          effects: [{ op: 'animate', atk: animateX, hp: animateX, target: 'magicalConstruct' }],
+          eligibleIds, sourceId: newEnt.id };
+        enterMsg = `${card.name}: Animate Magic — choose a Magical Construct to animate (${animateX}/${animateX}).`;
+      } else {
+        enterMsg = `${card.name} enters — no Magical Construct to animate.`;
+      }
+    }
+
+    // Coercion (on-enter, companions): the OPPONENT must discard a card or sacrifice
+    // a permanent — their choice, routed to their client (the acting player is held
+    // via reactiveHold). Their PC never qualifies as the sacrifice; with an empty
+    // hand and no other permanents the trigger fizzles.
+    let pendingCoercion: PendingCoercion | null = null;
+    if (isCompanion && card.keywords.includes('Coercion')) {
+      const victim: 'p1' | 'p2' = lp === 'p1' ? 'p2' : 'p1';
+      const canDiscard = game[victim].hand.length > 0;
+      const canSacrifice = Object.values(game[victim].board).some(e => e && e.kind !== 'pc');
+      if (canDiscard || canSacrifice) {
+        pendingCoercion = { source: card.name, victim };
+        enterMsg = `${card.name}: Coercion — opponent must discard a card or sacrifice a permanent.`;
+      } else {
+        enterMsg = `${card.name} enters — the opponent has nothing to coerce.`;
+      }
+    }
+
+    // Paranoia X (on-enter): the OPPONENT looks at the top X cards of their own deck
+    // and must send each to the top or bottom — the top-or-bottom decision is theirs
+    // (rules, Inactive Player Restrictions). Rides the existing deck-peek prompt with
+    // lp = deckSide = the victim and dests limited to top/bottom (never hand).
+    const paranoiaX = parseParanoia(card.keywords);
+    let paranoiaReq: PeekRequest | null = null;
+    if (paranoiaX != null) {
+      const victim: 'p1' | 'p2' = lp === 'p1' ? 'p2' : 'p1';
+      if (game[victim].deck.length > 0) {
+        paranoiaReq = { source: card.name, lp: victim, deckSide: victim, look: paranoiaX, dests: ['top', 'bottom'] };
+        enterMsg = `${card.name}: Paranoia — the opponent must resolve the top of their deck.`;
+      } else {
+        enterMsg = `${card.name} enters — the opponent has no deck to dread (Paranoia).`;
+      }
+    }
+
     const placedGame = recomputeStatics({
       ...game,
       [lp]: {
@@ -2814,7 +2949,7 @@ export const useGameStore = create<GameStoreState>()(
     // Structured on-enter effects (the non-keyword "When this enters, …" text).
     // Only when no keyword trigger already claimed the enter (avoids double pending).
     const onEnter = (card.effects ?? []).filter(c => c.trigger === 'onEnter').flatMap(c => c.effects);
-    if (!pendingTrigger && !pendingKit && onEnter.length > 0) {
+    if (!pendingTrigger && !pendingKit && !scavengerPick && !animatePick && !pendingCoercion && !paranoiaReq && onEnter.length > 0) {
       // Equip-from-hand (Veteran of the Ashgrove): pick an item from hand for this character.
       if (onEnter.some(e => e.op === 'equipFromHand')) {
         const items = placedGame[lp].hand.filter(c => c.type === 'Item');
@@ -2877,13 +3012,34 @@ export const useGameStore = create<GameStoreState>()(
       }
     }
 
+    // Scavenger's prompt joins the game-level Dead-Zone queue (behind any active pick).
+    const withScavenger: GameState = !scavengerPick ? placedGame
+      : placedGame.pendingDeadPick
+        ? { ...placedGame, pendingDeadPickQueue: [...placedGame.pendingDeadPickQueue, scavengerPick] }
+        : { ...placedGame, pendingDeadPick: scavengerPick };
+    const withCoercion: GameState = pendingCoercion ? { ...withScavenger, pendingCoercion } : withScavenger;
+    // Paranoia's peek joins the game-level queue (behind any active peek, re-sliced
+    // when it activates via nextPeek).
+    let withParanoia: GameState = withCoercion;
+    if (paranoiaReq) {
+      if (withCoercion.pendingPeek) {
+        withParanoia = { ...withCoercion, pendingPeekQueue: [...withCoercion.pendingPeekQueue, paranoiaReq] };
+      } else {
+        const { peek, rest } = nextPeek(withCoercion, [paranoiaReq]);
+        withParanoia = { ...withCoercion, pendingPeek: peek, pendingPeekQueue: [...withCoercion.pendingPeekQueue, ...rest] };
+      }
+    }
+
     return {
       pendingPlay: null,
       pendingTrigger,
       pendingKit,
+      // Only claim the pendingActionTarget slot when Animate Magic armed one — a null
+      // here must not clobber an unrelated pending target.
+      ...(animatePick ? { pendingActionTarget: animatePick } : {}),
       oathContext: newOathCtx,
       modalQueue: newModals,
-      game: placedGame,
+      game: withParanoia,
       toasts: [...s.toasts, { id, msg: enterMsg }],
     };
   }),
@@ -2923,7 +3079,7 @@ export const useGameStore = create<GameStoreState>()(
       const loc = findEntityAnywhere(g, o.id);
       if (!loc || loc.player !== player) continue;
       if (o.cleansed) {
-        g = updateEntity(g, o.id, { poison: 0, statuses: loc.ent.statuses.filter(st => st !== 'Poisoned'), exhausted: false, tapped: 'none' as TapState });
+        g = updateEntity(g, o.id, { poison: 0, statuses: loc.ent.statuses.filter(st => st !== POISONED_STATUS), exhausted: false, tapped: 'none' as TapState });
       } else {
         dmg += loc.ent.poison ?? 0; // failed check: the unit keeps its counters and stays exhausted
       }
@@ -2934,6 +3090,43 @@ export const useGameStore = create<GameStoreState>()(
       if (pcLoc) g = setPcHp(g, player, pcLoc.ent.id, Math.max(0, pcLoc.ent.hp - dmg));
     }
     return { game: { ...g, pendingPoison: null } };
+  }),
+
+  // ── Coercion resolution (the VICTIM's choice: discard or sacrifice) ────────
+  resolveCoercionDiscard: (cardId) => set(s => {
+    const co = s.game.pendingCoercion;
+    if (!co) return s;
+    if (s.conn.mode !== 'solo' && co.victim !== s.localPlayer) return s; // victim-only
+    const ps = s.game[co.victim];
+    const card = ps.hand.find(c => c.id === cardId);
+    if (!card) return s;
+    const g: GameState = { ...s.game, pendingCoercion: null,
+      [co.victim]: { ...ps, hand: ps.hand.filter(c => c.id !== cardId), dead: [...ps.dead, card] } };
+    const id = ++toastId;
+    setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 4000);
+    return { game: g, toasts: [...s.toasts, { id, msg: `${co.source}: ${card.name} discarded (Coercion)` }] };
+  }),
+
+  resolveCoercionSacrifice: (entityId) => set(s => {
+    const co = s.game.pendingCoercion;
+    if (!co) return s;
+    if (s.conn.mode !== 'solo' && co.victim !== s.localPlayer) return s; // victim-only
+    const loc = findEntityAnywhere(s.game, entityId);
+    // Only the victim's own permanents qualify, and never the PC (a forced game
+    // loss is not a cost).
+    if (!loc || loc.player !== co.victim || loc.ent.kind === 'pc') return s;
+    const deadSink: PendingDeadPick[] = [];
+    const armorSink: ArmorChoiceData[] = [];
+    let g = destroyEntity({ ...s.game, pendingCoercion: null }, entityId);
+    const msgs = [`${loc.ent.name} is sacrificed (Coercion)`];
+    if (hasRemovalTrigger(loc.ent)) {
+      const rt = resolveRemovalTriggers(g, loc.ent, loc.player, deadSink, armorSink);
+      g = rt.game; msgs.push(...rt.msgs);
+    }
+    const id = ++toastId;
+    setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 4000);
+    return { game: recomputeStatics(armPrompts(g, deadSink, armorSink)),
+      toasts: [...s.toasts, { id, msg: `${co.source}: ${msgs.join(' | ')}` }] };
   }),
 
   // ── HP nudge ──────────────────────────────────────────────────────────────
@@ -2998,9 +3191,15 @@ export const useGameStore = create<GameStoreState>()(
           readyNotices.push(`${whose} ${ent.name} flees — Level ${ent.level} exceeds Willpower ${effWP}.`);
           continue;
         }
-        // Ready the entity (drop unused Hit & Run marker + once-per-turn ability markers)
+        // Ready the entity (drop unused Hit & Run marker + once-per-turn ability markers).
+        // A Poisoned character does NOT ready here — the start-of-turn Poison check
+        // (PoisonModal → resolvePoison) decides whether it cleanses+readies or stays
+        // exhausted, so its tap/exhaust state is left for that check to resolve.
+        const poisoned = (ent.poison ?? 0) > 0;
         newBoard[slot as SlotId] = {
-          ...ent, tapped: 'none' as TapState, exhausted: false, fresh: false, acts: freshActs(),
+          ...ent, fresh: false, acts: freshActs(),
+          tapped: poisoned ? ent.tapped : 'none' as TapState,
+          exhausted: poisoned ? ent.exhausted : false,
           statuses: ent.statuses.filter(st => st !== HIT_RUN_STATUS && !st.startsWith('ability-used:')),
         };
       }

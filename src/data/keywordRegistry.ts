@@ -25,23 +25,26 @@ export const KEYWORDS: Record<string, KeywordSpec> = {
   Guardian:  { event: 'attack',  done: true,  note: 'targeting rules' },
   Reckless:  { event: 'attack',  done: true,  note: 'resolveAttack self-damage' },
   'Hit & Run': { event: 'attack', done: true, note: 'grantHitRun + resolveMove gate' },
+  // Printed as "X's Bane" (Goblin's Bane…) — double damage vs companions of the named subtype/class.
+  Bane:      { event: 'attack',  done: true,  note: 'parseBanes -> per-hit doubling in applyCombatHit' },
   // Items / defence
   'Armor':   { event: 'damaged', done: true,  note: 'applyDamageToEntity counters' },
   Acrobatics:{ event: 'damaged', done: true,  note: 'isImmuneToSplash' },
+  Poison:    { event: 'damaged', done: true,  note: 'poisonHitPatch in combat; ready-phase check via PoisonModal/resolvePoison' },
   // Static auras
   Dismay:    { event: 'static',  done: true,  note: 'recomputeStatics' },
   // Set-specific
   Oathsworn: { event: 'enter',   done: true,  note: 'oathsworn modal' },
 
-  // ── Not yet implemented (need targeting UI or structured card data) ──────────
+  // ── On-enter triggers (targeted / prompted; resolved from placeCard) ─────────
   Reinforce:      { event: 'enter',   done: true,  note: 'pendingTrigger -> resolveTrigger (add anchors)' },
   Dismantle:      { event: 'enter',   done: true,  note: 'pendingTrigger -> resolveTrigger (remove anchors / sacrifice)' },
   'Kit-Master':   { event: 'enter',   done: true,  note: 'pendingKit two-step (source item -> dest char)' },
-  Scavenger:      { event: 'enter',   done: false, note: 'return item from Dead Zone' },
-  Coercion:       { event: 'enter',   done: false, note: 'opponent discards or sacrifices' },
-  'Animate Magic':{ event: 'enter',   done: false, note: 'construct -> companion' },
-  Poison:         { event: 'damaged', done: false, note: 'exhaust + poison counter' },
+  Scavenger:      { event: 'enter',   done: true,  note: 'placeCard -> Dead-Zone pick with attachTo -> equipOnto' },
+  Coercion:       { event: 'enter',   done: true,  note: 'pendingCoercion -> victim modal (discard or sacrifice)' },
+  'Animate Magic':{ event: 'enter',   done: true,  note: "parseAnimateMagic -> pendingActionTarget 'enter' -> animate op" },
+  Paranoia:       { event: 'enter',   done: true,  note: "parseParanoia -> victim's own deck-peek (top/bottom only)" },
+
+  // ── Not yet implemented ───────────────────────────────────────────────────────
   Untamed:        { event: 'static',  done: false, note: 'per-card text bonus (needs card data)' },
-  Bane:           { event: 'attack',  done: false, note: 'double damage vs subtype/class' },
-  Paranoia:       { event: 'enter',   done: false, note: 'peek/reorder opponent deck' },
 };

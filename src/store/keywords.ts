@@ -259,6 +259,77 @@ export function parseEnterTrigger(keywords: string[]): EnterTrigger | null {
   return null;
 }
 
+/**
+ * Bane — printed as "X's Bane" (Goblin's Bane, Undead's Bane…): this character
+ * deals double damage to Companions of the named subtype or class. Parsed from
+ * the keyword string, like Reinforce/Dismantle, so card data stays declarative.
+ * Returns every named prey (a character could carry more than one Bane).
+ */
+export function parseBanes(keywords: string[]): string[] {
+  const out: string[] = [];
+  for (const kw of keywords) {
+    const m = /^(.+)'s Bane$/.exec(kw);
+    if (m) out.push(m[1]);
+  }
+  return out;
+}
+
+/** Whether an attack carrying these Bane subjects doubles against this defender.
+ *  Companions only (per the Master List); matches subtype OR class. */
+export function isBaneTarget(banes: string[], defender: BoardEntity): boolean {
+  if (defender.kind !== 'companion') return false;
+  return banes.some(b => b === defender.subtype || b === defender.cls);
+}
+
+/**
+ * Animate Magic — printed "Animate Magic X": when this enters, a Magical
+ * (Incantation) Construct you control becomes an X/X Manifest companion.
+ * Parsed from the keyword string like Reinforce/Dismantle; returns X, or null
+ * when the keyword is absent (or printed without its parameter).
+ */
+export function parseAnimateMagic(keywords: string[]): number | null {
+  for (const kw of keywords) {
+    const m = /^Animate Magic\s+(\d+)$/.exec(kw);
+    if (m) return parseInt(m[1], 10);
+  }
+  return null;
+}
+
+/**
+ * Paranoia — printed "Paranoia" or "Paranoia X": when this enters, the OPPONENT
+ * looks at the top X (default 1) cards of their own deck and must send each to
+ * the top or bottom. The rules give the top-or-bottom decision to the inactive
+ * player ("Inactive Player Restrictions"), so the prompt is theirs — the dread
+ * of knowing what's coming is the effect. Returns X, or null when absent.
+ */
+export function parseParanoia(keywords: string[]): number | null {
+  for (const kw of keywords) {
+    const m = /^Paranoia(?:\s+(\d+))?$/.exec(kw);
+    if (m) return m[1] ? parseInt(m[1], 10) : 1;
+  }
+  return null;
+}
+
+/** Status marking a character that holds Poison counters (`poison` > 0). */
+export const POISONED_STATUS = 'Poisoned';
+
+/**
+ * Poison — a character damaged by a Poison attacker is exhausted and gains a
+ * Poison counter (one per damaging hit; they stack). It does NOT ready at its
+ * controller's Ready phase: the start-of-turn Poison check (PoisonModal →
+ * resolvePoison) either cleanses it — counters removed, readied — or keeps it
+ * exhausted and damages the controller 1 per counter. This is the entity patch
+ * for one damaging hit.
+ */
+export function poisonHitPatch(ent: BoardEntity): Partial<BoardEntity> {
+  return {
+    poison: (ent.poison ?? 0) + 1,
+    statuses: ent.statuses.includes(POISONED_STATUS) ? ent.statuses : [...ent.statuses, POISONED_STATUS],
+    tapped: 'major',
+    exhausted: true,
+  };
+}
+
 /** Characters (not constructs) can hold items and be Kit-Master endpoints. */
 export function isCharacter(ent: BoardEntity): boolean {
   return ent.kind === 'companion' || ent.kind === 'pc';

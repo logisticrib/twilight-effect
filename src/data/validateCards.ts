@@ -71,8 +71,9 @@ const ITEM_KINDS = ['Weapon', 'Armor', 'Trinket'] as const;
 const has = (list: readonly string[], v: unknown): boolean => typeof v === 'string' && list.includes(v);
 const isInt = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v);
 
-/** Keyword base word — "Armor 2" / "Reinforce 3" carry a printed parameter. */
-const keywordBase = (kw: string) => kw.replace(/ \d+$/, '');
+/** Keyword base word — "Armor 2" / "Reinforce 3" carry a printed parameter;
+ *  "Goblin's Bane" names its prey and resolves to the Bane contract entry. */
+const keywordBase = (kw: string) => /'s Bane$/.test(kw) ? 'Bane' : kw.replace(/ \d+$/, '');
 
 function validAmount(a: unknown): boolean {
   if (typeof a === 'number') return Number.isFinite(a);
