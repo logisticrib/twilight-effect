@@ -171,6 +171,24 @@ describe('item 4: poison routes through setPcHp (resolvePoison)', () => {
     expect(g.p1.board.f1?.poison, 'counters untouched').toBe(2);
     expect(g.pendingPoison, 'prompt still cleared').toBeNull();
   });
+
+  it('ready phase: a Poisoned unit does NOT auto-ready — the check decides (endTurn arms it)', () => {
+    freshGame();
+    // Non-catalog names: no card effects fire at start of turn. Level 1 vs willpower 3 — no fleeing.
+    const poisoned = mkComp('rp-a', 'Venom Victim', { poison: 2, statuses: ['Poisoned'], exhausted: true, tapped: 'major' });
+    const normal = mkComp('rp-b', 'Tired Grunt', { exhausted: true, tapped: 'major' });
+    gs.setState(s => ({ game: { ...s.game,
+      p2: { ...s.game.p2, board: { f1: poisoned, f2: normal } },
+    } }));
+    gs.getState().endTurn(); // p1 ends → p2's ready phase
+    const g = gs.getState().game;
+    expect(g.activePlayer).toBe('p2');
+    expect(g.p2.board.f2?.exhausted, 'a plain unit readies as usual').toBe(false);
+    expect(g.p2.board.f1?.exhausted, 'the Poisoned unit stays exhausted').toBe(true);
+    expect(g.p2.board.f1?.tapped, 'still tapped').toBe('major');
+    expect(g.p2.board.f1?.poison, 'counters intact for the check').toBe(2);
+    expect(g.pendingPoison, 'check armed for the player whose turn begins').toBe('p2');
+  });
 });
 
 describe('item 5: slot capacity', () => {

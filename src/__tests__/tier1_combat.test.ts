@@ -215,3 +215,83 @@ describe("Bane: \"X's Bane\" deals double damage to companions of the named subt
     expect(g.p2.board.f2?.hp, 'splash Goblin takes the doubled 6').toBe(2);
   });
 });
+
+describe('Poison: a character damaged by a Poison attacker is exhausted + countered', () => {
+  const arm = (att: ReturnType<typeof mkComp>, defs: Record<string, ReturnType<typeof mkComp>>) =>
+    gs.setState(s => ({ game: { ...s.game,
+      p1: { ...s.game.p1, board: { f1: att } },
+      p2: { ...s.game.p2, board: defs },
+    }, pending: { action: 'attack', charId: att.id } }));
+  const venom = () => mkComp('po-att', compCard.name, { atk: 2, keywords: ['Poison'] });
+
+  it('a damaging hit adds a counter, marks Poisoned, and exhausts the survivor', () => {
+    freshGame();
+    arm(venom(), { f1: mkComp('po-def', compCard2.name, { hp: 8 }) });
+    gs.getState().resolveAttack('po-def');
+    const def = gs.getState().game.p2.board.f1!;
+    expect(def.hp, 'the damage itself still lands').toBe(6);
+    expect(def.poison, 'one counter for the hit').toBe(1);
+    expect(def.statuses, 'marked for the ready-phase check').toContain('Poisoned');
+    expect(def.exhausted, 'exhausted by the poison').toBe(true);
+    expect(def.tapped, 'fully tapped').toBe('major');
+  });
+
+  it('counters stack per damaging hit; the Poisoned status is not duplicated', () => {
+    freshGame();
+    arm(venom(), { f1: mkComp('po-def', compCard2.name, { hp: 8, poison: 1, statuses: ['Poisoned'] }) });
+    gs.getState().resolveAttack('po-def');
+    const def = gs.getState().game.p2.board.f1!;
+    expect(def.poison, 'second hit stacks').toBe(2);
+    expect(def.statuses.filter(st => st === 'Poisoned'), 'status stays single').toHaveLength(1);
+  });
+
+  it('an armor-blocked hit deals no damage and does not poison', () => {
+    freshGame();
+    arm(venom(), { f1: mkComp('po-def', compCard2.name,
+      { hp: 8, loadout: { weapon: null, gear: [mkItem('po-ar', 'Guard Plate', { armor: 3 }), null] } }) });
+    gs.getState().resolveAttack('po-def');
+    const def = gs.getState().game.p2.board.f1!;
+    expect(def.hp, 'hit fully prevented').toBe(8);
+    expect(def.poison ?? 0, 'no counter on a blocked hit').toBe(0);
+    expect(def.exhausted, 'not exhausted').toBe(false);
+  });
+
+  it('constructs are not characters — damaged, never poisoned', () => {
+    freshGame();
+    arm(venom(), { f1: mkConstruct('po-con', 'Watch Post', 2) });
+    gs.getState().resolveAttack('po-con');
+    const con = gs.getState().game.p2.board.f1!;
+    expect(con.hp, 'construct takes the damage').toBe(1);
+    expect(con.poison ?? 0, 'no counter').toBe(0);
+  });
+
+  it('the PC can be poisoned', () => {
+    freshGame();
+    arm(venom(), { f1: mkPc('po-pc') });
+    gs.getState().resolveAttack('po-pc');
+    const pc = gs.getState().game.p2.board.f1!;
+    expect(pc.hp).toBe(18);
+    expect(pc.poison, 'PC holds the counter').toBe(1);
+    expect(pc.exhausted, 'PC exhausted').toBe(true);
+  });
+
+  it('a killed character is destroyed, not poisoned posthumously', () => {
+    freshGame();
+    arm(venom(), { f1: mkComp('po-dead', compCard2.name, { hp: 2 }) });
+    gs.getState().resolveAttack('po-dead');
+    const g = gs.getState().game;
+    expect(g.p2.board.f1, 'defender destroyed').toBeUndefined();
+    expect(g.p2.dead.length, 'buried in the Dead Zone').toBeGreaterThan(0);
+  });
+
+  it('Cleave: every damaged character on the line is poisoned', () => {
+    freshGame();
+    arm(mkComp('po-att', compCard.name, { atk: 2, keywords: ['Cleave', 'Poison'] }),
+        { f1: mkComp('po-d1', compCard2.name, { hp: 8 }),
+          f2: mkComp('po-d2', compCard.name,  { hp: 8 }) });
+    gs.getState().resolveAttack('po-d1');
+    const g = gs.getState().game;
+    expect(g.p2.board.f1?.poison, 'primary poisoned').toBe(1);
+    expect(g.p2.board.f2?.poison, 'splash target poisoned too').toBe(1);
+  });
+});

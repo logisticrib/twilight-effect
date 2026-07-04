@@ -30,6 +30,7 @@ export const KEYWORDS: Record<string, KeywordSpec> = {
   // Items / defence
   'Armor':   { event: 'damaged', done: true,  note: 'applyDamageToEntity counters' },
   Acrobatics:{ event: 'damaged', done: true,  note: 'isImmuneToSplash' },
+  Poison:    { event: 'damaged', done: true,  note: 'poisonHitPatch in combat; ready-phase check via PoisonModal/resolvePoison' },
   // Static auras
   Dismay:    { event: 'static',  done: true,  note: 'recomputeStatics' },
   // Set-specific
@@ -42,7 +43,6 @@ export const KEYWORDS: Record<string, KeywordSpec> = {
   Scavenger:      { event: 'enter',   done: false, note: 'return item from Dead Zone' },
   Coercion:       { event: 'enter',   done: false, note: 'opponent discards or sacrifices' },
   'Animate Magic':{ event: 'enter',   done: false, note: 'construct -> companion' },
-  Poison:         { event: 'damaged', done: false, note: 'exhaust + poison counter' },
   Untamed:        { event: 'static',  done: false, note: 'per-card text bonus (needs card data)' },
   Paranoia:       { event: 'enter',   done: false, note: 'peek/reorder opponent deck' },
 };

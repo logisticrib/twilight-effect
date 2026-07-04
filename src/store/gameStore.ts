@@ -6,7 +6,8 @@ import { CATALOG, SORCERER_WARRIOR_CARDS, WIZARD_BUILDER_CARDS } from '../data/c
 import { recomputeStatics, isImmuneToSplash, grantHitRun, HIT_RUN_STATUS,
          isPhysicalConstruct, parseEnterTrigger, type EnterTriggerKind,
          isCharacter, firstItemOf, allItemsOf, canHoldItem, effectiveAttack, effectiveKeywords, hasModifier, effectiveMaxHp, wardedLines,
-         canPlayActionCard, actionTypeOf, playWillpower, parseBanes, isBaneTarget } from './keywords';
+         canPlayActionCard, actionTypeOf, playWillpower, parseBanes, isBaneTarget,
+         poisonHitPatch, POISONED_STATUS } from './keywords';
 
 export type Phase = 'ready' | 'draw' | 'cz' | 'action' | 'end';
 export type PlayPhase = 'lobby' | 'setup' | 'game';
@@ -222,6 +223,7 @@ export interface AttackCtx {
   attackerPlayer: 'p1' | 'p2';
   dmg: number;                 // per-hit damage (same for primary + every Cleave hit)
   banes: string[];             // "X's Bane" subjects — hits double vs matching companions
+  poison: boolean;             // attacker has Poison — damaged characters are exhausted + countered
   hitQueue: string[];          // entity ids still to be damaged (head = current)
   phase: 'damage' | 'after';
   reckless: boolean;
@@ -497,8 +499,17 @@ function applyCombatHit(game: GameState, ctx: AttackCtx, armorPieceId?: string):
     physical: before.kind === 'construct' && isPhysicalConstruct(before),
     destroyed: !after,
   });
+  let g = r.game;
+  // Poison (attacker keyword): a damaged CHARACTER that survives is exhausted and
+  // gains a counter — the ready-phase Poison check takes it from there. Armor-blocked
+  // hits deal no damage, so they don't poison; constructs aren't characters.
+  if (ctx.poison && dmg > 0 && tookDamage && after && isCharacter(after.ent)) {
+    const n = (after.ent.poison ?? 0) + 1;
+    g = updateEntity(g, entityId, poisonHitPatch(after.ent));
+    ctx.msgs.push(`${after.ent.name} is Poisoned — exhausted (${n} counter${n === 1 ? '' : 's'})`);
+  }
   ctx.hitQueue.shift();
-  return r.game;
+  return g;
 }
 
 /** Drive a (possibly resumed) attack to completion, or pause for an Armor choice.
@@ -610,9 +621,10 @@ function commitAttack(game: GameState, charId: string, targetEntityId: string, b
 
   const newGame = updateEntity(game, charId, { tapped: 'major', exhausted: true, acts: { ...attacker.acts, major: true } });
   const dmg = effectiveAttack(attacker, game) + attackDamageBonus(attacker, game, attLoc.player) + bonusDmg;
+  const attackerKws = effectiveKeywords(attacker, game);
   const hitQueue = [targetEntityId];
   const acroMsgs: string[] = [];
-  if (effectiveKeywords(attacker, game).includes('Cleave')) {
+  if (attackerKws.includes('Cleave')) {
     const tgtSlot = findSlot(game[oppPlayer].board, targetEntityId);
     if (tgtSlot) for (const ls of (isFront(tgtSlot as SlotId) ? FRONT_SLOTS : BACK_SLOTS)) {
       const lineEnt = newGame[oppPlayer].board[ls];
@@ -623,9 +635,10 @@ function commitAttack(game: GameState, charId: string, targetEntityId: string, b
   }
   const ctx: AttackCtx = {
     charId, attackerName: attacker.name, attackerPlayer: attLoc.player, dmg, hitQueue, phase: 'damage',
-    banes: parseBanes(effectiveKeywords(attacker, game)),
-    reckless: effectiveKeywords(attacker, game).includes('Reckless'),
-    hitRun: effectiveKeywords(attacker, game).includes('Hit & Run'),
+    banes: parseBanes(attackerKws),
+    poison: attackerKws.includes('Poison'),
+    reckless: attackerKws.includes('Reckless'),
+    hitRun: attackerKws.includes('Hit & Run'),
     msgs: acroMsgs, events: [], deadSink: [], armorSink: [],
   };
   const res = driveAttack(newGame, ctx);
@@ -2929,7 +2942,7 @@ export const useGameStore = create<GameStoreState>()(
       const loc = findEntityAnywhere(g, o.id);
       if (!loc || loc.player !== player) continue;
       if (o.cleansed) {
-        g = updateEntity(g, o.id, { poison: 0, statuses: loc.ent.statuses.filter(st => st !== 'Poisoned'), exhausted: false, tapped: 'none' as TapState });
+        g = updateEntity(g, o.id, { poison: 0, statuses: loc.ent.statuses.filter(st => st !== POISONED_STATUS), exhausted: false, tapped: 'none' as TapState });
       } else {
         dmg += loc.ent.poison ?? 0; // failed check: the unit keeps its counters and stays exhausted
       }
@@ -3004,9 +3017,15 @@ export const useGameStore = create<GameStoreState>()(
           readyNotices.push(`${whose} ${ent.name} flees — Level ${ent.level} exceeds Willpower ${effWP}.`);
           continue;
         }
-        // Ready the entity (drop unused Hit & Run marker + once-per-turn ability markers)
+        // Ready the entity (drop unused Hit & Run marker + once-per-turn ability markers).
+        // A Poisoned character does NOT ready here — the start-of-turn Poison check
+        // (PoisonModal → resolvePoison) decides whether it cleanses+readies or stays
+        // exhausted, so its tap/exhaust state is left for that check to resolve.
+        const poisoned = (ent.poison ?? 0) > 0;
         newBoard[slot as SlotId] = {
-          ...ent, tapped: 'none' as TapState, exhausted: false, fresh: false, acts: freshActs(),
+          ...ent, fresh: false, acts: freshActs(),
+          tapped: poisoned ? ent.tapped : 'none' as TapState,
+          exhausted: poisoned ? ent.exhausted : false,
           statuses: ent.statuses.filter(st => st !== HIT_RUN_STATUS && !st.startsWith('ability-used:')),
         };
       }

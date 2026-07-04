@@ -281,6 +281,26 @@ export function isBaneTarget(banes: string[], defender: BoardEntity): boolean {
   return banes.some(b => b === defender.subtype || b === defender.cls);
 }
 
+/** Status marking a character that holds Poison counters (`poison` > 0). */
+export const POISONED_STATUS = 'Poisoned';
+
+/**
+ * Poison — a character damaged by a Poison attacker is exhausted and gains a
+ * Poison counter (one per damaging hit; they stack). It does NOT ready at its
+ * controller's Ready phase: the start-of-turn Poison check (PoisonModal →
+ * resolvePoison) either cleanses it — counters removed, readied — or keeps it
+ * exhausted and damages the controller 1 per counter. This is the entity patch
+ * for one damaging hit.
+ */
+export function poisonHitPatch(ent: BoardEntity): Partial<BoardEntity> {
+  return {
+    poison: (ent.poison ?? 0) + 1,
+    statuses: ent.statuses.includes(POISONED_STATUS) ? ent.statuses : [...ent.statuses, POISONED_STATUS],
+    tapped: 'major',
+    exhausted: true,
+  };
+}
+
 /** Characters (not constructs) can hold items and be Kit-Master endpoints. */
 export function isCharacter(ent: BoardEntity): boolean {
   return ent.kind === 'companion' || ent.kind === 'pc';
