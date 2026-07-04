@@ -58,7 +58,10 @@ export type Condition =
   | { kind: 'killedIsPhysicalConstruct' };
 
 // ─── Amounts (fixed or derived/random) ─────────────────────────────────────────
-export type Amount = number | { die: number } | { halfDie: number } | { halfDieUp: number } | { perControlled: 'companions' | 'constructs' };
+// perControlled 'constructs' was REMOVED 2026-07-03 (owner): no card authored it and the
+// engine only counted companions — the contract must not advertise unimplemented design
+// space. Re-add it together with engine support when a future card needs it.
+export type Amount = number | { die: number } | { halfDie: number } | { halfDieUp: number } | { perControlled: 'companions' };
 
 // ─── Activated-ability costs ───────────────────────────────────────────────────
 export type Cost =

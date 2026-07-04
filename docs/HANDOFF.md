@@ -87,9 +87,12 @@ Two resolved owner rulings from `tasks/test_seed_plan.md` applied, then Phase 0 
   moved to dependency-free `src/data/keywordRegistry.ts` (store/keywords re-exports), no
   transitive catalog import; minted-name collisions rejected, duplicate mechanics allowed;
   keyword contract injectable. HARD BANS in the gate: +HP effects and Initiative references.
-  Suite: 11 files / 123 tests. ⚠ OPEN QUESTIONS for owner: (1) should EXILE also be a gate
-  ban (only Initiative was ruled)? (2) `perControlled` ignores its 'constructs' spec value —
-  intended?
+  Suite: 11 files / 123 tests. Both open questions RULED same day: (1) **Exile joined
+  Initiative in the gate** — both bans deliberately BROAD (name + flavor + keywords + text
+  + effects; rules-text-only scoping is the documented future loosening; shipped 100 stay
+  clean). (2) **perControlled 'constructs' REMOVED from schema + validator** (no card
+  authored perControlled at all → removal path; re-add with engine support when needed;
+  'companions' stays, engine-implemented + tested).
 - NOT started (next session candidates): audit batch 4 guest-deck-in-READY (H3), Phase 2
   replay recorder (the seed plan's last item), quality refactors (§d), live two-peer playtest.
 

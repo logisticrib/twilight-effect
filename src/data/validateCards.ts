@@ -80,7 +80,8 @@ function validAmount(a: unknown): boolean {
   const keys = Object.keys(a);
   if (keys.length !== 1 || !has(AMOUNT_KEYS, keys[0])) return false;
   const v = (a as Record<string, unknown>)[keys[0]];
-  if (keys[0] === 'perControlled') return v === 'companions' || v === 'constructs';
+  // 'constructs' removed from the contract 2026-07-03 — see the Amount type note.
+  if (keys[0] === 'perControlled') return v === 'companions';
   return isInt(v) && (v as number) >= 1;
 }
 
@@ -223,10 +224,15 @@ export function validateCards(
     else if (names.has(card.name)) p('duplicate name within this set (name-keyed lookups would silently pick the wrong card)');
     else names.add(card.name);
 
-    // HARD BAN: Initiative was stripped from the game (undefined in the rules) — no
-    // card may reference it in keywords, text, or effects. Absolute, no exceptions.
-    const hay = [(card.keywords ?? []).join(' '), card.text ?? '', JSON.stringify(card.effects ?? [])].join(' ');
+    // HARD BANS: Initiative (undefined in the rules) and Exile (forbidden — the Dead
+    // Zone is the only discard pile, Card_Design_Parameters §7) were stripped from the
+    // game; no card may reference either. DELIBERATELY BROAD: the sweep covers name,
+    // flavor, keywords, rules text, and effects JSON. If a thematic card name ever
+    // legitimately needs one of these words, scoping this down to rules-text-only is
+    // the intended loosening — until then, broad catches more mistakes.
+    const hay = [card.name ?? '', card.flavor ?? '', (card.keywords ?? []).join(' '), card.text ?? '', JSON.stringify(card.effects ?? [])].join(' ');
     if (/initiative/i.test(hay)) p('references Initiative — a banned mechanic');
+    if (/exile/i.test(hay)) p('references Exile — a banned mechanic (the Dead Zone is the only discard pile)');
 
     if (!has(CARD_TYPES, card.type)) p(`unknown card type "${card.type}"`);
     if (!isInt(card.level) || card.level < 1 || card.level > 5) p(`level out of range: ${card.level}`);

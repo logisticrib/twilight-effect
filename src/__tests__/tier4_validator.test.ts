@@ -82,11 +82,14 @@ describe('the validator catches each class of authoring mistake (mint-gate behav
       effects: [{ op: 'buff', stat: 'hp', amount: 2, scope: 'ownParty', duration: 'endOfTurn' }] }] }), '+HP temp buff');
   });
 
-  it('HARD BAN: any Initiative reference (keywords, text, or effects) is rejected', () => {
+  it('HARD BAN: any Initiative or Exile reference is rejected — broad sweep incl. name and flavor', () => {
     expectCaught(clone({ text: 'INITIATIVE. This character strikes first in combat.' }), 'Initiative in rules text');
     expectCaught(clone({ keywords: ['Initiative'] }), 'Initiative as a keyword');
     expectCaught(clone({ effects: [{ trigger: 'onPlay',
       effects: [{ op: 'buff', grant: ['Initiative'], scope: 'self', duration: 'endOfTurn' }] }] }), 'Initiative as a granted keyword');
+    expectCaught(clone({ text: 'Exile the top card of your deck.' }), 'Exile in rules text');
+    expectCaught(clone({ flavor: 'He returned from his long exile changed.' }), 'Exile in flavor (deliberately broad)');
+    expectCaught(clone({ name: 'Clone Under Test, the Exiled' }), 'Exile in the card name (deliberately broad)');
   });
 });
 
