@@ -2,6 +2,8 @@ import { useEffect, useRef, useCallback } from 'react';
 import { MultiplayerSession, type NetworkMessage } from './multiplayer';
 import { useGameStore, reactiveHold } from '../store/gameStore';
 import { useSettingsStore } from '../store/settingsStore';
+import { CATALOG } from '../data/catalog';
+import type { Card } from '../types/card';
 
 /**
  * Hook that manages the PeerJS session lifecycle and wires it
@@ -22,6 +24,11 @@ export function useMultiplayer() {
   const armedHoldRef = useRef<string | null>(null);
   // Unsubscribe handle for the game-state broadcast subscription.
   const unsubGameRef = useRef<(() => void) | null>(null);
+  // Host-only: our own deck, retained so we can assemble the authoritative game from BOTH
+  // real decks once the guest announces theirs (READY handshake). `isHostRef` gates the
+  // assemble/refuse logic in onOpponentJoined (the guest also receives the host's READY).
+  const hostDeckRef = useRef<Card[]>([]);
+  const isHostRef = useRef(false);
   // Actions only, selected individually (stable references) — a whole-store
   // subscription here would re-render Play(), the root of every play view, on
   // every store change (including each hover).
@@ -30,6 +37,7 @@ export function useMultiplayer() {
   const setConn          = useGameStore(s => s.setConn);
   const backToLobby      = useGameStore(s => s.backToLobby);
   const startMultiplayer = useGameStore(s => s.startMultiplayer);
+  const assembleMpGame   = useGameStore(s => s.assembleMpGame);
   const pushToast        = useGameStore(s => s.pushToast);
   const { playerName, avatarLetter } = useSettingsStore();
 
@@ -82,6 +90,26 @@ export function useMultiplayer() {
           }
         },
         onOpponentJoined: (peer) => {
+          // HOST: assemble the authoritative game from BOTH real decks now that we know the
+          // guest's. Resolve their announced ids against the shared CATALOG. The guest also
+          // receives the host's (deckless) READY here, but never assembles (isHostRef false).
+          if (isHostRef.current) {
+            const ids = peer.deck ?? [];
+            const guestCards = ids
+              .map(id => CATALOG.find(c => c.id === id))
+              .filter((c): c is Card => !!c);
+            // Refuse rather than silently substitute a deck. Reject on: no/empty deck, any id
+            // that doesn't resolve, or DUPLICATE ids — unique card ids are an engine invariant
+            // (id-keyed dead picks, equips, targeting) and the wire is a second entry path.
+            const dupes = new Set(ids).size !== ids.length;
+            if (ids.length === 0 || guestCards.length !== ids.length || dupes) {
+              sessionRef.current?.rejectOpponent(
+                `${peer.name}'s deck couldn't be read — they need the same app version and a valid deck. Still hosting; ask them to rejoin.`);
+              pushToast(`Rejected ${peer.name}: invalid deck`);
+              return; // seat stays empty — keep hosting on the same code
+            }
+            assembleMpGame(hostDeckRef.current, guestCards); // broadcasts via the game subscription
+          }
           setConn({ opponentName: peer.name, opponentAvatar: peer.avatar, opponentStatus: 'ready' });
           pushToast(`${peer.name} joined the table`);
         },
@@ -122,37 +150,36 @@ export function useMultiplayer() {
       });
     }
     return sessionRef.current!;
-  }, [clearBroadcast, setConn, pushToast]);
+  }, [clearBroadcast, setConn, pushToast, assembleMpGame]);
 
-  /** HOST: generate a code and wait. Returns the 6-char code. */
-  const host = useCallback(async (p1Cards: import('../types/card').Card[], p2Cards: import('../types/card').Card[]): Promise<string> => {
+  /** HOST: generate a code and wait. Returns the 6-char code. `oppCards` is a fallback used
+   *  ONLY for the provisional (Matching-screen) game — a hosted match always replaces p2 with
+   *  the guest's real deck (or refuses), so `oppCards` never reaches live play. */
+  const host = useCallback(async (myCards: Card[], oppCards: Card[]): Promise<string> => {
     const session = getSession();
+    isHostRef.current = true;
+    hostDeckRef.current = myCards; // retained to assemble against the guest's deck later
     const code = await session.host(playerName, avatarLetter);
     syncedRef.current = true; // the host's game IS the authoritative one
     armedHoldRef.current = null;
     startStateSync(session);
-    startMultiplayer('host', code, 'p1', p1Cards, p2Cards);
-    // When opponent connects and is ready, send them the current game state
-    const unsubOpponent = useGameStore.subscribe(
-      s => s.conn.opponentStatus,
-      (status) => {
-        if (status === 'ready') {
-          session.sendStateSync(useGameStore.getState().game);
-          unsubOpponent();
-        }
-      }
-    );
+    startMultiplayer('host', code, 'p1', myCards, oppCards);
+    // NOTE: the initial handoff snapshot is sent by assembleMpGame (in onOpponentJoined) via
+    // the game subscription — no separate opponentStatus subscription needed (it would double-send).
     return code;
   }, [getSession, playerName, avatarLetter, startStateSync, startMultiplayer]);
 
-  /** GUEST: connect using the host's code. */
-  const join = useCallback(async (code: string, p1Cards: import('../types/card').Card[], p2Cards: import('../types/card').Card[]): Promise<void> => {
+  /** GUEST: connect using the host's code, announcing our own deck (as card ids) so the host
+   *  assembles the authoritative game from it. The provisional local game is overwritten by
+   *  the host's first STATE_SYNC (syncedRef stays false until then). */
+  const join = useCallback(async (code: string, myCards: Card[]): Promise<void> => {
     const session = getSession();
+    isHostRef.current = false;
     syncedRef.current = false; // silent until the host's first snapshot arrives
     armedHoldRef.current = null;
-    await session.join(code, playerName, avatarLetter);
+    await session.join(code, playerName, avatarLetter, myCards.map(c => c.id));
     startStateSync(session);
-    startMultiplayer('join', code, 'p2', p1Cards, p2Cards);
+    startMultiplayer('join', code, 'p2', myCards, myCards);
   }, [getSession, playerName, avatarLetter, startStateSync, startMultiplayer]);
 
   /** Tear down the connection and go back to lobby. */
@@ -163,6 +190,7 @@ export function useMultiplayer() {
     sessionRef.current = null;
     syncedRef.current = true;
     armedHoldRef.current = null;
+    isHostRef.current = false;
     clearBroadcast();
     backToLobby();
   }, [clearBroadcast, backToLobby]);

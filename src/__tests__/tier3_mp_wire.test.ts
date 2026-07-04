@@ -10,27 +10,32 @@ vi.mock('../lib/multiplayer', () => {
     static instances: MultiplayerSession[] = [];
     callbacks: unknown;
     sent: unknown[] = [];
+    rejected: unknown[] = [];
+    isHost = false;
     constructor(cb: unknown) { this.callbacks = cb; MultiplayerSession.instances.push(this); }
     sendStateSync(state: unknown) { this.sent.push(state); }
+    rejectOpponent(reason: unknown) { this.rejected.push(reason); }
     send() {}
-    async host() { return 'TEST42'; }
+    async host() { this.isHost = true; return 'TEST42'; }
     async join() {}
     destroy() {}
   }
-  return { MultiplayerSession, PROTOCOL_VERSION: 1 };
+  return { MultiplayerSession, PROTOCOL_VERSION: 2 };
 });
 
 import { useMultiplayer } from '../lib/useMultiplayer';
 import { MultiplayerSession } from '../lib/multiplayer';
 import { gs, deckCards } from './helpers';
+import { CATALOG } from '../data/catalog';
 import type { GameState } from '../store/gameStore';
 
 interface FakeSession {
   callbacks: {
-    onOpponentJoined: (p: { name: string; avatar: string }) => void;
+    onOpponentJoined: (p: { name: string; avatar: string; deck?: string[] }) => void;
     onMessage: (m: unknown) => void;
   };
   sent: GameState[];
+  rejected: unknown[];
 }
 const instances = (MultiplayerSession as unknown as { instances: FakeSession[] }).instances;
 const lastSession = () => instances[instances.length - 1];
@@ -41,10 +46,11 @@ async function hostGame() {
   const hook = renderHook(() => useMultiplayer());
   await act(async () => { await hook.result.current.host(deckCards, deckCards); });
   const session = lastSession();
-  // Opponent becomes ready → the one-shot initial handoff snapshot. (host() also
-  // broadcast once when startMultiplayer reset the game — harmless in production,
-  // no connection is open yet, but the recording fake counts it.)
-  act(() => { session.callbacks.onOpponentJoined({ name: 'Bob', avatar: 'B' }); });
+  // A guest READY carrying a VALID deck (else the host would refuse) → the host assembles
+  // the authoritative game, which broadcasts via the game subscription = the initial handoff.
+  // (host() also broadcast once when startMultiplayer seeded the provisional game — harmless
+  // in production, no connection is open yet, but the recording fake counts it → total 2.)
+  act(() => { session.callbacks.onOpponentJoined({ name: 'Bob', avatar: 'B', deck: deckCards.map(c => c.id) }); });
   expect(session.sent.length, 'initial handoff snapshot on opponent ready').toBe(2);
   return session;
 }
@@ -103,7 +109,7 @@ describe('item 1: reactiveHold suppresses the WIRE while an opponent-owned promp
 describe('item 3: the guest is silent until the host’s first STATE_SYNC', () => {
   it('applies nothing outward and broadcasts nothing pre-sync; syncs then flows', async () => {
     const hook = renderHook(() => useMultiplayer());
-    await act(async () => { await hook.result.current.join('CODE99', deckCards, deckCards); });
+    await act(async () => { await hook.result.current.join('CODE99', deckCards); });
     const session = lastSession();
 
     // Pre-sync window: local mutations (clicks, Escape fallout) must NOT broadcast the
@@ -143,5 +149,51 @@ describe('item 5: STATE_SYNC shape check', () => {
     // A well-formed snapshot still applies afterwards.
     act(() => { session.callbacks.onMessage({ type: 'STATE_SYNC', state: { ...before, turn: 77 }, seq: 12 }); });
     expect(gs.getState().game.turn).toBe(77);
+  });
+});
+
+// Audit #11 (tasks/audit_2026-07-02.md): the guest's built deck used to be silently
+// discarded — the host assembled p2 from its own "Opponent deck (sandbox)" dropdown. Fix:
+// the guest sends its deck ids in READY and the HOST assembles the authoritative game from
+// them (or REFUSES, per the owner's 2026-07-04 ruling — never a silent substitute).
+describe('audit #11: host assembles the game from the guest’s deck (READY)', () => {
+  const hostDeck = CATALOG.slice(0, 50);
+  const guestDeck = CATALOG.slice(50, 100);
+  const hostIds = new Set(hostDeck.map(c => c.id));
+  const guestIds = new Set(guestDeck.map(c => c.id));
+
+  it('rebuilds the authoritative game with the guest deck as p2, host deck as p1', async () => {
+    const hook = renderHook(() => useMultiplayer());
+    await act(async () => { await hook.result.current.host(hostDeck, hostDeck); });
+    const session = lastSession();
+    // Guest announces a DISTINCT deck (disjoint from the host's) via READY.
+    act(() => { session.callbacks.onOpponentJoined({ name: 'Bob', avatar: 'B', deck: guestDeck.map(c => c.id) }); });
+
+    const g = session.sent.at(-1)!; // the assembled handoff snapshot
+    const p2Ids = [...g.p2.deck, ...g.p2.hand].map(c => c.id);
+    const p1Ids = [...g.p1.deck, ...g.p1.hand].map(c => c.id);
+    expect(p2Ids.length, 'p2 was dealt cards').toBeGreaterThan(0);
+    expect(p2Ids.every(id => guestIds.has(id)), 'p2 drawn entirely from the GUEST deck').toBe(true);
+    expect(p2Ids.some(id => hostIds.has(id)), 'no host/sandbox cards leaked into p2').toBe(false);
+    expect(p1Ids.every(id => hostIds.has(id)), 'p1 stays the host’s own deck').toBe(true);
+    expect(session.rejected.length, 'a valid deck is not rejected').toBe(0);
+  });
+
+  it('REFUSES a guest with no / unresolvable / duplicate deck and keeps hosting', async () => {
+    const bad: (string[] | undefined)[] = [
+      undefined,                                        // old build / no deck field
+      ['no-such-card-id'],                              // ids that don't resolve
+      [...guestDeck.map(c => c.id), guestDeck[0].id],   // duplicate id (engine invariant)
+    ];
+    for (const deck of bad) {
+      const hook = renderHook(() => useMultiplayer());
+      await act(async () => { await hook.result.current.host(hostDeck, hostDeck); });
+      const session = lastSession();
+      const sentBefore = session.sent.length; // the provisional seed only
+      act(() => { session.callbacks.onOpponentJoined({ name: 'Mallory', avatar: 'M', deck }); });
+      expect(session.rejected.length, `rejected (deck=${JSON.stringify(deck)})`).toBe(1);
+      expect(session.sent.length, 'no handoff broadcast on refusal').toBe(sentBefore);
+      expect(gs.getState().conn.opponentStatus, 'seat not marked ready').not.toBe('ready');
+    }
   });
 });

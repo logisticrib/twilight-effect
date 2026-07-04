@@ -6,12 +6,15 @@ import type { GameState } from '../store/gameStore';
 // `game`, the receiver applies it. (The old per-action replay protocol was removed.)
 
 /** Bump whenever the message protocol or the synced GameState schema changes shape —
- *  mismatched builds refuse to connect instead of desyncing/crashing mid-game. */
-export const PROTOCOL_VERSION = 1;
+ *  mismatched builds refuse to connect instead of desyncing/crashing mid-game.
+ *  v2 (2026-07-04): READY now carries the guest's `deck` ids and the host assembles
+ *  the game from them. A v1 host silently ignores `deck` (reviving the sandbox-
+ *  substitution bug), so mixed builds must refuse — hence the bump. */
+export const PROTOCOL_VERSION = 2;
 
 export type NetworkMessage =
   | { type: 'STATE_SYNC'; state: GameState; seq?: number }
-  | { type: 'READY';      name: string; avatar: string; v?: number }
+  | { type: 'READY';      name: string; avatar: string; v?: number; deck?: string[] }
   | { type: 'PING';       ts: number; seq?: number }
   | { type: 'PONG';       ts: number; origTs: number; recvSeq?: number };
 
@@ -28,6 +31,9 @@ export interface SessionPeer {
   name: string;
   avatar: string;
   status: 'connecting' | 'ready';
+  /** The guest's deck as card ids (from the READY handshake). Undefined for the host's
+   *  own READY. The host resolves these against CATALOG to assemble the authoritative game. */
+  deck?: string[];
 }
 
 export interface MultiplayerCallbacks {
@@ -52,6 +58,9 @@ export class MultiplayerSession {
   private sentSeq = 0;
   private recvSeq = 0;
   private lastState: GameState | null = null;
+  // Our own deck as card ids, announced in the READY handshake. Only the GUEST sets this
+  // (the host assembles from it); the host leaves it empty so its READY carries no deck.
+  private myDeck: string[] = [];
   private callbacks: MultiplayerCallbacks;
   public code = '';
   public isHost = false;
@@ -95,10 +104,12 @@ export class MultiplayerSession {
     });
   }
 
-  /** GUEST: connect to a host using their code. */
-  async join(code: string, playerName: string, avatarLetter: string): Promise<void> {
+  /** GUEST: connect to a host using their code. `deckIds` (this player's deck as card ids)
+   *  is announced in the READY handshake so the host can assemble the authoritative game. */
+  async join(code: string, playerName: string, avatarLetter: string, deckIds: string[] = []): Promise<void> {
     this.isHost = false;
     this.code = code;
+    this.myDeck = deckIds;
     this.sentSeq = 0; this.recvSeq = 0; this.lastState = null; this.pendingPing = null;
     this.callbacks.onStatusChange('connecting');
 
@@ -144,10 +155,24 @@ export class MultiplayerSession {
     this.code = '';
   }
 
+  /** HOST: reject the connected guest (e.g. they sent no/invalid deck) but KEEP hosting on
+   *  the same code so a valid guest can retry. Mirrors the version-mismatch refusal path:
+   *  surface the reason locally + close the connection (the conn 'close' handler returns the
+   *  host to the waiting state); the peer stays alive. */
+  rejectOpponent(reason: string) {
+    this.callbacks.onError(reason);
+    if (this.pingInterval) { clearInterval(this.pingInterval); this.pingInterval = null; }
+    this.conn?.close();
+    this.conn = null;
+    this.sentSeq = 0; this.recvSeq = 0; this.lastState = null; this.pendingPing = null;
+  }
+
   private _wireConn(conn: DataConnection, name: string, avatar: string) {
     conn.on('open', () => {
-      // Announce ourselves (with the protocol version — mismatched builds refuse to play)
-      this.send({ type: 'READY', name, avatar, v: PROTOCOL_VERSION });
+      // Announce ourselves (with the protocol version — mismatched builds refuse to play).
+      // The guest also announces its deck ids so the host can assemble the authoritative game.
+      this.send({ type: 'READY', name, avatar, v: PROTOCOL_VERSION,
+        deck: this.myDeck.length ? this.myDeck : undefined });
       this.callbacks.onStatusChange('connected');
       // Start ping loop
       this.pingInterval = setInterval(() => {
@@ -184,7 +209,7 @@ export class MultiplayerSession {
             conn.close(); // refuse: playing across schema versions desyncs/crashes mid-game
             return;
           }
-          this.callbacks.onOpponentJoined({ name: msg.name, avatar: msg.avatar, status: 'ready' });
+          this.callbacks.onOpponentJoined({ name: msg.name, avatar: msg.avatar, status: 'ready', deck: msg.deck });
           return;
         }
         if (msg.type === 'STATE_SYNC') this.recvSeq = msg.seq ?? this.recvSeq + 1;

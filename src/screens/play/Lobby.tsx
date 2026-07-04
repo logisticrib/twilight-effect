@@ -9,8 +9,9 @@ import type { Card } from '../../types/card';
 
 interface LobbyProps {
   /** Host/join the PeerJS session — owned by Play() so it survives the view switch. */
-  host: (p1Cards: Card[], p2Cards: Card[]) => Promise<string>;
-  join: (code: string, p1Cards: Card[], p2Cards: Card[]) => Promise<void>;
+  host: (myCards: Card[], oppCards: Card[]) => Promise<string>;
+  /** Guest sends only its own deck; the host assembles both sides from the READY handshake. */
+  join: (code: string, myCards: Card[]) => Promise<void>;
 }
 
 // Resolve a deck's card ID map → ordered Card array
@@ -122,7 +123,8 @@ export function Lobby({ host, join }: LobbyProps) {
   const handleJoin = async () => {
     if (joining || joinCode.length !== 6 || !myCards.length) return;
     setJoining(true); setError('');
-    try { await join(joinCode, myCards, oppCards.length ? oppCards : myCards); }
+    // Only our own deck is sent — the host assembles both sides (opponent dropdown is ignored).
+    try { await join(joinCode, myCards); }
     catch (e) { setError(`Couldn't join: ${String(e)}`); setJoining(false); }
   };
 

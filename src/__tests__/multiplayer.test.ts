@@ -57,6 +57,7 @@ function makePipe() {
 // Test seam into the session's private wiring (host()/join() assign these in the real flow).
 type SessionInternals = {
   conn: DataConnection | null;
+  myDeck: string[];
   _wireConn(conn: DataConnection, name: string, avatar: string): void;
 };
 const internals = (s: MultiplayerSession) => s as unknown as SessionInternals;
@@ -134,8 +135,27 @@ describe('protocol: handshake, sync sequencing, self-heal', () => {
     expect(logA.errors.some(e => e.includes('Version mismatch')), `error surfaced (${logA.errors})`).toBe(true);
     expect(a.closed, 'connection closed').toBe(true);
     expect(logA.joined.length, 'opponent NOT marked joined').toBe(0);
-    expect(PROTOCOL_VERSION, 'protocol version exported').toBe(1);
+    expect(PROTOCOL_VERSION, 'protocol version exported').toBe(2);
     A.destroy();
+  });
+
+  // Audit #11: the guest announces its deck (as card ids) in the READY handshake; the host
+  // reads it off onOpponentJoined and assembles the authoritative game from it.
+  it('carries the guest’s deck ids in READY through to onOpponentJoined', () => {
+    const logHost = mkLog();
+    const host = new MultiplayerSession(mkCallbacks(logHost));
+    const guest = new MultiplayerSession(mkCallbacks(mkLog()));
+    const { a, b, openBoth } = makePipe();
+    const guestDeck = CATALOG.slice(50, 100).map(c => c.id);
+    internals(guest).myDeck = guestDeck;                 // set by join(code,…,deckIds) in real flow
+    internals(host).conn = asConn(a);                    // host()/join() assign these in the real flow
+    internals(guest).conn = asConn(b);
+    internals(host)._wireConn(asConn(a), 'HostName', 'H');
+    internals(guest)._wireConn(asConn(b), 'GuestName', 'G');
+    openBoth();
+    const joined = logHost.joined[0] as { name: string; deck?: string[] } | undefined;
+    expect(joined?.deck, 'host received the guest deck ids in READY').toEqual(guestDeck);
+    host.destroy(); guest.destroy();
   });
 });
 

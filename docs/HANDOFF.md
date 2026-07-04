@@ -2,7 +2,52 @@
 
 Self-contained context for continuing the card-effect engine work in a fresh session.
 
-## Latest session (2026-07-04) — six keywords merged; Paranoia corrected to canon; canon in docs/
+## Latest session (2026-07-04, later) — audit batch 4: guest deck in READY (audit #11) DONE
+*(Landed alongside the same-day keyword/Paranoia session below, on its combined tree — suite
+was green at 14 files / 178 tests after both.)* The guest's built deck used to be **silently
+discarded**: the host assembled the game from its own two Lobby dropdowns ("Your deck" → p1,
+"Opponent deck (sandbox)" → p2) and broadcast it wholesale, so the guest played whatever the
+host picked in the sandbox dropdown. FIX — *guest sends deck ids in READY; the host assembles*:
+- **Protocol (`lib/multiplayer.ts`)**: `READY` now carries `deck?: string[]` (guest's card ids).
+  `PROTOCOL_VERSION` bumped **1 → 2** (a v1 host ignores `deck` → the substitution bug survives
+  in mixed builds, so mixed builds must refuse via the existing version gate). Guest's
+  `join(code,name,avatar,deckIds)` stores `myDeck`; `_wireConn` sends it (host sends none).
+  `SessionPeer.deck` added; the READY handler forwards it to `onOpponentJoined`. New method
+  **`rejectOpponent(reason)`** (mirrors the version-mismatch refusal: `onError` + close the conn,
+  keep the peer alive so the same code keeps hosting).
+- **Store (`gameStore.ts`)**: new action **`assembleMpGame(p1Cards,p2Cards)`** — rebuilds via
+  the existing `makeNewGame`, resetting local prompts like `startMultiplayer` but keeping
+  `conn`/`localPlayer`. Safe pre-setup (host is on the Matching screen).
+- **Hook (`lib/useMultiplayer.ts`)**: `hostDeckRef`/`isHostRef` added. `host(myCards,oppCards)`
+  retains its own deck; the old one-shot `opponentStatus→sendStateSync` subscription was
+  **removed** (the assemble's own broadcast is now the handoff — avoids a double-send).
+  `join(code,myCards)` (signature changed — drops the opp-deck arg) sends `myCards.map(c=>c.id)`.
+  `onOpponentJoined` **host branch** resolves the guest ids against CATALOG and either
+  `assembleMpGame(hostDeck, guestCards)` then marks ready, **or REFUSES** (owner ruling
+  2026-07-04) on no/empty deck, any unresolved id, **or duplicate ids** (unique-id engine
+  invariant — id-keyed dead picks/equips/targeting; the wire is a second entry path).
+- **Lobby/Play**: `join` prop is now `(code, myCards)`; `handleJoin` drops the opp arg. The
+  "Opponent deck (sandbox)" dropdown now affects **only Sandbox solo** (no effect on a hosted match).
+- **Tests**: `tier3_mp_wire.test.ts` — `hostGame()` now passes a valid deck (host assembles;
+  broadcast count stays 2), item-3 `join` call updated, + NEW assembly test (distinct
+  `CATALOG.slice(50,100)` guest deck → p2 drawn entirely from it, p1 stays host's) + NEW refusal
+  test (no / unresolvable / duplicate deck → `rejectOpponent`, seat not ready, no handoff).
+  `multiplayer.test.ts` — `PROTOCOL_VERSION` assertion 1→2 + a READY-carries-deck protocol test
+  (set `myDeck`+`conn` via the internals cast, like the lifecycle test). **typecheck ZERO;
+  validate:decks clean.**
+- **Runtime smoke (single-window preview)**: app loads, Lobby renders, **Host** → Matching
+  screen + real PeerJS code generated, no console/server errors. NOT done (single-page harness
+  can't drive two WebRTC contexts): the live two-window "guest plays deck C not B" confirmation —
+  the batch's REQUIRED done-criterion, which doubles as the never-run first live two-peer
+  playtest; it's the owner's manual step (dev server left running on :5173).
+- **Open flags for owner**: (1) a refused guest currently sees only a generic disconnect — a
+  dedicated `REJECT` message carrying the reason is a possible small follow-up; (2) no deck-SIZE
+  gate on received decks (Lobby tolerates <50, warning-only — matched); (3) the "Opponent deck
+  (sandbox)" dropdown could be de-emphasized/hidden when hosting.
+- NOT started (next candidates): the audit's join-lifecycle items (M4/M5), reconnect (M1),
+  Phase 2 replay recorder, quality refactors (audit §d).
+
+## Session (2026-07-04, earlier) — six keywords merged; Paranoia corrected to canon; canon in docs/
 **CANON NOW LIVES IN-REPO: `twilight-app/docs/Master_Keyword_List.md` + `Card_Design_Parameters.md`
 (snapshots of the parent-dir canonical docs). CHECK THEM before writing/implementing any keyword —
 Paranoia was twice described/implemented from invented paraphrases (owner correction; see

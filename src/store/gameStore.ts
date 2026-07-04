@@ -1585,6 +1585,10 @@ interface GameStoreState {
   // Lobby / setup
   startSolo: (p1Cards: Card[], p2Cards: Card[], p1Name?: string, p2Name?: string) => void;
   startMultiplayer: (mode: 'host' | 'join', code: string, localPlayer: 'p1' | 'p2', p1Cards: Card[], p2Cards: Card[]) => void;
+  /** HOST-only: rebuild the authoritative game once the guest's real deck is known (from the
+   *  READY handshake). Runs pre-setup while the host is still on the Matching screen, so
+   *  re-dealing both hands is invisible; conn/localPlayer are left intact. */
+  assembleMpGame: (p1Cards: Card[], p2Cards: Card[]) => void;
   backToLobby: () => void;
   setConn: (patch: Partial<ConnState>) => void;
   /** Place a PC on the board. targetPlayer defaults to localPlayer; during setup pass the owner. */
@@ -1761,6 +1765,18 @@ export const useGameStore = create<GameStoreState>()(
       ...LOCAL_PROMPTS_CLEARED,
       // Setup is serialized via the synced game.setupQueue (seeded in makeNewGame); each
       // peer acts only on the steps it owns. modalQueue is for mid-game modals only.
+      modalQueue: [],
+      oathContext: null,
+    });
+  },
+
+  assembleMpGame: (p1Cards, p2Cards) => {
+    // Rebuild the authoritative game (host) now that the guest's real deck is known. Same
+    // shape as startMultiplayer's game seed, but keep conn/localPlayer/_broadcast — we're
+    // already hosting; only the game contents change (p2 becomes the guest's actual deck).
+    set({
+      game: makeNewGame('You', p1Cards, 'Opponent', p2Cards),
+      ...LOCAL_PROMPTS_CLEARED,
       modalQueue: [],
       oathContext: null,
     });
