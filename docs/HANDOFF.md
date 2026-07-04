@@ -33,10 +33,28 @@ tasks/lessons.md 2026-07-04).**
   character's controller — implemented + tested (tier1_zones item 4). (3) **Coercion PC-exclusion
   is THE RULE** — Rules Note added to Master_Keyword_List.md (parent + docs/), KEYWORD_DEFS
   updated, and the merged implementation already enforces it.
-- **OPEN QUESTIONS from this slice** (per the standing rule, not encoded in tests): simultaneous-
-  trigger order (placer's own scry currently resolves before Paranoia — confirm); "plays a
-  Companion" = from-hand only (PC placement / Animate conversions don't trigger — confirm);
-  PoisonModal rolls vs RAW Willpower — should Dismayed's −1 apply?
+- **All three open questions RATIFIED same day (batch 2, commit `0fea53d`):**
+  1. Trigger order: placer's own on-enter scry FIRST, Paranoia peek after — pinned by test.
+  2. "Plays a Companion" = from hand only: placePc and Animate Magic conversions do NOT
+     trigger Paranoia — pinned by tests through the real reducers.
+  3. **ONE "current Willpower"** (Class-Zone count −1 while Dismayed, floor 0) read by EVERY
+     check — new accessor **`currentWillpower(player)`** in store/keywords.ts replaces
+     `playWillpower` (renamed) + dead `effectiveWillpower` (deleted) + readyPlayer's inline
+     effWP copy. Fixed raw readers: the Poison roll (PoisonModal — its un-canonical floor-at-1
+     also removed; at current WP 0 a d6 can never cleanse, ruled consequence) and the
+     `willpowerAtLeast` card condition. **Dismay pressure CAN cause fleeing — intended and
+     tested** (willpower_current.test.ts; Poison's Dismayed flip in
+     willpower_poison_modal.test.tsx, jsdom). Rules Note dated 2026-07-04 added to
+     Game_Rules_Updated.md §Willpower (parent + docs/). Tray/Mulligan still display the BASE
+     stat (display, not a check) — flag if the owner wants the adjusted value shown.
+  Suite at commit `0fea53d`: 14 files / 175 tests green in an isolated worktree of the
+  committed tree; tsc ZERO.
+- **CONCURRENT SESSION (2026-07-04, in-flight)**: audit batch 4 (guest deck in READY,
+  PROTOCOL_VERSION 2) is being built by ANOTHER session in the same working tree
+  (multiplayer.ts / useMultiplayer.ts / Lobby.tsx / a gameStore host-rebuild action + their
+  tests). This session's commits exclude those hunks (gameStore was staged from a
+  my-hunks-only blob). If you see multiplayer/tier3 test failures in the WORKING tree, they
+  belong to that in-flight work — check `git log` / `git status` before assuming a regression.
 
 ## Previous session (2026-07-03) — owner rulings applied + test suite seeded (Phase 0)
 Two resolved owner rulings from `tasks/test_seed_plan.md` applied, then Phase 0 executed.
