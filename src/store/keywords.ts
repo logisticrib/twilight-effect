@@ -281,6 +281,20 @@ export function isBaneTarget(banes: string[], defender: BoardEntity): boolean {
   return banes.some(b => b === defender.subtype || b === defender.cls);
 }
 
+/**
+ * Animate Magic — printed "Animate Magic X": when this enters, a Magical
+ * (Incantation) Construct you control becomes an X/X Manifest companion.
+ * Parsed from the keyword string like Reinforce/Dismantle; returns X, or null
+ * when the keyword is absent (or printed without its parameter).
+ */
+export function parseAnimateMagic(keywords: string[]): number | null {
+  for (const kw of keywords) {
+    const m = /^Animate Magic\s+(\d+)$/.exec(kw);
+    if (m) return parseInt(m[1], 10);
+  }
+  return null;
+}
+
 /** Status marking a character that holds Poison counters (`poison` > 0). */
 export const POISONED_STATUS = 'Poisoned';
 

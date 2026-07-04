@@ -7,7 +7,7 @@ import { recomputeStatics, isImmuneToSplash, grantHitRun, HIT_RUN_STATUS,
          isPhysicalConstruct, parseEnterTrigger, type EnterTriggerKind,
          isCharacter, firstItemOf, allItemsOf, canHoldItem, effectiveAttack, effectiveKeywords, hasModifier, effectiveMaxHp, wardedLines,
          canPlayActionCard, actionTypeOf, playWillpower, parseBanes, isBaneTarget,
-         poisonHitPatch, POISONED_STATUS } from './keywords';
+         poisonHitPatch, POISONED_STATUS, parseAnimateMagic } from './keywords';
 
 export type Phase = 'ready' | 'draw' | 'cz' | 'action' | 'end';
 export type PlayPhase = 'lobby' | 'setup' | 'game';
@@ -2856,6 +2856,25 @@ export const useGameStore = create<GameStoreState>()(
       }
     }
 
+    // Animate Magic X (on-enter): choose a Magical (Incantation) Construct you
+    // control — it becomes an X/X Manifest companion via the interpreter's existing
+    // 'animate' op. No Magical Construct → fizzles with a note.
+    let animatePick: PendingActionTarget | null = null;
+    const animateX = parseAnimateMagic(card.keywords);
+    if (animateX != null) {
+      const eligibleIds = (Object.values(game[lp].board) as (BoardEntity | undefined)[])
+        .filter((e): e is BoardEntity => !!e && e.kind === 'construct' && e.subtype === 'Incantation')
+        .map(e => e.id);
+      if (eligibleIds.length > 0) {
+        animatePick = { source: 'enter', sourceName: card.name, lp,
+          effects: [{ op: 'animate', atk: animateX, hp: animateX, target: 'magicalConstruct' }],
+          eligibleIds, sourceId: newEnt.id };
+        enterMsg = `${card.name}: Animate Magic — choose a Magical Construct to animate (${animateX}/${animateX}).`;
+      } else {
+        enterMsg = `${card.name} enters — no Magical Construct to animate.`;
+      }
+    }
+
     const placedGame = recomputeStatics({
       ...game,
       [lp]: {
@@ -2870,7 +2889,7 @@ export const useGameStore = create<GameStoreState>()(
     // Structured on-enter effects (the non-keyword "When this enters, …" text).
     // Only when no keyword trigger already claimed the enter (avoids double pending).
     const onEnter = (card.effects ?? []).filter(c => c.trigger === 'onEnter').flatMap(c => c.effects);
-    if (!pendingTrigger && !pendingKit && !scavengerPick && onEnter.length > 0) {
+    if (!pendingTrigger && !pendingKit && !scavengerPick && !animatePick && onEnter.length > 0) {
       // Equip-from-hand (Veteran of the Ashgrove): pick an item from hand for this character.
       if (onEnter.some(e => e.op === 'equipFromHand')) {
         const items = placedGame[lp].hand.filter(c => c.type === 'Item');
@@ -2943,6 +2962,9 @@ export const useGameStore = create<GameStoreState>()(
       pendingPlay: null,
       pendingTrigger,
       pendingKit,
+      // Only claim the pendingActionTarget slot when Animate Magic armed one — a null
+      // here must not clobber an unrelated pending target.
+      ...(animatePick ? { pendingActionTarget: animatePick } : {}),
       oathContext: newOathCtx,
       modalQueue: newModals,
       game: withScavenger,

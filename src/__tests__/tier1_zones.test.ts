@@ -400,3 +400,65 @@ describe('Scavenger: on enter, optionally attach an Item from your Dead Zone', (
     expect(g.p1.dead.map(c => c.name), 'item preserved').toContain('Iron Sword');
   });
 });
+
+describe('Animate Magic X: on enter, an own Magical Construct becomes an X/X Manifest', () => {
+  const binderCard = (): Card => ({
+    id: 'am-1', name: 'Spirit Binder', level: 1, type: 'Companion', subtype: '', rarity: '',
+    class1: '', class2: '', attack: 1, hp: 3, anchor: null, actionSub: '', actionPM: '',
+    itemKind: '', keywords: ['Animate Magic 2'], text: '', flavor: '', cls: '',
+  } as unknown as Card);
+
+  /** Place the Animate Magic companion for p1 with the given boards. */
+  function placeBinder(p1Board: Record<string, unknown>, p2Board: Record<string, unknown> = {}) {
+    freshGame();
+    const bc = binderCard();
+    gs.setState(s => ({ game: { ...s.game,
+      p1: { ...s.game.p1,
+        classZone: CATALOG.slice(20, 23).map((c, i) => mkCz(c, 'Warrior', `cz-${i}`)),
+        willpower: 3, hand: [bc], board: p1Board },
+      p2: { ...s.game.p2, board: p2Board },
+    } }));
+    gs.getState().beginPlay(bc.id);
+    gs.getState().placeCard('b1');
+  }
+
+  it('arms an enter target over OWN Incantation constructs only', () => {
+    placeBinder(
+      { f1: mkConstruct('am-inc', 'Glimmer Ward', 2, { subtype: 'Incantation' }),
+        f2: mkConstruct('am-trap', 'Spike Pit', 2, { subtype: 'Trap' }) },
+      { f1: mkConstruct('am-opp', 'Enemy Sigil', 2, { subtype: 'Incantation' }) });
+    const pa = gs.getState().pendingActionTarget;
+    expect(pa, 'target pick armed').not.toBeNull();
+    expect(pa?.source, 'an enter trigger, no card cost involved').toBe('enter');
+    expect(pa?.eligibleIds, 'own Incantation eligible').toEqual(['am-inc']);
+  });
+
+  it('resolving animates: kind/stats/subtype flip, anchors + manifest status retained', () => {
+    placeBinder({ f1: mkConstruct('am-inc', 'Glimmer Ward', 2, { subtype: 'Incantation' }) });
+    gs.getState().resolveActionTarget('am-inc');
+    const ent = gs.getState().game.p1.board.f1!;
+    expect(ent.kind, 'construct became a companion').toBe('companion');
+    expect(ent.subtype).toBe('Manifest');
+    expect([ent.atk, ent.hp, ent.maxHp], 'X/X from the keyword parameter').toEqual([2, 2, 2]);
+    expect(ent.statuses, 'manifest marker (sacrificed instead of bouncing)').toContain('manifest');
+    expect(ent.fresh, 'summoning sickness as a new companion').toBe(true);
+    expect(ent.anchors, 'anchor counters retained (inert)').toBe(2);
+    expect(gs.getState().pendingActionTarget, 'prompt cleared').toBeNull();
+  });
+
+  it('no Magical Construct → enters without a prompt (fizzle)', () => {
+    placeBinder({ f1: mkConstruct('am-trap', 'Spike Pit', 2, { subtype: 'Trap' }) });
+    expect(gs.getState().game.p1.board.b1?.name, 'companion still placed').toBe('Spirit Binder');
+    expect(gs.getState().pendingActionTarget, 'nothing to animate').toBeNull();
+  });
+
+  it('cancel fizzles the trigger without touching the placed companion', () => {
+    placeBinder({ f1: mkConstruct('am-inc', 'Glimmer Ward', 2, { subtype: 'Incantation' }) });
+    gs.getState().cancelActionTarget();
+    const g = gs.getState().game;
+    expect(gs.getState().pendingActionTarget, 'prompt cleared').toBeNull();
+    expect(g.p1.board.f1?.kind, 'construct untouched').toBe('construct');
+    expect(g.p1.board.b1?.name, 'companion stays placed').toBe('Spirit Binder');
+    expect(g.p1.hand, 'nothing bounced to hand').toHaveLength(0);
+  });
+});
