@@ -80,6 +80,10 @@ export interface GameState {
   /** The player who must resolve a start-of-turn Poison check, or null. Routed to
    *  that player's client (the modal renders only when localPlayer === pendingPoison). */
   pendingPoison: 'p1' | 'p2' | null;
+  /** Coercion prompt: an opposing Coercion companion entered — the VICTIM chooses to
+   *  discard a card or sacrifice a permanent. Routed to the victim's client; the
+   *  acting player is held (see `reactiveHold`) until it resolves. */
+  pendingCoercion: PendingCoercion | null;
   /** Mid-combat Armor choice — when an attack hits a character with 2+ armor pieces,
    *  combat PAUSES and the DEFENDER picks which piece absorbs the hit (rules: "the
    *  controlling player chooses which armor prevents the damage"). Carries the
@@ -185,6 +189,15 @@ export interface PendingEquipPick {
   lp: 'p1' | 'p2';
   targetId: string;   // the entity that will wear the item
   items: Card[];      // the equippable items in hand
+}
+
+/** Coercion (on-enter keyword): the opponent of the entering companion must discard
+ *  a card or sacrifice a permanent — the VICTIM makes the choice (Game Rules,
+ *  "Inactive Player Restrictions"). Their PC is not a legal sacrifice: a forced
+ *  game loss is not a cost, so only companions/constructs qualify. */
+export interface PendingCoercion {
+  source: string;       // the Coercion companion's name
+  victim: 'p1' | 'p2';  // who chooses and pays
 }
 
 /** A Dead-Zone recovery prompt: pick one of `options` to return to hand (or skip if
@@ -1161,6 +1174,10 @@ function armPrompts(game: GameState, deadSink: PendingDeadPick[], armorSink: Arm
 export function reactiveHold(game: GameState, localPlayer: 'p1' | 'p2'): string | null {
   const dp = game.pendingDeadPick;
   if (dp && dp.lp !== localPlayer) return dp.source;
+  // A Coercion prompt is the VICTIM's decision — the player who played the coercer
+  // (and anyone else) waits for it.
+  const co = game.pendingCoercion;
+  if (co && co.victim !== localPlayer) return `${co.source} (Coercion)`;
   // A mid-combat Armor choice owned by the opponent (defender) holds the attacker
   // until it resolves, so the attacker's broadcasts don't clobber the resolution.
   const pa = game.pendingArmor;
@@ -1522,6 +1539,7 @@ export function makeNewGame(
     pendingDeadPick: null,
     pendingDeadPickQueue: [],
     pendingPoison: null,
+    pendingCoercion: null,
     pendingArmor: null,
     pendingAttackChoice: null,
     setupQueue: [...SETUP_SEQUENCE],
@@ -1678,6 +1696,10 @@ interface GameStoreState {
    *  (via setPcHp — entity + headline stay married, game ends at 0). Un-rolled units are
    *  simply omitted. Clears `pendingPoison`. */
   resolvePoison: (player: 'p1' | 'p2', outcomes: { id: string; cleansed: boolean }[]) => void;
+  /** Coercion: the victim discards the chosen hand card to their Dead Zone. */
+  resolveCoercionDiscard: (cardId: string) => void;
+  /** Coercion: the victim sacrifices the chosen permanent (never their PC). */
+  resolveCoercionSacrifice: (entityId: string) => void;
 
   // Turn
   endTurn: () => void;
@@ -2360,7 +2382,7 @@ export const useGameStore = create<GameStoreState>()(
       setupQueue: sg.setupQueue ?? [],
       // Old saves stored a winner NAME in gameOver; only the side form is valid now.
       gameOver: sg.gameOver === 'p1' || sg.gameOver === 'p2' ? sg.gameOver : null,
-      pendingPeek: null, pendingPeekQueue: [], pendingDeadPick: null, pendingDeadPickQueue: [], pendingPoison: null, pendingArmor: null, pendingAttackChoice: null,
+      pendingPeek: null, pendingPeekQueue: [], pendingDeadPick: null, pendingDeadPickQueue: [], pendingPoison: null, pendingCoercion: null, pendingArmor: null, pendingAttackChoice: null,
     };
     return { game, playPhase: 'game', conn: { ...EMPTY_CONN, mode: 'solo', code: 'RESUMED' }, localPlayer: 'p1' as const, ...LOCAL_PROMPTS_CLEARED };
   }),
@@ -2875,6 +2897,23 @@ export const useGameStore = create<GameStoreState>()(
       }
     }
 
+    // Coercion (on-enter, companions): the OPPONENT must discard a card or sacrifice
+    // a permanent — their choice, routed to their client (the acting player is held
+    // via reactiveHold). Their PC never qualifies as the sacrifice; with an empty
+    // hand and no other permanents the trigger fizzles.
+    let pendingCoercion: PendingCoercion | null = null;
+    if (isCompanion && card.keywords.includes('Coercion')) {
+      const victim: 'p1' | 'p2' = lp === 'p1' ? 'p2' : 'p1';
+      const canDiscard = game[victim].hand.length > 0;
+      const canSacrifice = Object.values(game[victim].board).some(e => e && e.kind !== 'pc');
+      if (canDiscard || canSacrifice) {
+        pendingCoercion = { source: card.name, victim };
+        enterMsg = `${card.name}: Coercion — opponent must discard a card or sacrifice a permanent.`;
+      } else {
+        enterMsg = `${card.name} enters — the opponent has nothing to coerce.`;
+      }
+    }
+
     const placedGame = recomputeStatics({
       ...game,
       [lp]: {
@@ -2889,7 +2928,7 @@ export const useGameStore = create<GameStoreState>()(
     // Structured on-enter effects (the non-keyword "When this enters, …" text).
     // Only when no keyword trigger already claimed the enter (avoids double pending).
     const onEnter = (card.effects ?? []).filter(c => c.trigger === 'onEnter').flatMap(c => c.effects);
-    if (!pendingTrigger && !pendingKit && !scavengerPick && !animatePick && onEnter.length > 0) {
+    if (!pendingTrigger && !pendingKit && !scavengerPick && !animatePick && !pendingCoercion && onEnter.length > 0) {
       // Equip-from-hand (Veteran of the Ashgrove): pick an item from hand for this character.
       if (onEnter.some(e => e.op === 'equipFromHand')) {
         const items = placedGame[lp].hand.filter(c => c.type === 'Item');
@@ -2957,6 +2996,7 @@ export const useGameStore = create<GameStoreState>()(
       : placedGame.pendingDeadPick
         ? { ...placedGame, pendingDeadPickQueue: [...placedGame.pendingDeadPickQueue, scavengerPick] }
         : { ...placedGame, pendingDeadPick: scavengerPick };
+    const withCoercion: GameState = pendingCoercion ? { ...withScavenger, pendingCoercion } : withScavenger;
 
     return {
       pendingPlay: null,
@@ -2967,7 +3007,7 @@ export const useGameStore = create<GameStoreState>()(
       ...(animatePick ? { pendingActionTarget: animatePick } : {}),
       oathContext: newOathCtx,
       modalQueue: newModals,
-      game: withScavenger,
+      game: withCoercion,
       toasts: [...s.toasts, { id, msg: enterMsg }],
     };
   }),
@@ -3018,6 +3058,43 @@ export const useGameStore = create<GameStoreState>()(
       if (pcLoc) g = setPcHp(g, player, pcLoc.ent.id, Math.max(0, pcLoc.ent.hp - dmg));
     }
     return { game: { ...g, pendingPoison: null } };
+  }),
+
+  // ── Coercion resolution (the VICTIM's choice: discard or sacrifice) ────────
+  resolveCoercionDiscard: (cardId) => set(s => {
+    const co = s.game.pendingCoercion;
+    if (!co) return s;
+    if (s.conn.mode !== 'solo' && co.victim !== s.localPlayer) return s; // victim-only
+    const ps = s.game[co.victim];
+    const card = ps.hand.find(c => c.id === cardId);
+    if (!card) return s;
+    const g: GameState = { ...s.game, pendingCoercion: null,
+      [co.victim]: { ...ps, hand: ps.hand.filter(c => c.id !== cardId), dead: [...ps.dead, card] } };
+    const id = ++toastId;
+    setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 4000);
+    return { game: g, toasts: [...s.toasts, { id, msg: `${co.source}: ${card.name} discarded (Coercion)` }] };
+  }),
+
+  resolveCoercionSacrifice: (entityId) => set(s => {
+    const co = s.game.pendingCoercion;
+    if (!co) return s;
+    if (s.conn.mode !== 'solo' && co.victim !== s.localPlayer) return s; // victim-only
+    const loc = findEntityAnywhere(s.game, entityId);
+    // Only the victim's own permanents qualify, and never the PC (a forced game
+    // loss is not a cost).
+    if (!loc || loc.player !== co.victim || loc.ent.kind === 'pc') return s;
+    const deadSink: PendingDeadPick[] = [];
+    const armorSink: ArmorChoiceData[] = [];
+    let g = destroyEntity({ ...s.game, pendingCoercion: null }, entityId);
+    const msgs = [`${loc.ent.name} is sacrificed (Coercion)`];
+    if (hasRemovalTrigger(loc.ent)) {
+      const rt = resolveRemovalTriggers(g, loc.ent, loc.player, deadSink, armorSink);
+      g = rt.game; msgs.push(...rt.msgs);
+    }
+    const id = ++toastId;
+    setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 4000);
+    return { game: recomputeStatics(armPrompts(g, deadSink, armorSink)),
+      toasts: [...s.toasts, { id, msg: `${co.source}: ${msgs.join(' | ')}` }] };
   }),
 
   // ── HP nudge ──────────────────────────────────────────────────────────────

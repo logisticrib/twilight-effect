@@ -4,6 +4,7 @@
 import { describe, it, expect } from 'vitest';
 import { gs, deckCards, freshGame, mkComp, mkPc, mkConstruct, mkItem, mkCz } from './helpers';
 import { canHoldItem } from '../store/keywords';
+import { reactiveHold } from '../store/gameStore';
 import { CATALOG } from '../data/catalog';
 import type { Card } from '../types/card';
 
@@ -460,5 +461,71 @@ describe('Animate Magic X: on enter, an own Magical Construct becomes an X/X Man
     expect(g.p1.board.f1?.kind, 'construct untouched').toBe('construct');
     expect(g.p1.board.b1?.name, 'companion stays placed').toBe('Spirit Binder');
     expect(g.p1.hand, 'nothing bounced to hand').toHaveLength(0);
+  });
+});
+
+describe('Coercion: on enter, the OPPONENT discards a card or sacrifices a permanent', () => {
+  const envoyCard = (): Card => ({
+    id: 'co-1', name: 'Dread Envoy', level: 1, type: 'Companion', subtype: '', rarity: '',
+    class1: '', class2: '', attack: 1, hp: 3, anchor: null, actionSub: '', actionPM: '',
+    itemKind: '', keywords: ['Coercion'], text: '', flavor: '', cls: '',
+  } as unknown as Card);
+
+  /** Place the Coercion companion for p1 against the given p2 hand/board. */
+  function placeEnvoy(p2Hand: Card[], p2Board: Record<string, unknown>) {
+    freshGame();
+    const ec = envoyCard();
+    gs.setState(s => ({ game: { ...s.game,
+      p1: { ...s.game.p1,
+        classZone: CATALOG.slice(20, 23).map((c, i) => mkCz(c, 'Warrior', `cz-${i}`)),
+        willpower: 3, hand: [ec], board: {} },
+      p2: { ...s.game.p2, hand: p2Hand, dead: [], board: p2Board },
+    } }));
+    gs.getState().beginPlay(ec.id);
+    gs.getState().placeCard('b1');
+  }
+
+  it('arms the prompt for the VICTIM and holds everyone else', () => {
+    placeEnvoy([CATALOG[10]], { f1: mkComp('co-c', compCard.name) });
+    const g = gs.getState().game;
+    expect(g.pendingCoercion, 'prompt armed').toEqual({ source: 'Dread Envoy', victim: 'p2' });
+    expect(reactiveHold(g, 'p1'), 'the acting player is held').toMatch(/Coercion/);
+    expect(reactiveHold(g, 'p2'), 'the victim is not held — they must act').toBeNull();
+  });
+
+  it('discard: the chosen card moves hand → Dead Zone and the prompt clears', () => {
+    placeEnvoy([CATALOG[10]], {});
+    gs.getState().resolveCoercionDiscard(CATALOG[10].id);
+    const g = gs.getState().game;
+    expect(g.p2.hand, 'hand emptied').toHaveLength(0);
+    expect(g.p2.dead.map(c => c.name), 'discard lands in the Dead Zone').toContain(CATALOG[10].name);
+    expect(g.pendingCoercion, 'prompt cleared').toBeNull();
+  });
+
+  it('sacrifice: the permanent is buried; the PC is never a legal choice', () => {
+    placeEnvoy([], { f1: mkComp('co-c', compCard.name), b1: mkPc('co-pc') });
+    gs.getState().resolveCoercionSacrifice('co-pc');
+    expect(gs.getState().game.pendingCoercion, 'PC refused — prompt still armed').not.toBeNull();
+    expect(gs.getState().game.p2.board.b1, 'PC untouched').toBeDefined();
+    gs.getState().resolveCoercionSacrifice('co-c');
+    const g = gs.getState().game;
+    expect(g.p2.board.f1, 'companion sacrificed').toBeFalsy();
+    expect(g.p2.dead.map(c => c.name), 'buried in the Dead Zone').toContain(compCard.name);
+    expect(g.pendingCoercion, 'prompt cleared').toBeNull();
+  });
+
+  it("cannot sacrifice the coercer's own-side permanents (victim's board only)", () => {
+    placeEnvoy([CATALOG[10]], {});
+    const envoyId = gs.getState().game.p1.board.b1!.id;
+    gs.getState().resolveCoercionSacrifice(envoyId);
+    expect(gs.getState().game.p1.board.b1, 'the coercer survives').toBeDefined();
+    expect(gs.getState().game.pendingCoercion, 'prompt still armed').not.toBeNull();
+  });
+
+  it('nothing to coerce (empty hand, only the PC) → fizzles without a prompt', () => {
+    placeEnvoy([], { b1: mkPc('co-pc') });
+    const g = gs.getState().game;
+    expect(g.p1.board.b1?.name, 'coercer still placed').toBe('Dread Envoy');
+    expect(g.pendingCoercion, 'no prompt').toBeNull();
   });
 });

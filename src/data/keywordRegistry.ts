@@ -41,7 +41,7 @@ export const KEYWORDS: Record<string, KeywordSpec> = {
   Dismantle:      { event: 'enter',   done: true,  note: 'pendingTrigger -> resolveTrigger (remove anchors / sacrifice)' },
   'Kit-Master':   { event: 'enter',   done: true,  note: 'pendingKit two-step (source item -> dest char)' },
   Scavenger:      { event: 'enter',   done: true,  note: 'placeCard -> Dead-Zone pick with attachTo -> equipOnto' },
-  Coercion:       { event: 'enter',   done: false, note: 'opponent discards or sacrifices' },
+  Coercion:       { event: 'enter',   done: true,  note: 'pendingCoercion -> victim modal (discard or sacrifice)' },
   'Animate Magic':{ event: 'enter',   done: true,  note: "parseAnimateMagic -> pendingActionTarget 'enter' -> animate op" },
   Untamed:        { event: 'static',  done: false, note: 'per-card text bonus (needs card data)' },
   Paranoia:       { event: 'enter',   done: false, note: 'peek/reorder opponent deck' },

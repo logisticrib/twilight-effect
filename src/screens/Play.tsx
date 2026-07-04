@@ -13,6 +13,7 @@ import { ModalHost } from './play/modals/ModalHost';
 import { ModalShell, md } from './play/modals/ModalShell';
 import { CardPickModal } from './play/modals/CardPickModal';
 import { PoisonModal } from './play/modals/PoisonModal';
+import { CoercionModal } from './play/modals/CoercionModal';
 
 function GameView() {
   // Deliberately NO store subscription here: GameView is the root of the whole board
@@ -35,7 +36,8 @@ function GameView() {
       // cancels/skips prompts by design.
       const modalUp = game.setupQueue.length > 0 || s.modalQueue.length > 0
         || !!game.pendingPeek || !!game.pendingDeadPick || !!game.pendingArmor
-        || !!game.pendingAttackChoice || !!game.pendingPoison || !!game.gameOver
+        || !!game.pendingAttackChoice || !!game.pendingPoison || !!game.pendingCoercion
+        || !!game.gameOver
         || !!s.pendingEquipPick || s.pendingKit?.step === 'item' || !!s.pileView;
 
       if (e.key === 'Tab') {
@@ -75,6 +77,7 @@ function GameView() {
       <ArmorModal />
       <AttackChoiceModal />
       <PoisonHost />
+      <CoercionModal />
       <ReactiveHoldBanner />
       <EquipPickModal />
       <ModalHost />
