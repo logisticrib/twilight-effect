@@ -257,7 +257,8 @@ function ReactiveHoldBanner() {
   );
 }
 
-/** Dead-Zone recovery picker (Library of Memory): pick a card to return to hand. */
+/** Dead-Zone recovery picker (Library of Memory / Scavenger): pick a card to return
+ *  to hand — or, with an attach destination (Scavenger), onto the entering companion. */
 function DeadPickModal() {
   const dp = useGameStore(s => s.game.pendingDeadPick);
   const pendingPeek = useGameStore(s => s.game.pendingPeek);
@@ -271,11 +272,13 @@ function DeadPickModal() {
 
   return (
     <CardPickModal glyph="☠" eyebrow={dp.source}
-      title="Return a card from your Dead Zone"
-      sub={`Pick a card to return to your hand${dp.optional ? ', or skip.' : '.'}`}
+      title={dp.attachTo ? 'Return an item from your Dead Zone' : 'Return a card from your Dead Zone'}
+      sub={dp.attachTo
+        ? `Pick an item to attach to ${dp.attachTo.name}${dp.optional ? ', or skip.' : '.'}`
+        : `Pick a card to return to your hand${dp.optional ? ', or skip.' : '.'}`}
       picks={dp.options.map(({ card, idx }) => ({ key: idx, name: card.name, card }))}
       onPick={idx => resolveDeadPick(idx as number)}
-      pickTitle={n => `Return ${n}`}
+      pickTitle={n => dp.attachTo ? `Attach ${n}` : `Return ${n}`}
       cancel={dp.optional ? { label: 'Skip', onClick: cancelDeadPick } : undefined}
     />
   );

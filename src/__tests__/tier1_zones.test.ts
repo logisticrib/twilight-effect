@@ -2,9 +2,10 @@
 // Destruction paths, PC-HP mirroring, slot capacity, dead-pick identity, prompt resets.
 // NOTE: poison resolution lives in PoisonModal (component, needs jsdom) — not covered here.
 import { describe, it, expect } from 'vitest';
-import { gs, deckCards, freshGame, mkComp, mkPc, mkConstruct, mkItem } from './helpers';
+import { gs, deckCards, freshGame, mkComp, mkPc, mkConstruct, mkItem, mkCz } from './helpers';
 import { canHoldItem } from '../store/keywords';
 import { CATALOG } from '../data/catalog';
+import type { Card } from '../types/card';
 
 const compCard = CATALOG.find(c => c.type === 'Companion')!;
 const compCard2 = CATALOG.filter(c => c.type === 'Companion')[1];
@@ -317,5 +318,85 @@ describe('item 12: prompt-state reset on every game-lifecycle path', () => {
     const g = gs.getState().game;
     expect(g.p1.hand.length, 'cancel returned nothing').toBe(handBefore);
     expect(g.p1.hand.map(c => c.id), 'the old game card did not appear').not.toContain(leakCard.id);
+  });
+});
+
+describe('Scavenger: on enter, optionally attach an Item from your Dead Zone', () => {
+  const scavCard = (): Card => ({
+    id: 'scav-1', name: 'Rust Scavenger', level: 1, type: 'Companion', subtype: '', rarity: '',
+    class1: '', class2: '', attack: 1, hp: 3, anchor: null, actionSub: '', actionPM: '',
+    itemKind: '', keywords: ['Scavenger'], text: '', flavor: '', cls: '',
+  } as unknown as Card);
+  const sword = CATALOG.find(c => c.name === 'Iron Sword')!;
+  const mantle = CATALOG.find(c => c.name === "Storm-Caller's Mantle")!;
+  const action = CATALOG.find(c => c.type === 'Action')!;
+
+  /** Place a fresh Scavenger companion for p1 with the given Dead Zone. */
+  function placeScavenger(dead: Card[]) {
+    freshGame();
+    const sc = scavCard();
+    gs.setState(s => ({ game: { ...s.game, p1: { ...s.game.p1,
+      classZone: CATALOG.slice(20, 23).map((c, i) => mkCz(c, 'Warrior', `cz-${i}`)),
+      willpower: 3, hand: [sc], dead, board: {},
+    } } }));
+    gs.getState().beginPlay(sc.id);
+    gs.getState().placeCard('b1');
+  }
+
+  it('arms an optional pick listing only Items, bound to the entering companion', () => {
+    placeScavenger([action, sword, mantle]);
+    const g = gs.getState().game;
+    expect(g.p1.board.b1?.name, 'companion placed').toBe('Rust Scavenger');
+    const dp = g.pendingDeadPick;
+    expect(dp, 'pick armed').not.toBeNull();
+    expect(dp?.optional, '"you may" — skippable').toBe(true);
+    expect(dp?.attachTo?.id, 'attach destination is the scavenger').toBe(g.p1.board.b1?.id);
+    expect(dp?.options.map(o => o.card.name).sort(), 'Actions filtered out')
+      .toEqual(["Iron Sword", "Storm-Caller's Mantle"]);
+  });
+
+  it('resolving attaches the item to the companion — not to hand', () => {
+    placeScavenger([action, sword]);
+    const idx = gs.getState().game.pendingDeadPick!.options.find(o => o.card.name === 'Iron Sword')!.idx;
+    gs.getState().resolveDeadPick(idx);
+    const g = gs.getState().game;
+    expect(g.p1.board.b1?.loadout?.weapon?.name, 'weapon equipped').toBe('Iron Sword');
+    expect(g.p1.dead.map(c => c.name), 'item left the Dead Zone').not.toContain('Iron Sword');
+    expect(g.p1.dead.map(c => c.name), 'other dead cards untouched').toContain(action.name);
+    expect(g.p1.hand.map(c => c.name), 'did NOT go to hand').not.toContain('Iron Sword');
+    expect(g.pendingDeadPick, 'prompt cleared').toBeNull();
+  });
+
+  it('an armor item lands in a gear slot with its Armor value parsed', () => {
+    placeScavenger([mantle]);
+    gs.getState().resolveDeadPick(0);
+    const worn = gs.getState().game.p1.board.b1?.loadout?.gear[0];
+    expect(worn?.name).toBe("Storm-Caller's Mantle");
+    expect(worn?.armor, 'ARMOR 1 parsed for the damage pipeline').toBe(1);
+  });
+
+  it('Skip declines: the Dead Zone is untouched', () => {
+    placeScavenger([sword]);
+    gs.getState().cancelDeadPick();
+    const g = gs.getState().game;
+    expect(g.pendingDeadPick, 'prompt cleared').toBeNull();
+    expect(g.p1.dead.map(c => c.name), 'item stays dead').toContain('Iron Sword');
+    expect(g.p1.board.b1?.loadout?.weapon, 'nothing equipped').toBeNull();
+  });
+
+  it('no Items in the Dead Zone: enters without a prompt', () => {
+    placeScavenger([action]);
+    const g = gs.getState().game;
+    expect(g.p1.board.b1?.name, 'companion still placed').toBe('Rust Scavenger');
+    expect(g.pendingDeadPick, 'nothing to scavenge').toBeNull();
+  });
+
+  it('wearer gone by resolve time: the pick is skipped, the item stays dead', () => {
+    placeScavenger([sword]);
+    gs.setState(s => ({ game: { ...s.game, p1: { ...s.game.p1, board: {} } } }));
+    gs.getState().resolveDeadPick(0);
+    const g = gs.getState().game;
+    expect(g.pendingDeadPick, 'stale pick skipped').toBeNull();
+    expect(g.p1.dead.map(c => c.name), 'item preserved').toContain('Iron Sword');
   });
 });

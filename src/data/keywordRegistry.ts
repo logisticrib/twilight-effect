@@ -40,7 +40,7 @@ export const KEYWORDS: Record<string, KeywordSpec> = {
   Reinforce:      { event: 'enter',   done: true,  note: 'pendingTrigger -> resolveTrigger (add anchors)' },
   Dismantle:      { event: 'enter',   done: true,  note: 'pendingTrigger -> resolveTrigger (remove anchors / sacrifice)' },
   'Kit-Master':   { event: 'enter',   done: true,  note: 'pendingKit two-step (source item -> dest char)' },
-  Scavenger:      { event: 'enter',   done: false, note: 'return item from Dead Zone' },
+  Scavenger:      { event: 'enter',   done: true,  note: 'placeCard -> Dead-Zone pick with attachTo -> equipOnto' },
   Coercion:       { event: 'enter',   done: false, note: 'opponent discards or sacrifices' },
   'Animate Magic':{ event: 'enter',   done: false, note: 'construct -> companion' },
   Untamed:        { event: 'static',  done: false, note: 'per-card text bonus (needs card data)' },

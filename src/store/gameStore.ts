@@ -196,6 +196,8 @@ export interface PendingDeadPick {
   options: { card: Card; idx: number }[]; // eligible dead cards + their index in the dead array
   postEffects: Effect[];
   optional: boolean;
+  /** Scavenger: the recovered ITEM is attached to this entity instead of going to hand. */
+  attachTo?: { id: string; name: string };
 }
 
 /** Kit-Master's targeting: pick a source character holding an item; if it holds
@@ -2254,8 +2256,25 @@ export const useGameStore = create<GameStoreState>()(
       const [next, ...rest] = s.game.pendingDeadPickQueue;
       return { game: { ...s.game, pendingDeadPick: next ?? null, pendingDeadPickQueue: rest } };
     }
-    let g: GameState = { ...s.game, [dp.lp]: { ...ps, dead: ps.dead.filter((_, i) => i !== liveIdx), hand: [...ps.hand, card] } };
-    const msgs = [`Returned ${card.name} from the Dead Zone to hand`];
+    const taken: GameState = { ...s.game, [dp.lp]: { ...ps, dead: ps.dead.filter((_, i) => i !== liveIdx), hand: [...ps.hand, card] } };
+    let g = taken;
+    const msgs: string[] = [];
+    if (dp.attachTo) {
+      // Scavenger: the recovered item attaches to the wearer instead of going to hand.
+      // The card routes THROUGH the hand so equipOnto's hand-removal applies. If the
+      // wearer left the board or lost capacity since the prompt armed, skip the pick
+      // like a stale option (the item stays in the Dead Zone).
+      const wearer = findEntityAnywhere(s.game, dp.attachTo.id);
+      const { isWeapon, isHeavy } = itemProfileOf(card);
+      if (!wearer || !canHoldItem(wearer.ent, isWeapon, isHeavy)) {
+        const [next, ...rest] = s.game.pendingDeadPickQueue;
+        return { game: { ...s.game, pendingDeadPick: next ?? null, pendingDeadPickQueue: rest } };
+      }
+      g = equipOnto(taken, dp.lp, dp.attachTo.id, card);
+      msgs.push(`Returned ${card.name} from the Dead Zone — attached to ${wearer.ent.name}`);
+    } else {
+      msgs.push(`Returned ${card.name} from the Dead Zone to hand`);
+    }
     // Run "if you do" effects (e.g. exhaust the source construct) now a card was taken.
     if (dp.postEffects.length) { const r = resolveActionEffects(g, dp.lp, dp.source, dp.postEffects, undefined, dp.sourceId); g = r.game; msgs.push(...r.msgs); }
     const id = ++toastId;
@@ -2819,6 +2838,24 @@ export const useGameStore = create<GameStoreState>()(
       }
     }
 
+    // Scavenger (on-enter, optional): return an Item card from your Dead Zone and
+    // attach it to this companion. Rides the existing Dead-Zone prompt with an attach
+    // destination (resolveDeadPick equips instead of returning to hand). No items in
+    // the Dead Zone → fizzles with a note rather than blocking.
+    let scavengerPick: PendingDeadPick | null = null;
+    if (isCompanion && card.keywords.includes('Scavenger')) {
+      const options = game[lp].dead
+        .map((c, idx) => ({ card: c, idx }))
+        .filter(o => o.card.type === 'Item');
+      if (options.length > 0) {
+        scavengerPick = { source: card.name, lp, options, postEffects: [], optional: true,
+          attachTo: { id: newEnt.id, name: card.name } };
+        enterMsg = `${card.name}: Scavenger — you may return an item from your Dead Zone.`;
+      } else {
+        enterMsg = `${card.name} enters — no item in the Dead Zone (Scavenger).`;
+      }
+    }
+
     const placedGame = recomputeStatics({
       ...game,
       [lp]: {
@@ -2833,7 +2870,7 @@ export const useGameStore = create<GameStoreState>()(
     // Structured on-enter effects (the non-keyword "When this enters, …" text).
     // Only when no keyword trigger already claimed the enter (avoids double pending).
     const onEnter = (card.effects ?? []).filter(c => c.trigger === 'onEnter').flatMap(c => c.effects);
-    if (!pendingTrigger && !pendingKit && onEnter.length > 0) {
+    if (!pendingTrigger && !pendingKit && !scavengerPick && onEnter.length > 0) {
       // Equip-from-hand (Veteran of the Ashgrove): pick an item from hand for this character.
       if (onEnter.some(e => e.op === 'equipFromHand')) {
         const items = placedGame[lp].hand.filter(c => c.type === 'Item');
@@ -2896,13 +2933,19 @@ export const useGameStore = create<GameStoreState>()(
       }
     }
 
+    // Scavenger's prompt joins the game-level Dead-Zone queue (behind any active pick).
+    const withScavenger: GameState = !scavengerPick ? placedGame
+      : placedGame.pendingDeadPick
+        ? { ...placedGame, pendingDeadPickQueue: [...placedGame.pendingDeadPickQueue, scavengerPick] }
+        : { ...placedGame, pendingDeadPick: scavengerPick };
+
     return {
       pendingPlay: null,
       pendingTrigger,
       pendingKit,
       oathContext: newOathCtx,
       modalQueue: newModals,
-      game: placedGame,
+      game: withScavenger,
       toasts: [...s.toasts, { id, msg: enterMsg }],
     };
   }),
