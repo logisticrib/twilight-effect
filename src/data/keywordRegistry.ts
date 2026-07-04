@@ -36,13 +36,15 @@ export const KEYWORDS: Record<string, KeywordSpec> = {
   // Set-specific
   Oathsworn: { event: 'enter',   done: true,  note: 'oathsworn modal' },
 
-  // ── Not yet implemented (need targeting UI or structured card data) ──────────
+  // ── On-enter triggers (targeted / prompted; resolved from placeCard) ─────────
   Reinforce:      { event: 'enter',   done: true,  note: 'pendingTrigger -> resolveTrigger (add anchors)' },
   Dismantle:      { event: 'enter',   done: true,  note: 'pendingTrigger -> resolveTrigger (remove anchors / sacrifice)' },
   'Kit-Master':   { event: 'enter',   done: true,  note: 'pendingKit two-step (source item -> dest char)' },
   Scavenger:      { event: 'enter',   done: true,  note: 'placeCard -> Dead-Zone pick with attachTo -> equipOnto' },
   Coercion:       { event: 'enter',   done: true,  note: 'pendingCoercion -> victim modal (discard or sacrifice)' },
   'Animate Magic':{ event: 'enter',   done: true,  note: "parseAnimateMagic -> pendingActionTarget 'enter' -> animate op" },
+  Paranoia:       { event: 'enter',   done: true,  note: "parseParanoia -> victim's own deck-peek (top/bottom only)" },
+
+  // ── Not yet implemented ───────────────────────────────────────────────────────
   Untamed:        { event: 'static',  done: false, note: 'per-card text bonus (needs card data)' },
-  Paranoia:       { event: 'enter',   done: false, note: 'peek/reorder opponent deck' },
 };

@@ -19,5 +19,6 @@ export const KEYWORD_DEFS: Record<string, string> = {
   'Untamed':       'While there are no Items or Physical Constructs in the encounter, this character is Untamed.',
   'Oathsworn':     'As this enters, tuck a card from your hand face-down beneath it (or sacrifice it). The sworn card returns to hand when it leaves.',
   'Animate Magic': 'When this enters, a Magical Construct you control becomes a Manifest companion with Attack/HP X.',
+  'Paranoia':      'When this enters, the opponent looks at the top X cards of their deck and must put each on top or on the bottom.',
   'Bane':          'Deals double damage to Companions of the named subtype or class.',
 };

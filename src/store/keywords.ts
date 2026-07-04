@@ -295,6 +295,21 @@ export function parseAnimateMagic(keywords: string[]): number | null {
   return null;
 }
 
+/**
+ * Paranoia — printed "Paranoia" or "Paranoia X": when this enters, the OPPONENT
+ * looks at the top X (default 1) cards of their own deck and must send each to
+ * the top or bottom. The rules give the top-or-bottom decision to the inactive
+ * player ("Inactive Player Restrictions"), so the prompt is theirs — the dread
+ * of knowing what's coming is the effect. Returns X, or null when absent.
+ */
+export function parseParanoia(keywords: string[]): number | null {
+  for (const kw of keywords) {
+    const m = /^Paranoia(?:\s+(\d+))?$/.exec(kw);
+    if (m) return m[1] ? parseInt(m[1], 10) : 1;
+  }
+  return null;
+}
+
 /** Status marking a character that holds Poison counters (`poison` > 0). */
 export const POISONED_STATUS = 'Poisoned';
 

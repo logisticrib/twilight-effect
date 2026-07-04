@@ -7,7 +7,7 @@ import { recomputeStatics, isImmuneToSplash, grantHitRun, HIT_RUN_STATUS,
          isPhysicalConstruct, parseEnterTrigger, type EnterTriggerKind,
          isCharacter, firstItemOf, allItemsOf, canHoldItem, effectiveAttack, effectiveKeywords, hasModifier, effectiveMaxHp, wardedLines,
          canPlayActionCard, actionTypeOf, playWillpower, parseBanes, isBaneTarget,
-         poisonHitPatch, POISONED_STATUS, parseAnimateMagic } from './keywords';
+         poisonHitPatch, POISONED_STATUS, parseAnimateMagic, parseParanoia } from './keywords';
 
 export type Phase = 'ready' | 'draw' | 'cz' | 'action' | 'end';
 export type PlayPhase = 'lobby' | 'setup' | 'game';
@@ -1178,6 +1178,11 @@ export function reactiveHold(game: GameState, localPlayer: 'p1' | 'p2'): string 
   // (and anyone else) waits for it.
   const co = game.pendingCoercion;
   if (co && co.victim !== localPlayer) return `${co.source} (Coercion)`;
+  // A deck-peek owned by the other player: normally their own-turn scry (holding the
+  // inactive peer is harmless), but with Paranoia the ACTIVE player pushed a peek
+  // onto the opponent and must wait for the top-or-bottom decision.
+  const pk = game.pendingPeek;
+  if (pk && pk.lp !== localPlayer) return pk.source;
   // A mid-combat Armor choice owned by the opponent (defender) holds the attacker
   // until it resolves, so the attacker's broadcasts don't clobber the resolution.
   const pa = game.pendingArmor;
@@ -2914,6 +2919,22 @@ export const useGameStore = create<GameStoreState>()(
       }
     }
 
+    // Paranoia X (on-enter): the OPPONENT looks at the top X cards of their own deck
+    // and must send each to the top or bottom — the top-or-bottom decision is theirs
+    // (rules, Inactive Player Restrictions). Rides the existing deck-peek prompt with
+    // lp = deckSide = the victim and dests limited to top/bottom (never hand).
+    const paranoiaX = parseParanoia(card.keywords);
+    let paranoiaReq: PeekRequest | null = null;
+    if (paranoiaX != null) {
+      const victim: 'p1' | 'p2' = lp === 'p1' ? 'p2' : 'p1';
+      if (game[victim].deck.length > 0) {
+        paranoiaReq = { source: card.name, lp: victim, deckSide: victim, look: paranoiaX, dests: ['top', 'bottom'] };
+        enterMsg = `${card.name}: Paranoia — the opponent must resolve the top of their deck.`;
+      } else {
+        enterMsg = `${card.name} enters — the opponent has no deck to dread (Paranoia).`;
+      }
+    }
+
     const placedGame = recomputeStatics({
       ...game,
       [lp]: {
@@ -2928,7 +2949,7 @@ export const useGameStore = create<GameStoreState>()(
     // Structured on-enter effects (the non-keyword "When this enters, …" text).
     // Only when no keyword trigger already claimed the enter (avoids double pending).
     const onEnter = (card.effects ?? []).filter(c => c.trigger === 'onEnter').flatMap(c => c.effects);
-    if (!pendingTrigger && !pendingKit && !scavengerPick && !animatePick && !pendingCoercion && onEnter.length > 0) {
+    if (!pendingTrigger && !pendingKit && !scavengerPick && !animatePick && !pendingCoercion && !paranoiaReq && onEnter.length > 0) {
       // Equip-from-hand (Veteran of the Ashgrove): pick an item from hand for this character.
       if (onEnter.some(e => e.op === 'equipFromHand')) {
         const items = placedGame[lp].hand.filter(c => c.type === 'Item');
@@ -2997,6 +3018,17 @@ export const useGameStore = create<GameStoreState>()(
         ? { ...placedGame, pendingDeadPickQueue: [...placedGame.pendingDeadPickQueue, scavengerPick] }
         : { ...placedGame, pendingDeadPick: scavengerPick };
     const withCoercion: GameState = pendingCoercion ? { ...withScavenger, pendingCoercion } : withScavenger;
+    // Paranoia's peek joins the game-level queue (behind any active peek, re-sliced
+    // when it activates via nextPeek).
+    let withParanoia: GameState = withCoercion;
+    if (paranoiaReq) {
+      if (withCoercion.pendingPeek) {
+        withParanoia = { ...withCoercion, pendingPeekQueue: [...withCoercion.pendingPeekQueue, paranoiaReq] };
+      } else {
+        const { peek, rest } = nextPeek(withCoercion, [paranoiaReq]);
+        withParanoia = { ...withCoercion, pendingPeek: peek, pendingPeekQueue: [...withCoercion.pendingPeekQueue, ...rest] };
+      }
+    }
 
     return {
       pendingPlay: null,
@@ -3007,7 +3039,7 @@ export const useGameStore = create<GameStoreState>()(
       ...(animatePick ? { pendingActionTarget: animatePick } : {}),
       oathContext: newOathCtx,
       modalQueue: newModals,
-      game: withCoercion,
+      game: withParanoia,
       toasts: [...s.toasts, { id, msg: enterMsg }],
     };
   }),

@@ -314,11 +314,13 @@ describe('item 12: prompt-state reset on every game-lifecycle path', () => {
     freshGame(); setStale();
     gs.getState().startSolo(deckCards, deckCards);
     expect(gs.getState().pendingActionTarget, 'prompt gone with the old game').toBeNull();
-    const handBefore = gs.getState().game.p1.hand.length;
+    // Compare the whole hand before/after — leakCard is part of the 50-card deck, so
+    // "hand does not contain it" false-positives whenever the fresh shuffle happens
+    // to deal it into the opening hand (a real 10% flake). Unchanged ids prove cancel
+    // returned nothing, including the stale card.
+    const handBefore = gs.getState().game.p1.hand.map(c => c.id);
     gs.getState().cancelActionTarget();
-    const g = gs.getState().game;
-    expect(g.p1.hand.length, 'cancel returned nothing').toBe(handBefore);
-    expect(g.p1.hand.map(c => c.id), 'the old game card did not appear').not.toContain(leakCard.id);
+    expect(gs.getState().game.p1.hand.map(c => c.id), 'cancel returned nothing — hand unchanged').toEqual(handBefore);
   });
 });
 
@@ -527,5 +529,67 @@ describe('Coercion: on enter, the OPPONENT discards a card or sacrifices a perma
     const g = gs.getState().game;
     expect(g.p1.board.b1?.name, 'coercer still placed').toBe('Dread Envoy');
     expect(g.pendingCoercion, 'no prompt').toBeNull();
+  });
+});
+
+describe('Paranoia: on enter, the OPPONENT resolves the top of their own deck', () => {
+  const whispererCard = (kw: string): Card => ({
+    id: 'pn-1', name: 'Whisper of Doubt', level: 1, type: 'Companion', subtype: '', rarity: '',
+    class1: '', class2: '', attack: 1, hp: 3, anchor: null, actionSub: '', actionPM: '',
+    itemKind: '', keywords: [kw], text: '', flavor: '', cls: '',
+  } as unknown as Card);
+
+  /** Place the Paranoia companion for p1 against the given p2 deck. */
+  function placeWhisperer(kw: string, p2Deck: Card[]) {
+    freshGame();
+    const wc = whispererCard(kw);
+    gs.setState(s => ({ game: { ...s.game,
+      p1: { ...s.game.p1,
+        classZone: CATALOG.slice(20, 23).map((c, i) => mkCz(c, 'Warrior', `cz-${i}`)),
+        willpower: 3, hand: [wc], board: {} },
+      p2: { ...s.game.p2, deck: p2Deck, hand: [] },
+    } }));
+    gs.getState().beginPlay(wc.id);
+    gs.getState().placeCard('b1');
+  }
+
+  it("arms the VICTIM's own-deck peek (top/bottom only) and holds the acting player", () => {
+    placeWhisperer('Paranoia', CATALOG.slice(30, 35));
+    const g = gs.getState().game;
+    const pk = g.pendingPeek;
+    expect(pk, 'peek armed').not.toBeNull();
+    expect([pk?.lp, pk?.deckSide], 'the opponent peeks their OWN deck').toEqual(['p2', 'p2']);
+    expect(pk?.dests, 'no hand option — reorder only').toEqual(['top', 'bottom']);
+    expect(pk?.cards.map(c => c.id), 'bare keyword looks at 1').toEqual([CATALOG[30].id]);
+    expect(reactiveHold(g, 'p1'), 'the acting player waits for the decision').toBe('Whisper of Doubt');
+    expect(reactiveHold(g, 'p2'), 'the victim is free to decide').toBeNull();
+  });
+
+  it('choosing bottom moves the card under the deck; hand untouched', () => {
+    placeWhisperer('Paranoia', CATALOG.slice(30, 35));
+    const dreaded = CATALOG[30];
+    gs.getState().resolvePeek(['bottom']);
+    const g = gs.getState().game;
+    expect(g.p2.deck, 'deck size unchanged').toHaveLength(5);
+    expect(g.p2.deck[g.p2.deck.length - 1]?.id, 'top card sent to the bottom').toBe(dreaded.id);
+    expect(g.p2.deck[0]?.id, 'next card now on top').toBe(CATALOG[31].id);
+    expect(g.p2.hand, 'nothing drawn').toHaveLength(0);
+    expect(g.pendingPeek, 'prompt cleared').toBeNull();
+  });
+
+  it('Paranoia 2 looks at two cards, each resolved independently', () => {
+    placeWhisperer('Paranoia 2', CATALOG.slice(30, 35));
+    expect(gs.getState().game.pendingPeek?.cards, 'two cards shown').toHaveLength(2);
+    gs.getState().resolvePeek(['bottom', 'top']);
+    const g = gs.getState().game;
+    expect(g.p2.deck[0]?.id, 'kept card leads the deck').toBe(CATALOG[31].id);
+    expect(g.p2.deck[g.p2.deck.length - 1]?.id, 'bottomed card is last').toBe(CATALOG[30].id);
+  });
+
+  it('empty opponent deck → fizzles without a prompt', () => {
+    placeWhisperer('Paranoia', []);
+    const g = gs.getState().game;
+    expect(g.p1.board.b1?.name, 'companion still placed').toBe('Whisper of Doubt');
+    expect(g.pendingPeek, 'nothing to dread').toBeNull();
   });
 });
