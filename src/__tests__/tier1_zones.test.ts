@@ -2,9 +2,11 @@
 // Destruction paths, PC-HP mirroring, slot capacity, dead-pick identity, prompt resets.
 // NOTE: poison resolution lives in PoisonModal (component, needs jsdom) — not covered here.
 import { describe, it, expect } from 'vitest';
-import { gs, deckCards, freshGame, mkComp, mkPc, mkConstruct, mkItem } from './helpers';
+import { gs, deckCards, freshGame, mkComp, mkPc, mkConstruct, mkItem, mkCz } from './helpers';
 import { canHoldItem } from '../store/keywords';
+import { reactiveHold } from '../store/gameStore';
 import { CATALOG } from '../data/catalog';
+import type { Card } from '../types/card';
 
 const compCard = CATALOG.find(c => c.type === 'Companion')!;
 const compCard2 = CATALOG.filter(c => c.type === 'Companion')[1];
@@ -171,6 +173,24 @@ describe('item 4: poison routes through setPcHp (resolvePoison)', () => {
     expect(g.p1.board.f1?.poison, 'counters untouched').toBe(2);
     expect(g.pendingPoison, 'prompt still cleared').toBeNull();
   });
+
+  it('ready phase: a Poisoned unit does NOT auto-ready — the check decides (endTurn arms it)', () => {
+    freshGame();
+    // Non-catalog names: no card effects fire at start of turn. Level 1 vs willpower 3 — no fleeing.
+    const poisoned = mkComp('rp-a', 'Venom Victim', { poison: 2, statuses: ['Poisoned'], exhausted: true, tapped: 'major' });
+    const normal = mkComp('rp-b', 'Tired Grunt', { exhausted: true, tapped: 'major' });
+    gs.setState(s => ({ game: { ...s.game,
+      p2: { ...s.game.p2, board: { f1: poisoned, f2: normal } },
+    } }));
+    gs.getState().endTurn(); // p1 ends → p2's ready phase
+    const g = gs.getState().game;
+    expect(g.activePlayer).toBe('p2');
+    expect(g.p2.board.f2?.exhausted, 'a plain unit readies as usual').toBe(false);
+    expect(g.p2.board.f1?.exhausted, 'the Poisoned unit stays exhausted').toBe(true);
+    expect(g.p2.board.f1?.tapped, 'still tapped').toBe('major');
+    expect(g.p2.board.f1?.poison, 'counters intact for the check').toBe(2);
+    expect(g.pendingPoison, 'check armed for the player whose turn begins').toBe('p2');
+  });
 });
 
 describe('item 5: slot capacity', () => {
@@ -294,10 +314,265 @@ describe('item 12: prompt-state reset on every game-lifecycle path', () => {
     freshGame(); setStale();
     gs.getState().startSolo(deckCards, deckCards);
     expect(gs.getState().pendingActionTarget, 'prompt gone with the old game').toBeNull();
-    const handBefore = gs.getState().game.p1.hand.length;
+    // Compare the whole hand before/after — leakCard is part of the 50-card deck, so
+    // "hand does not contain it" false-positives whenever the fresh shuffle happens
+    // to deal it into the opening hand (a real 10% flake). Unchanged ids prove cancel
+    // returned nothing, including the stale card.
+    const handBefore = gs.getState().game.p1.hand.map(c => c.id);
+    gs.getState().cancelActionTarget();
+    expect(gs.getState().game.p1.hand.map(c => c.id), 'cancel returned nothing — hand unchanged').toEqual(handBefore);
+  });
+});
+
+describe('Scavenger: on enter, optionally attach an Item from your Dead Zone', () => {
+  const scavCard = (): Card => ({
+    id: 'scav-1', name: 'Rust Scavenger', level: 1, type: 'Companion', subtype: '', rarity: '',
+    class1: '', class2: '', attack: 1, hp: 3, anchor: null, actionSub: '', actionPM: '',
+    itemKind: '', keywords: ['Scavenger'], text: '', flavor: '', cls: '',
+  } as unknown as Card);
+  const sword = CATALOG.find(c => c.name === 'Iron Sword')!;
+  const mantle = CATALOG.find(c => c.name === "Storm-Caller's Mantle")!;
+  const action = CATALOG.find(c => c.type === 'Action')!;
+
+  /** Place a fresh Scavenger companion for p1 with the given Dead Zone. */
+  function placeScavenger(dead: Card[]) {
+    freshGame();
+    const sc = scavCard();
+    gs.setState(s => ({ game: { ...s.game, p1: { ...s.game.p1,
+      classZone: CATALOG.slice(20, 23).map((c, i) => mkCz(c, 'Warrior', `cz-${i}`)),
+      willpower: 3, hand: [sc], dead, board: {},
+    } } }));
+    gs.getState().beginPlay(sc.id);
+    gs.getState().placeCard('b1');
+  }
+
+  it('arms an optional pick listing only Items, bound to the entering companion', () => {
+    placeScavenger([action, sword, mantle]);
+    const g = gs.getState().game;
+    expect(g.p1.board.b1?.name, 'companion placed').toBe('Rust Scavenger');
+    const dp = g.pendingDeadPick;
+    expect(dp, 'pick armed').not.toBeNull();
+    expect(dp?.optional, '"you may" — skippable').toBe(true);
+    expect(dp?.attachTo?.id, 'attach destination is the scavenger').toBe(g.p1.board.b1?.id);
+    expect(dp?.options.map(o => o.card.name).sort(), 'Actions filtered out')
+      .toEqual(["Iron Sword", "Storm-Caller's Mantle"]);
+  });
+
+  it('resolving attaches the item to the companion — not to hand', () => {
+    placeScavenger([action, sword]);
+    const idx = gs.getState().game.pendingDeadPick!.options.find(o => o.card.name === 'Iron Sword')!.idx;
+    gs.getState().resolveDeadPick(idx);
+    const g = gs.getState().game;
+    expect(g.p1.board.b1?.loadout?.weapon?.name, 'weapon equipped').toBe('Iron Sword');
+    expect(g.p1.dead.map(c => c.name), 'item left the Dead Zone').not.toContain('Iron Sword');
+    expect(g.p1.dead.map(c => c.name), 'other dead cards untouched').toContain(action.name);
+    expect(g.p1.hand.map(c => c.name), 'did NOT go to hand').not.toContain('Iron Sword');
+    expect(g.pendingDeadPick, 'prompt cleared').toBeNull();
+  });
+
+  it('an armor item lands in a gear slot with its Armor value parsed', () => {
+    placeScavenger([mantle]);
+    gs.getState().resolveDeadPick(0);
+    const worn = gs.getState().game.p1.board.b1?.loadout?.gear[0];
+    expect(worn?.name).toBe("Storm-Caller's Mantle");
+    expect(worn?.armor, 'ARMOR 1 parsed for the damage pipeline').toBe(1);
+  });
+
+  it('Skip declines: the Dead Zone is untouched', () => {
+    placeScavenger([sword]);
+    gs.getState().cancelDeadPick();
+    const g = gs.getState().game;
+    expect(g.pendingDeadPick, 'prompt cleared').toBeNull();
+    expect(g.p1.dead.map(c => c.name), 'item stays dead').toContain('Iron Sword');
+    expect(g.p1.board.b1?.loadout?.weapon, 'nothing equipped').toBeNull();
+  });
+
+  it('no Items in the Dead Zone: enters without a prompt', () => {
+    placeScavenger([action]);
+    const g = gs.getState().game;
+    expect(g.p1.board.b1?.name, 'companion still placed').toBe('Rust Scavenger');
+    expect(g.pendingDeadPick, 'nothing to scavenge').toBeNull();
+  });
+
+  it('wearer gone by resolve time: the pick is skipped, the item stays dead', () => {
+    placeScavenger([sword]);
+    gs.setState(s => ({ game: { ...s.game, p1: { ...s.game.p1, board: {} } } }));
+    gs.getState().resolveDeadPick(0);
+    const g = gs.getState().game;
+    expect(g.pendingDeadPick, 'stale pick skipped').toBeNull();
+    expect(g.p1.dead.map(c => c.name), 'item preserved').toContain('Iron Sword');
+  });
+});
+
+describe('Animate Magic X: on enter, an own Magical Construct becomes an X/X Manifest', () => {
+  const binderCard = (): Card => ({
+    id: 'am-1', name: 'Spirit Binder', level: 1, type: 'Companion', subtype: '', rarity: '',
+    class1: '', class2: '', attack: 1, hp: 3, anchor: null, actionSub: '', actionPM: '',
+    itemKind: '', keywords: ['Animate Magic 2'], text: '', flavor: '', cls: '',
+  } as unknown as Card);
+
+  /** Place the Animate Magic companion for p1 with the given boards. */
+  function placeBinder(p1Board: Record<string, unknown>, p2Board: Record<string, unknown> = {}) {
+    freshGame();
+    const bc = binderCard();
+    gs.setState(s => ({ game: { ...s.game,
+      p1: { ...s.game.p1,
+        classZone: CATALOG.slice(20, 23).map((c, i) => mkCz(c, 'Warrior', `cz-${i}`)),
+        willpower: 3, hand: [bc], board: p1Board },
+      p2: { ...s.game.p2, board: p2Board },
+    } }));
+    gs.getState().beginPlay(bc.id);
+    gs.getState().placeCard('b1');
+  }
+
+  it('arms an enter target over OWN Incantation constructs only', () => {
+    placeBinder(
+      { f1: mkConstruct('am-inc', 'Glimmer Ward', 2, { subtype: 'Incantation' }),
+        f2: mkConstruct('am-trap', 'Spike Pit', 2, { subtype: 'Trap' }) },
+      { f1: mkConstruct('am-opp', 'Enemy Sigil', 2, { subtype: 'Incantation' }) });
+    const pa = gs.getState().pendingActionTarget;
+    expect(pa, 'target pick armed').not.toBeNull();
+    expect(pa?.source, 'an enter trigger, no card cost involved').toBe('enter');
+    expect(pa?.eligibleIds, 'own Incantation eligible').toEqual(['am-inc']);
+  });
+
+  it('resolving animates: kind/stats/subtype flip, anchors + manifest status retained', () => {
+    placeBinder({ f1: mkConstruct('am-inc', 'Glimmer Ward', 2, { subtype: 'Incantation' }) });
+    gs.getState().resolveActionTarget('am-inc');
+    const ent = gs.getState().game.p1.board.f1!;
+    expect(ent.kind, 'construct became a companion').toBe('companion');
+    expect(ent.subtype).toBe('Manifest');
+    expect([ent.atk, ent.hp, ent.maxHp], 'X/X from the keyword parameter').toEqual([2, 2, 2]);
+    expect(ent.statuses, 'manifest marker (sacrificed instead of bouncing)').toContain('manifest');
+    expect(ent.fresh, 'summoning sickness as a new companion').toBe(true);
+    expect(ent.anchors, 'anchor counters retained (inert)').toBe(2);
+    expect(gs.getState().pendingActionTarget, 'prompt cleared').toBeNull();
+  });
+
+  it('no Magical Construct → enters without a prompt (fizzle)', () => {
+    placeBinder({ f1: mkConstruct('am-trap', 'Spike Pit', 2, { subtype: 'Trap' }) });
+    expect(gs.getState().game.p1.board.b1?.name, 'companion still placed').toBe('Spirit Binder');
+    expect(gs.getState().pendingActionTarget, 'nothing to animate').toBeNull();
+  });
+
+  it('cancel fizzles the trigger without touching the placed companion', () => {
+    placeBinder({ f1: mkConstruct('am-inc', 'Glimmer Ward', 2, { subtype: 'Incantation' }) });
     gs.getState().cancelActionTarget();
     const g = gs.getState().game;
-    expect(g.p1.hand.length, 'cancel returned nothing').toBe(handBefore);
-    expect(g.p1.hand.map(c => c.id), 'the old game card did not appear').not.toContain(leakCard.id);
+    expect(gs.getState().pendingActionTarget, 'prompt cleared').toBeNull();
+    expect(g.p1.board.f1?.kind, 'construct untouched').toBe('construct');
+    expect(g.p1.board.b1?.name, 'companion stays placed').toBe('Spirit Binder');
+    expect(g.p1.hand, 'nothing bounced to hand').toHaveLength(0);
+  });
+});
+
+describe('Coercion: on enter, the OPPONENT discards a card or sacrifices a permanent', () => {
+  const envoyCard = (): Card => ({
+    id: 'co-1', name: 'Dread Envoy', level: 1, type: 'Companion', subtype: '', rarity: '',
+    class1: '', class2: '', attack: 1, hp: 3, anchor: null, actionSub: '', actionPM: '',
+    itemKind: '', keywords: ['Coercion'], text: '', flavor: '', cls: '',
+  } as unknown as Card);
+
+  /** Place the Coercion companion for p1 against the given p2 hand/board. */
+  function placeEnvoy(p2Hand: Card[], p2Board: Record<string, unknown>) {
+    freshGame();
+    const ec = envoyCard();
+    gs.setState(s => ({ game: { ...s.game,
+      p1: { ...s.game.p1,
+        classZone: CATALOG.slice(20, 23).map((c, i) => mkCz(c, 'Warrior', `cz-${i}`)),
+        willpower: 3, hand: [ec], board: {} },
+      p2: { ...s.game.p2, hand: p2Hand, dead: [], board: p2Board },
+    } }));
+    gs.getState().beginPlay(ec.id);
+    gs.getState().placeCard('b1');
+  }
+
+  it('arms the prompt for the VICTIM and holds everyone else', () => {
+    placeEnvoy([CATALOG[10]], { f1: mkComp('co-c', compCard.name) });
+    const g = gs.getState().game;
+    expect(g.pendingCoercion, 'prompt armed').toEqual({ source: 'Dread Envoy', victim: 'p2' });
+    expect(reactiveHold(g, 'p1'), 'the acting player is held').toMatch(/Coercion/);
+    expect(reactiveHold(g, 'p2'), 'the victim is not held — they must act').toBeNull();
+  });
+
+  it('discard: the chosen card moves hand → Dead Zone and the prompt clears', () => {
+    placeEnvoy([CATALOG[10]], {});
+    gs.getState().resolveCoercionDiscard(CATALOG[10].id);
+    const g = gs.getState().game;
+    expect(g.p2.hand, 'hand emptied').toHaveLength(0);
+    expect(g.p2.dead.map(c => c.name), 'discard lands in the Dead Zone').toContain(CATALOG[10].name);
+    expect(g.pendingCoercion, 'prompt cleared').toBeNull();
+  });
+
+  it('sacrifice: the permanent is buried; the PC is never a legal choice', () => {
+    placeEnvoy([], { f1: mkComp('co-c', compCard.name), b1: mkPc('co-pc') });
+    gs.getState().resolveCoercionSacrifice('co-pc');
+    expect(gs.getState().game.pendingCoercion, 'PC refused — prompt still armed').not.toBeNull();
+    expect(gs.getState().game.p2.board.b1, 'PC untouched').toBeDefined();
+    gs.getState().resolveCoercionSacrifice('co-c');
+    const g = gs.getState().game;
+    expect(g.p2.board.f1, 'companion sacrificed').toBeFalsy();
+    expect(g.p2.dead.map(c => c.name), 'buried in the Dead Zone').toContain(compCard.name);
+    expect(g.pendingCoercion, 'prompt cleared').toBeNull();
+  });
+
+  it("cannot sacrifice the coercer's own-side permanents (victim's board only)", () => {
+    placeEnvoy([CATALOG[10]], {});
+    const envoyId = gs.getState().game.p1.board.b1!.id;
+    gs.getState().resolveCoercionSacrifice(envoyId);
+    expect(gs.getState().game.p1.board.b1, 'the coercer survives').toBeDefined();
+    expect(gs.getState().game.pendingCoercion, 'prompt still armed').not.toBeNull();
+  });
+
+  it('nothing to coerce (empty hand, only the PC) → fizzles without a prompt', () => {
+    placeEnvoy([], { b1: mkPc('co-pc') });
+    const g = gs.getState().game;
+    expect(g.p1.board.b1?.name, 'coercer still placed').toBe('Dread Envoy');
+    expect(g.pendingCoercion, 'no prompt').toBeNull();
+  });
+});
+
+// Paranoia was first implemented here from an INVENTED definition (on-enter trigger,
+// the victim resolving their OWN deck). Canon (docs/Master_Keyword_List.md) is the
+// reverse: "Whenever an opponent plays a Companion, look at the top card of that
+// player's deck. You may put that card on the top or bottom of their deck." — the
+// CONTROLLER decides, over the PLACING player's deck. Full canonical coverage lives in
+// keyword_paranoia.test.ts; this block pins the correction against regression.
+describe('Paranoia: canonical direction (owner correction 2026-07-04)', () => {
+  const whispererCard = (): Card => ({
+    id: 'pn-1', name: 'Whisper of Doubt', level: 1, type: 'Companion', subtype: '', rarity: '',
+    class1: '', class2: '', attack: 1, hp: 3, anchor: null, actionSub: '', actionPM: '',
+    itemKind: '', keywords: ['Paranoia'], text: '', flavor: '', cls: '',
+  } as unknown as Card);
+
+  function placeWhisperer(p2Board: Record<string, ReturnType<typeof mkComp>>) {
+    freshGame();
+    const wc = whispererCard();
+    gs.setState(s => ({ game: { ...s.game,
+      p1: { ...s.game.p1,
+        classZone: CATALOG.slice(20, 23).map((c, i) => mkCz(c, 'Warrior', `cz-${i}`)),
+        willpower: 3, hand: [wc], board: {}, deck: CATALOG.slice(30, 35) },
+      p2: { ...s.game.p2, board: p2Board, deck: CATALOG.slice(35, 40), hand: [] },
+    } }));
+    gs.getState().beginPlay(wc.id);
+    gs.getState().placeCard('b1');
+  }
+
+  it('playing a companion that ITSELF has Paranoia triggers nothing — not an on-enter ability', () => {
+    placeWhisperer({});
+    const g = gs.getState().game;
+    expect(g.p1.board.b1?.name, 'companion placed').toBe('Whisper of Doubt');
+    expect(g.pendingPeek, 'no peek: the placed card\'s own Paranoia is dormant until the OPPONENT plays a companion').toBeNull();
+    expect(reactiveHold(g, 'p1'), 'nobody is held').toBeNull();
+  });
+
+  it('an opposing Paranoia permanent peeks the PLACING player\'s deck — never its controller\'s own', () => {
+    placeWhisperer({ f1: mkComp('opp-par', 'Duke\'s Watcher', { keywords: ['Paranoia'] }) });
+    const g = gs.getState().game;
+    const pk = g.pendingPeek!;
+    expect(pk, 'peek armed for the controller').toBeTruthy();
+    expect([pk.lp, pk.deckSide], 'p2 (controller) looks at p1\'s (placer\'s) deck').toEqual(['p2', 'p1']);
+    expect(pk.cards.map(c => c.id), 'sees the placer\'s top card').toEqual([CATALOG[30].id]);
+    expect(reactiveHold(g, 'p1'), 'the placer waits for the decision').toContain('Duke\'s Watcher');
   });
 });

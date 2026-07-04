@@ -13,6 +13,7 @@ import { ModalHost } from './play/modals/ModalHost';
 import { ModalShell, md } from './play/modals/ModalShell';
 import { CardPickModal } from './play/modals/CardPickModal';
 import { PoisonModal } from './play/modals/PoisonModal';
+import { CoercionModal } from './play/modals/CoercionModal';
 
 function GameView() {
   // Deliberately NO store subscription here: GameView is the root of the whole board
@@ -35,7 +36,8 @@ function GameView() {
       // cancels/skips prompts by design.
       const modalUp = game.setupQueue.length > 0 || s.modalQueue.length > 0
         || !!game.pendingPeek || !!game.pendingDeadPick || !!game.pendingArmor
-        || !!game.pendingAttackChoice || !!game.pendingPoison || !!game.gameOver
+        || !!game.pendingAttackChoice || !!game.pendingPoison || !!game.pendingCoercion
+        || !!game.gameOver
         || !!s.pendingEquipPick || s.pendingKit?.step === 'item' || !!s.pileView;
 
       if (e.key === 'Tab') {
@@ -75,6 +77,7 @@ function GameView() {
       <ArmorModal />
       <AttackChoiceModal />
       <PoisonHost />
+      <CoercionModal />
       <ReactiveHoldBanner />
       <EquipPickModal />
       <ModalHost />
@@ -257,7 +260,8 @@ function ReactiveHoldBanner() {
   );
 }
 
-/** Dead-Zone recovery picker (Library of Memory): pick a card to return to hand. */
+/** Dead-Zone recovery picker (Library of Memory / Scavenger): pick a card to return
+ *  to hand — or, with an attach destination (Scavenger), onto the entering companion. */
 function DeadPickModal() {
   const dp = useGameStore(s => s.game.pendingDeadPick);
   const pendingPeek = useGameStore(s => s.game.pendingPeek);
@@ -271,11 +275,13 @@ function DeadPickModal() {
 
   return (
     <CardPickModal glyph="☠" eyebrow={dp.source}
-      title="Return a card from your Dead Zone"
-      sub={`Pick a card to return to your hand${dp.optional ? ', or skip.' : '.'}`}
+      title={dp.attachTo ? 'Return an item from your Dead Zone' : 'Return a card from your Dead Zone'}
+      sub={dp.attachTo
+        ? `Pick an item to attach to ${dp.attachTo.name}${dp.optional ? ', or skip.' : '.'}`
+        : `Pick a card to return to your hand${dp.optional ? ', or skip.' : '.'}`}
       picks={dp.options.map(({ card, idx }) => ({ key: idx, name: card.name, card }))}
       onPick={idx => resolveDeadPick(idx as number)}
-      pickTitle={n => `Return ${n}`}
+      pickTitle={n => dp.attachTo ? `Attach ${n}` : `Return ${n}`}
       cancel={dp.optional ? { label: 'Skip', onClick: cancelDeadPick } : undefined}
     />
   );

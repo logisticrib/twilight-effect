@@ -2,29 +2,37 @@
 
 Self-contained context for continuing the card-effect engine work in a fresh session.
 
-## Latest session (2026-07-04) — Paranoia per canon; keyword canon snapshotted into docs/
+## Latest session (2026-07-04) — six keywords merged; Paranoia corrected to canon; canon in docs/
 **CANON NOW LIVES IN-REPO: `twilight-app/docs/Master_Keyword_List.md` + `Card_Design_Parameters.md`
 (snapshots of the parent-dir canonical docs). CHECK THEM before writing/implementing any keyword —
-the Paranoia registry note turned out to be an invented paraphrase (owner correction; see
+Paranoia was twice described/implemented from invented paraphrases (owner correction; see
 tasks/lessons.md 2026-07-04).**
-- **Paranoia IMPLEMENTED per canon**: "Whenever an opponent plays a Companion, look at the top card
-  of that player's deck. You may put that card on the top or bottom of their deck." The CONTROLLER
-  decides; the placing player makes no choice and never sees the card. `placeCard` (companion plays
-  only) queues one controller-owned `PeekRequest` per opposing Paranoia permanent (effectiveKeywords
-  → suppression honored), folded into every return path via `armParanoia`, queued BEHIND the placer's
-  own on-enter scry. `reactiveHold` extended: an opponent-owned `pendingPeek` now holds you (the
-  armer is the placer, the owner is the inactive controller — Memory-Stone pattern). `resolvePeek`
-  hardened: un-offered destinations coerce to 'top' (a stray 'hand' on an opponent-deck peek used to
-  DELETE the card). Registry: new `KwEvent 'oppPlay'`, Paranoia done:true; Animate Magic corrected to
-  done:true (structured op); Poison note records resolution-done/application-unwired. PeekModal title
-  says "— opponent's deck" when deckSide ≠ lp. NEW `keyword_paranoia.test.ts` (10 tests). Suite
-  **12 files / 133 tests green, tsc ZERO, validate:decks clean.**
-- **Ratified rulings recorded**: (1) Incantation constructs = Magical Constructs (engine already
-  correct: `subtype==='Incantation'`); Animate Magic leave-sacrifice replacement confirmed
-  implemented ('manifest' status). (2) Poison failed roll = 1 dmg/counter to the poisoned character's
-  controller — already implemented + tested (tier1_zones item 4). (3) **Coercion PC-exclusion is THE
-  RULE** — Rules Note added to Master_Keyword_List.md (parent + docs/), KEYWORD_DEFS updated;
-  Coercion itself still unimplemented (enforce on wiring).
+- **Merged the cloud session's PR #1** (branch `claude/todo-implementation-3n3uwh`, merged on
+  GitHub while this session worked locally): Bane (parseBanes → per-hit doubling), Poison
+  APPLICATION (poisonHitPatch in combat; resolution already existed), Scavenger (Dead-Zone pick
+  with attachTo → equipOnto), Animate Magic keyword parsing (parseAnimateMagic → animate op),
+  Coercion (pendingCoercion → victim CoercionModal, PC excluded at arm/reducer/modal — matches the
+  ruling ratified this session). Only Untamed remains unimplemented in the registry.
+- **Paranoia CORRECTED + re-implemented per canon** — the PR had built it from an invented
+  definition (on-enter trigger, the VICTIM resolving their OWN deck, invented "Paranoia X").
+  Canon: "Whenever an opponent plays a Companion, look at the top card of that player's deck. You
+  may put that card on the top or bottom of their deck." The CONTROLLER decides; the placing
+  player makes no choice and never sees the card. `placeCard` (companion plays only) queues one
+  controller-owned `PeekRequest` per opposing Paranoia permanent (effectiveKeywords → suppression
+  honored) via `armParanoia` on every return path, BEHIND the placer's own on-enter scry;
+  parseParanoia deleted (canonical keyword is bare). `reactiveHold` holds on an opponent-owned
+  `pendingPeek` (the armer is the placer, the owner is the inactive controller). `resolvePeek`
+  hardened: un-offered destinations coerce to 'top' (a stray 'hand' on an opponent-deck peek used
+  to DELETE the card). Registry: `KwEvent 'oppPlay'`, canonical note; KEYWORD_DEFS entry = canon
+  text. PeekModal title says "— opponent's deck" when deckSide ≠ lp. The PR's invented Paranoia
+  tests were replaced with correction-pinning tests (tier1_zones) + NEW `keyword_paranoia.test.ts`
+  (10, full canonical coverage). Suite **12 files / 164 tests green, tsc ZERO, validate:decks clean.**
+- **Ratified rulings recorded**: (1) Incantation constructs = Magical Constructs (engine keys
+  `subtype==='Incantation'`); Animate Magic leave-sacrifice replacement confirmed ('manifest'
+  status → sacrificed on bounce). (2) Poison failed roll = 1 dmg/counter to the poisoned
+  character's controller — implemented + tested (tier1_zones item 4). (3) **Coercion PC-exclusion
+  is THE RULE** — Rules Note added to Master_Keyword_List.md (parent + docs/), KEYWORD_DEFS
+  updated, and the merged implementation already enforces it.
 - **OPEN QUESTIONS from this slice** (per the standing rule, not encoded in tests): simultaneous-
   trigger order (placer's own scry currently resolves before Paranoia — confirm); "plays a
   Companion" = from-hand only (PC placement / Animate conversions don't trigger — confirm);

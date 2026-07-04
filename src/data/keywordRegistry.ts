@@ -25,27 +25,32 @@ export const KEYWORDS: Record<string, KeywordSpec> = {
   Guardian:  { event: 'attack',  done: true,  note: 'targeting rules' },
   Reckless:  { event: 'attack',  done: true,  note: 'resolveAttack self-damage' },
   'Hit & Run': { event: 'attack', done: true, note: 'grantHitRun + resolveMove gate' },
+  // Printed as "X's Bane" (Goblin's Bane…) — double damage vs companions of the named subtype/class.
+  Bane:      { event: 'attack',  done: true,  note: 'parseBanes -> per-hit doubling in applyCombatHit' },
   // Items / defence
   'Armor':   { event: 'damaged', done: true,  note: 'applyDamageToEntity counters' },
   Acrobatics:{ event: 'damaged', done: true,  note: 'isImmuneToSplash' },
+  Poison:    { event: 'damaged', done: true,  note: 'poisonHitPatch in combat; ready-phase check via PoisonModal/resolvePoison' },
   // Static auras
   Dismay:    { event: 'static',  done: true,  note: 'recomputeStatics' },
   // Set-specific
   Oathsworn: { event: 'enter',   done: true,  note: 'oathsworn modal' },
 
-  // ── Not yet implemented (need targeting UI or structured card data) ──────────
+  // ── On-enter triggers (targeted / prompted; resolved from placeCard) ─────────
   Reinforce:      { event: 'enter',   done: true,  note: 'pendingTrigger -> resolveTrigger (add anchors)' },
   Dismantle:      { event: 'enter',   done: true,  note: 'pendingTrigger -> resolveTrigger (remove anchors / sacrifice)' },
   'Kit-Master':   { event: 'enter',   done: true,  note: 'pendingKit two-step (source item -> dest char)' },
-  Scavenger:      { event: 'enter',   done: false, note: 'return item from Dead Zone' },
-  Coercion:       { event: 'enter',   done: false, note: 'opponent discards or sacrifices a permanent (PC excluded — ruling ratified 2026-07-04)' },
-  'Animate Magic':{ event: 'enter',   done: true,  note: "structured 'animate' op (Incantation = Magical Construct) + 'manifest' leave-sacrifice; keyword string itself not parsed" },
-  Poison:         { event: 'damaged', done: false, note: 'application (exhaust + counter on damage) unwired; RESOLUTION done: pendingPoison -> resolvePoison (roll <= WP cleanses+readies, else stays exhausted + 1 dmg per counter to controller PC)' },
+  Scavenger:      { event: 'enter',   done: true,  note: 'placeCard -> Dead-Zone pick with attachTo -> equipOnto' },
+  Coercion:       { event: 'enter',   done: true,  note: 'pendingCoercion -> victim modal (discard or sacrifice; PC cannot be sacrificed — ruling ratified 2026-07-04)' },
+  'Animate Magic':{ event: 'enter',   done: true,  note: "parseAnimateMagic -> pendingActionTarget 'enter' -> animate op ('manifest' leave-sacrifice on bounce)" },
+
+  // Canonical (docs/Master_Keyword_List.md): "Whenever an OPPONENT plays a Companion, look
+  // at the top card of THAT player's deck. You may put that card on the top or bottom of
+  // their deck." The Paranoia CONTROLLER looks and decides; the placing player makes no
+  // choice and by default never sees the card. (Two earlier takes invented other shapes —
+  // an on-enter self peek and a victim-decides own-deck check. Both wrong; see canon.)
+  Paranoia:       { event: 'oppPlay', done: true,  note: "placeCard arms a controller-owned PendingPeek over the PLACING player's deck (top/bottom only)" },
+
+  // ── Not yet implemented ───────────────────────────────────────────────────────
   Untamed:        { event: 'static',  done: false, note: 'per-card text bonus (needs card data)' },
-  Bane:           { event: 'attack',  done: false, note: 'double damage vs subtype/class' },
-  // Canonical (Master_Keyword_List): "Whenever an OPPONENT plays a Companion, look at the
-  // top card of THAT player's deck. You may put that card on the top or bottom of their
-  // deck." The Paranoia controller decides; the placing player makes no choice and does
-  // not see the card. (An earlier registry note guessed an on-enter self trigger — wrong.)
-  Paranoia:       { event: 'oppPlay', done: true,  note: 'placeCard arms an opponent-owned PendingPeek over the placing player\'s deck (top/bottom)' },
 };
