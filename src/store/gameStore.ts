@@ -6,7 +6,7 @@ import { CATALOG, SORCERER_WARRIOR_CARDS, WIZARD_BUILDER_CARDS } from '../data/c
 import { recomputeStatics, isImmuneToSplash, grantHitRun, HIT_RUN_STATUS,
          isPhysicalConstruct, parseEnterTrigger, type EnterTriggerKind,
          isCharacter, firstItemOf, allItemsOf, canHoldItem, effectiveAttack, effectiveKeywords, hasModifier, effectiveMaxHp, wardedLines,
-         canPlayActionCard, actionTypeOf, playWillpower } from './keywords';
+         canPlayActionCard, actionTypeOf, playWillpower, parseBanes, isBaneTarget } from './keywords';
 
 export type Phase = 'ready' | 'draw' | 'cz' | 'action' | 'end';
 export type PlayPhase = 'lobby' | 'setup' | 'game';
@@ -221,6 +221,7 @@ export interface AttackCtx {
   attackerName: string;
   attackerPlayer: 'p1' | 'p2';
   dmg: number;                 // per-hit damage (same for primary + every Cleave hit)
+  banes: string[];             // "X's Bane" subjects — hits double vs matching companions
   hitQueue: string[];          // entity ids still to be damaged (head = current)
   phase: 'damage' | 'after';
   reckless: boolean;
@@ -483,11 +484,15 @@ function applyCombatHit(game: GameState, ctx: AttackCtx, armorPieceId?: string):
   const beforeLoc = findEntityAnywhere(game, entityId);
   if (!beforeLoc) { ctx.hitQueue.shift(); return game; }
   const before = beforeLoc.ent;
-  const r = applyDamage(game, entityId, ctx.dmg, ctx.attackerName, ctx.attackerPlayer, ctx.deadSink, armorPieceId);
+  // Bane doubles per hit (primary AND Cleave splash), keyed off each defender.
+  const bane = isBaneTarget(ctx.banes, before);
+  const dmg = bane ? ctx.dmg * 2 : ctx.dmg;
+  if (bane) ctx.msgs.push(`${ctx.attackerName} strikes ${before.name} for double damage (Bane)`);
+  const r = applyDamage(game, entityId, dmg, ctx.attackerName, ctx.attackerPlayer, ctx.deadSink, armorPieceId);
   ctx.msgs.push(...r.msgs);
   const after = findEntityAnywhere(r.game, entityId);
   const tookDamage = !after || after.ent.hp < before.hp; // armor-blocked hits don't count
-  if (ctx.dmg > 0 && tookDamage) ctx.events.push({
+  if (dmg > 0 && tookDamage) ctx.events.push({
     id: entityId, kind: before.kind, owner: beforeLoc.player,
     physical: before.kind === 'construct' && isPhysicalConstruct(before),
     destroyed: !after,
@@ -618,6 +623,7 @@ function commitAttack(game: GameState, charId: string, targetEntityId: string, b
   }
   const ctx: AttackCtx = {
     charId, attackerName: attacker.name, attackerPlayer: attLoc.player, dmg, hitQueue, phase: 'damage',
+    banes: parseBanes(effectiveKeywords(attacker, game)),
     reckless: effectiveKeywords(attacker, game).includes('Reckless'),
     hitRun: effectiveKeywords(attacker, game).includes('Hit & Run'),
     msgs: acroMsgs, events: [], deadSink: [], armorSink: [],

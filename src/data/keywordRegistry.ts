@@ -25,6 +25,8 @@ export const KEYWORDS: Record<string, KeywordSpec> = {
   Guardian:  { event: 'attack',  done: true,  note: 'targeting rules' },
   Reckless:  { event: 'attack',  done: true,  note: 'resolveAttack self-damage' },
   'Hit & Run': { event: 'attack', done: true, note: 'grantHitRun + resolveMove gate' },
+  // Printed as "X's Bane" (Goblin's Bane…) — double damage vs companions of the named subtype/class.
+  Bane:      { event: 'attack',  done: true,  note: 'parseBanes -> per-hit doubling in applyCombatHit' },
   // Items / defence
   'Armor':   { event: 'damaged', done: true,  note: 'applyDamageToEntity counters' },
   Acrobatics:{ event: 'damaged', done: true,  note: 'isImmuneToSplash' },
@@ -42,6 +44,5 @@ export const KEYWORDS: Record<string, KeywordSpec> = {
   'Animate Magic':{ event: 'enter',   done: false, note: 'construct -> companion' },
   Poison:         { event: 'damaged', done: false, note: 'exhaust + poison counter' },
   Untamed:        { event: 'static',  done: false, note: 'per-card text bonus (needs card data)' },
-  Bane:           { event: 'attack',  done: false, note: 'double damage vs subtype/class' },
   Paranoia:       { event: 'enter',   done: false, note: 'peek/reorder opponent deck' },
 };

@@ -259,6 +259,28 @@ export function parseEnterTrigger(keywords: string[]): EnterTrigger | null {
   return null;
 }
 
+/**
+ * Bane — printed as "X's Bane" (Goblin's Bane, Undead's Bane…): this character
+ * deals double damage to Companions of the named subtype or class. Parsed from
+ * the keyword string, like Reinforce/Dismantle, so card data stays declarative.
+ * Returns every named prey (a character could carry more than one Bane).
+ */
+export function parseBanes(keywords: string[]): string[] {
+  const out: string[] = [];
+  for (const kw of keywords) {
+    const m = /^(.+)'s Bane$/.exec(kw);
+    if (m) out.push(m[1]);
+  }
+  return out;
+}
+
+/** Whether an attack carrying these Bane subjects doubles against this defender.
+ *  Companions only (per the Master List); matches subtype OR class. */
+export function isBaneTarget(banes: string[], defender: BoardEntity): boolean {
+  if (defender.kind !== 'companion') return false;
+  return banes.some(b => b === defender.subtype || b === defender.cls);
+}
+
 /** Characters (not constructs) can hold items and be Kit-Master endpoints. */
 export function isCharacter(ent: BoardEntity): boolean {
   return ent.kind === 'companion' || ent.kind === 'pc';

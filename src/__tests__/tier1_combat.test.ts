@@ -1,6 +1,6 @@
 // Tier 1 (test_seed_plan.md) — armor-picker + keyword-suppression regressions, items 6/10.
 import { describe, it, expect } from 'vitest';
-import { gs, freshGame, mkComp, mkConstruct, mkItem, mkCz } from './helpers';
+import { gs, freshGame, mkComp, mkConstruct, mkItem, mkCz, mkPc } from './helpers';
 import { effectiveKeywords, isImmuneToSplash } from '../store/keywords';
 import { CATALOG } from '../data/catalog';
 
@@ -161,5 +161,57 @@ describe('item 10: keywords resolve through effectiveKeywords', () => {
     } }));
     const g = gs.getState().game;
     expect(effectiveKeywords(g.p1.board.b1!, g), 'back line unaffected (front-line ward)').toContain('Zealous');
+  });
+});
+
+describe("Bane: \"X's Bane\" deals double damage to companions of the named subtype or class", () => {
+  /** Board with one p1 attacker vs the given p2 defenders, attack armed. */
+  const arm = (att: ReturnType<typeof mkComp>, defs: Record<string, ReturnType<typeof mkComp>>) =>
+    gs.setState(s => ({ game: { ...s.game,
+      p1: { ...s.game.p1, board: { f1: att } },
+      p2: { ...s.game.p2, board: defs },
+    }, pending: { action: 'attack', charId: att.id } }));
+
+  it('doubles against a companion of the named SUBTYPE', () => {
+    freshGame();
+    arm(mkComp('bn-att', compCard.name, { atk: 3, keywords: ["Goblin's Bane"] }),
+        { f1: mkComp('bn-gob', compCard2.name, { hp: 8, subtype: 'Goblin' }) });
+    gs.getState().resolveAttack('bn-gob');
+    expect(gs.getState().game.p2.board.f1?.hp, '3 attack lands as 6').toBe(2);
+  });
+
+  it('doubles against a companion of the named CLASS', () => {
+    freshGame();
+    arm(mkComp('bn-att', compCard.name, { atk: 3, keywords: ["Warrior's Bane"] }),
+        { f1: mkComp('bn-war', compCard2.name, { hp: 8, cls: 'Warrior' }) });
+    gs.getState().resolveAttack('bn-war');
+    expect(gs.getState().game.p2.board.f1?.hp, '3 attack lands as 6').toBe(2);
+  });
+
+  it('a companion outside the named prey takes normal damage', () => {
+    freshGame();
+    arm(mkComp('bn-att', compCard.name, { atk: 3, keywords: ["Goblin's Bane"] }),
+        { f1: mkComp('bn-elf', compCard2.name, { hp: 8, subtype: 'Elf', cls: 'Rogue' }) });
+    gs.getState().resolveAttack('bn-elf');
+    expect(gs.getState().game.p2.board.f1?.hp, 'no double vs a non-named companion').toBe(5);
+  });
+
+  it('never doubles against the PC — companions only, even on a class match', () => {
+    freshGame();
+    arm(mkComp('bn-att', compCard.name, { atk: 3, keywords: ["Warrior's Bane"] }),
+        { f1: mkPc('bn-pc', { cls: 'Warrior' }) });
+    gs.getState().resolveAttack('bn-pc');
+    expect(gs.getState().game.p2.board.f1?.hp, 'PC takes the plain 3').toBe(17);
+  });
+
+  it('Cleave checks each hit separately: only the named prey on the line takes double', () => {
+    freshGame();
+    arm(mkComp('bn-att', compCard.name, { atk: 3, keywords: ['Cleave', "Goblin's Bane"] }),
+        { f1: mkComp('bn-d1', compCard2.name, { hp: 8, subtype: 'Elf' }),
+          f2: mkComp('bn-d2', compCard.name,  { hp: 8, subtype: 'Goblin' }) });
+    gs.getState().resolveAttack('bn-d1');
+    const g = gs.getState().game;
+    expect(g.p2.board.f1?.hp, 'primary (Elf) takes the plain 3').toBe(5);
+    expect(g.p2.board.f2?.hp, 'splash Goblin takes the doubled 6').toBe(2);
   });
 });
