@@ -14,10 +14,11 @@ export const KEYWORD_DEFS: Record<string, string> = {
   'Acrobatics':    'This companion cannot be damaged by any source that does not target it directly.',
   'Reinforce':     'When this enters, add N Anchor counters to target Physical Construct.',
   'Dismantle':     'When this enters, remove up to N Anchor counters from target Physical Construct; sacrifice it if none remain.',
-  'Coercion':      'When this companion enters, target opponent must discard a card or sacrifice a permanent.',
+  'Coercion':      'When this companion enters, target opponent must discard a card or sacrifice a permanent. The Player Character cannot be sacrificed.',
   'Dismay':        'While you control one or more permanents with Dismay, your opponent is Dismayed (−1 Willpower).',
   'Untamed':       'While there are no Items or Physical Constructs in the encounter, this character is Untamed.',
   'Oathsworn':     'As this enters, tuck a card from your hand face-down beneath it (or sacrifice it). The sworn card returns to hand when it leaves.',
-  'Animate Magic': 'When this enters, a Magical Construct you control becomes a Manifest companion with Attack/HP X.',
+  'Animate Magic': 'When this enters, a Magical Construct you control becomes a Manifest companion with Attack/HP X. It keeps its text and Anchor counters; if it would leave the encounter, sacrifice it instead.',
   'Bane':          'Deals double damage to Companions of the named subtype or class.',
+  'Paranoia':      'Whenever an opponent plays a Companion, look at the top card of that player\'s deck. You may put that card on the top or bottom of their deck.',
 };

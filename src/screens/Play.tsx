@@ -179,7 +179,7 @@ function PeekModal() {
 
   return (
     <ModalShell glyph="☾" eyebrow={pk.source}
-      title={`Look at ${pk.cards.length} card${pk.cards.length !== 1 ? 's' : ''}`}
+      title={`Look at ${pk.cards.length} card${pk.cards.length !== 1 ? 's' : ''}${pk.deckSide !== pk.lp ? " — opponent's deck" : ''}`}
       sub={`Assign a destination to each card${pk.maxHand != null ? ` (up to ${pk.maxHand} to hand)` : ''}.`}
       width="min(760px, 94vw)"
       footer={

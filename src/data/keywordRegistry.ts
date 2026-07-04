@@ -7,7 +7,7 @@
  * Each keyword resolves at one lifecycle event; `done` tracks engine support so the
  * gaps stay visible.
  */
-export type KwEvent = 'static' | 'enter' | 'attack' | 'damaged' | 'turnStart';
+export type KwEvent = 'static' | 'enter' | 'attack' | 'damaged' | 'turnStart' | 'oppPlay';
 
 export interface KeywordSpec {
   event: KwEvent;
@@ -38,10 +38,14 @@ export const KEYWORDS: Record<string, KeywordSpec> = {
   Dismantle:      { event: 'enter',   done: true,  note: 'pendingTrigger -> resolveTrigger (remove anchors / sacrifice)' },
   'Kit-Master':   { event: 'enter',   done: true,  note: 'pendingKit two-step (source item -> dest char)' },
   Scavenger:      { event: 'enter',   done: false, note: 'return item from Dead Zone' },
-  Coercion:       { event: 'enter',   done: false, note: 'opponent discards or sacrifices' },
-  'Animate Magic':{ event: 'enter',   done: false, note: 'construct -> companion' },
-  Poison:         { event: 'damaged', done: false, note: 'exhaust + poison counter' },
+  Coercion:       { event: 'enter',   done: false, note: 'opponent discards or sacrifices a permanent (PC excluded — ruling ratified 2026-07-04)' },
+  'Animate Magic':{ event: 'enter',   done: true,  note: "structured 'animate' op (Incantation = Magical Construct) + 'manifest' leave-sacrifice; keyword string itself not parsed" },
+  Poison:         { event: 'damaged', done: false, note: 'application (exhaust + counter on damage) unwired; RESOLUTION done: pendingPoison -> resolvePoison (roll <= WP cleanses+readies, else stays exhausted + 1 dmg per counter to controller PC)' },
   Untamed:        { event: 'static',  done: false, note: 'per-card text bonus (needs card data)' },
   Bane:           { event: 'attack',  done: false, note: 'double damage vs subtype/class' },
-  Paranoia:       { event: 'enter',   done: false, note: 'peek/reorder opponent deck' },
+  // Canonical (Master_Keyword_List): "Whenever an OPPONENT plays a Companion, look at the
+  // top card of THAT player's deck. You may put that card on the top or bottom of their
+  // deck." The Paranoia controller decides; the placing player makes no choice and does
+  // not see the card. (An earlier registry note guessed an on-enter self trigger — wrong.)
+  Paranoia:       { event: 'oppPlay', done: true,  note: 'placeCard arms an opponent-owned PendingPeek over the placing player\'s deck (top/bottom)' },
 };

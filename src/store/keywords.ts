@@ -16,6 +16,8 @@ import { CATALOG } from '../data/catalog';
  *   attack    — a character resolves an attack (resolveAttack)
  *   damaged   — a character would take damage (applyDamageToEntity)
  *   turnStart — the Ready phase of a controller's turn (endTurn)
+ *   oppPlay   — an OPPONENT of the keyword's controller plays a Companion (placeCard;
+ *               Paranoia — the controller gets the choice, not the placing player)
  *
  * Status of the full vocabulary lives in KEYWORDS so the gaps stay visible.
  *

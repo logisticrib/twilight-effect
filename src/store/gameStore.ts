@@ -1147,6 +1147,10 @@ export function reactiveHold(game: GameState, localPlayer: 'p1' | 'p2'): string 
   // The opponent's pre-attack pay-HP choice (Mara) — same clobber risk.
   const pac = game.pendingAttackChoice;
   if (pac && pac.lp !== localPlayer) return `${pac.sourceName} (attack choice)`;
+  // An opponent-owned deck peek (Paranoia: armed by the active player playing a
+  // Companion, owned by the inactive Paranoia controller) — same clobber risk.
+  const pp = game.pendingPeek;
+  if (pp && pp.lp !== localPlayer) return `${pp.source} (deck peek)`;
   return null;
 }
 
@@ -2191,7 +2195,11 @@ export const useGameStore = create<GameStoreState>()(
     const below = ps.deck.slice(pk.cards.length);
     const toHand: Card[] = [], toTop: Card[] = [], toBottom: Card[] = [];
     pk.cards.forEach((c, i) => {
-      const dest = assignments[i] ?? 'top';
+      // Coerce any destination the peek doesn't offer back to 'top' (else a stray
+      // 'hand' on an opponent-deck peek would vaporize the card: lp !== deckSide
+      // means toHand cards are never added to a hand below).
+      const raw = assignments[i] ?? 'top';
+      const dest = pk.dests.includes(raw) ? raw : pk.dests.includes('top') ? 'top' : pk.dests[0];
       (dest === 'hand' ? toHand : dest === 'bottom' ? toBottom : toTop).push(c);
     });
     const newDeck = [...toTop, ...below, ...toBottom];
@@ -2722,6 +2730,27 @@ export const useGameStore = create<GameStoreState>()(
     // Build board entity from card
     const isCompanion = card.type === 'Companion';
     const isConstruct = card.type === 'Construct';
+
+    // Paranoia (Master_Keyword_List): "Whenever an opponent plays a Companion, look at
+    // the top card of that player's deck. You may put that card on the top or bottom of
+    // their deck." The peek is OWNED by the Paranoia controller (this player's opponent)
+    // and looks at THIS player's deck; the placing player makes no choice and never sees
+    // the card (PeekModal renders only for the owner). One trigger per Paranoia
+    // permanent; extras queue and re-slice the live deck when they become active.
+    const oppSide: 'p1' | 'p2' = lp === 'p1' ? 'p2' : 'p1';
+    const paranoiaReqs: PeekRequest[] = isCompanion
+      ? (Object.values(game[oppSide].board) as (BoardEntity | undefined)[])
+          .filter((e): e is BoardEntity => !!e && effectiveKeywords(e, game).includes('Paranoia'))
+          .map(e => ({ source: e.name, lp: oppSide, deckSide: lp, look: 1, dests: ['top', 'bottom'] }))
+      : [];
+    /** Fold the Paranoia peeks into whatever game the return path built (queue behind
+     *  an already-armed peek so the placer's own scry resolves first). */
+    const armParanoia = (g: GameState): GameState => {
+      if (paranoiaReqs.length === 0) return g;
+      if (g.pendingPeek) return { ...g, pendingPeekQueue: [...g.pendingPeekQueue, ...paranoiaReqs] };
+      const { peek, rest } = nextPeek(g, paranoiaReqs);
+      return peek ? { ...g, pendingPeek: peek, pendingPeekQueue: [...g.pendingPeekQueue, ...rest] } : g;
+    };
     const newEnt: BoardEntity = {
       id: `placed-${card.id}-${Date.now()}`,
       kind: isConstruct ? 'construct' : 'companion',
@@ -2820,7 +2849,7 @@ export const useGameStore = create<GameStoreState>()(
         const items = placedGame[lp].hand.filter(c => c.type === 'Item');
         if (items.length > 0) {
           return {
-            pendingPlay: null, oathContext: newOathCtx, modalQueue: newModals, game: placedGame,
+            pendingPlay: null, oathContext: newOathCtx, modalQueue: newModals, game: armParanoia(placedGame),
             pendingEquipPick: { source: card.name, lp, targetId: newEnt.id, items },
             toasts: [...s.toasts, { id, msg: `${card.name} enters — equip an item from your hand?` }],
           };
@@ -2836,7 +2865,7 @@ export const useGameStore = create<GameStoreState>()(
         const sources = physical.filter(pid => (findEntityAnywhere(placedGame, pid)?.ent.anchors ?? 0) >= count);
         if (sources.length >= 1 && physical.length >= 2) {
           return {
-            pendingPlay: null, oathContext: newOathCtx, modalQueue: newModals, game: placedGame,
+            pendingPlay: null, oathContext: newOathCtx, modalQueue: newModals, game: armParanoia(placedGame),
             pendingActionTarget: { source: 'enter', sourceName: card.name, lp, effects: onEnter, eligibleIds: sources, sourceId: newEnt.id, twoStep: 'moveAnchor' },
             toasts: [...s.toasts, { id, msg: `${card.name} enters — move an anchor: choose a source Physical Construct.` }],
           };
@@ -2850,7 +2879,7 @@ export const useGameStore = create<GameStoreState>()(
         if (cards.length > 0) {
           return {
             pendingPlay: null, oathContext: newOathCtx, modalQueue: newModals,
-            game: { ...placedGame, pendingPeek: { source: card.name, lp, deckSide: lp, cards, dests: enterPeek.dests, maxHand: enterPeek.maxHand } },
+            game: armParanoia({ ...placedGame, pendingPeek: { source: card.name, lp, deckSide: lp, cards, dests: enterPeek.dests, maxHand: enterPeek.maxHand } }),
             toasts: [...s.toasts, { id, msg: `${card.name} enters — look at your deck.` }],
           };
         }
@@ -2860,7 +2889,7 @@ export const useGameStore = create<GameStoreState>()(
         const eligibleIds = eligibleTargets(placedGame, lp, spec).filter(eid => eid !== newEnt.id);
         if (eligibleIds.length > 0) {
           return {
-            pendingPlay: null, oathContext: newOathCtx, modalQueue: newModals, game: placedGame,
+            pendingPlay: null, oathContext: newOathCtx, modalQueue: newModals, game: armParanoia(placedGame),
             pendingActionTarget: { source: 'enter', sourceName: card.name, lp, effects: onEnter, eligibleIds, sourceId: newEnt.id },
             toasts: [...s.toasts, { id, msg: `${card.name} enters — choose a target.` }],
           };
@@ -2871,7 +2900,7 @@ export const useGameStore = create<GameStoreState>()(
         const r = resolveActionEffects(placedGame, lp, card.name, onEnter, undefined, newEnt.id, undefined, undefined, armorSink);
         return {
           pendingPlay: null, pendingTrigger, pendingKit, oathContext: newOathCtx, modalQueue: newModals,
-          game: armPrompts(r.game, [], armorSink),
+          game: armParanoia(armPrompts(r.game, [], armorSink)),
           toasts: [...s.toasts, { id, msg: r.msgs.length ? `${card.name} enters! ${r.msgs.join(' | ')}` : enterMsg }],
         };
       }
@@ -2883,7 +2912,7 @@ export const useGameStore = create<GameStoreState>()(
       pendingKit,
       oathContext: newOathCtx,
       modalQueue: newModals,
-      game: placedGame,
+      game: armParanoia(placedGame),
       toasts: [...s.toasts, { id, msg: enterMsg }],
     };
   }),
