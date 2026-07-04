@@ -80,6 +80,16 @@ Two resolved owner rulings from `tasks/test_seed_plan.md` applied, then Phase 0 
   synthetic plays). ENGINE NOTES: `perControlled` ignores its spec value (always counts
   companions); discard/mill/sacrifice/sacrificeItem/search/modal/gainControl are
   schema-valid interpreter NO-OPS. **Suite: 11 files / 119 tests; tsc ZERO errors.**
+- **Validator follow-ups DONE (owner-directed, same day):** `npm run validate:decks`
+  (scripts/validate-decks.mjs, ssrLoadModule harness) + CI step — negative path verified
+  (injected +HP buff + Initiative text → both caught, exit 1; decks restored). Validator is
+  now a PURE mint-gate `validateCards(candidates, existingNames, keywords)` — KEYWORDS
+  moved to dependency-free `src/data/keywordRegistry.ts` (store/keywords re-exports), no
+  transitive catalog import; minted-name collisions rejected, duplicate mechanics allowed;
+  keyword contract injectable. HARD BANS in the gate: +HP effects and Initiative references.
+  Suite: 11 files / 123 tests. ⚠ OPEN QUESTIONS for owner: (1) should EXILE also be a gate
+  ban (only Initiative was ruled)? (2) `perControlled` ignores its 'constructs' spec value —
+  intended?
 - NOT started (next session candidates): audit batch 4 guest-deck-in-READY (H3), Phase 2
   replay recorder (the seed plan's last item), quality refactors (§d), live two-peer playtest.
 
@@ -526,5 +536,15 @@ owner-ruling flags in OPEN QUESTIONS.
 - One slice at a time, verify in preview, remove temp hook, typecheck, update memory.
 - **Every slice's verification script gets COMMITTED as a Vitest test (`src/__tests__/`,
   `npm test`), never run-and-discarded** (test_seed_plan.md Phase 0 rule, 2026-07-03). CI
-  (`.github/workflows/ci.yml`) runs typecheck + tests on every push.
+  (`.github/workflows/ci.yml`) runs typecheck + deck validation + tests on every push.
+- **OWNER STANDING RULE (2026-07-03): if an op's edge behavior isn't specified in the rules
+  docs, list it as an OPEN QUESTION for the owner — never encode a reasonable-seeming answer
+  as a test.** Corollary: the validator/mint-gate carries only ABSOLUTE rulings (no +HP, no
+  Initiative); softer design constraints (no straight draw, no mill, token limits) are
+  generation POLICY, not validator rules. Tests may pin current ENGINE state if labeled as such.
+- **Deck authoring gate:** after hand-patching deck JSONs, run `npm run validate:decks`
+  (scripts/validate-decks.mjs; also a CI step). The validator (`src/data/validateCards.ts`)
+  is a PURE mint-gate: `validateCards(candidates, existingNames, keywords)` — previously
+  minted names are a parameter (unique names, mechanics may repeat); the keyword vocabulary
+  lives dependency-free in `src/data/keywordRegistry.ts` (store/keywords re-exports it).
 - Don't touch pre-existing unrelated TS errors.

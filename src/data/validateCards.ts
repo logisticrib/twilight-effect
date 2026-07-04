@@ -1,7 +1,16 @@
 /**
- * Deck-data validator — the data contract for card JSONs, and later the MINT-GATE
- * for the card-generation pipeline (validate a generated card before it is minted).
- * Returns a list of human-readable problems; an empty list means the cards are valid.
+ * Deck-data validator — the data contract for card JSONs, and the MINT-GATE for the
+ * card-generation pipeline: a PURE function of (candidate cards, existing card names,
+ * keyword contract). Nothing here imports the engine, the store, or the shipped
+ * catalog — previously minted names arrive as a PARAMETER (duplicate names are banned;
+ * duplicate mechanics are fine). Returns human-readable problems; empty = mintable.
+ *
+ * HARD BANS enforced here (absolute owner rulings — no exceptions, so they live in
+ * the gate, not just in tests that audit the current decks):
+ *  - no effect may increase max HP (max HP is fixed; only healing exists);
+ *  - no card may reference Initiative in keywords, text, or effects.
+ * Softer design constraints (draw limits, mill, token caps…) are generation POLICY,
+ * deliberately NOT validator rules.
  *
  * The runtime union mirrors below are kept honest in BOTH directions:
  *  - `satisfies readonly X[]` proves every listed entry is a real union member;
@@ -10,7 +19,7 @@
  */
 import type { Card } from '../types/card';
 import type { Trigger, TargetSpec, Effect, Condition, Cost, Modifier, CardEffect } from '../types/effects';
-import { KEYWORDS } from '../store/keywords';
+import { KEYWORDS } from './keywordRegistry';
 
 type AssertNever<T extends never> = T;
 
@@ -89,7 +98,7 @@ function validCost(c: unknown): boolean {
   return true;
 }
 
-function validateEffect(e: Effect, path: string, p: (msg: string) => void): void {
+function validateEffect(e: Effect, path: string, p: (msg: string) => void, keywords: Readonly<Record<string, unknown>>): void {
   const raw = e as unknown as Record<string, unknown>;
   if (!has(OPS, raw.op)) { p(`${path}: unknown op "${String(raw.op)}"`); return; }
   const target = (field: string) => {
@@ -109,10 +118,13 @@ function validateEffect(e: Effect, path: string, p: (msg: string) => void): void
     case 'heal': amount(); target('target'); break;
     case 'buff':
       target('scope');
-      if (e.stat !== undefined && e.stat !== 'atk' && e.stat !== 'hp') p(`${path}(buff): bad stat "${String(e.stat)}"`);
+      // HARD BAN: nothing may increase max HP — max HP is fixed, only healing exists
+      // (owner ruling 2026-06-22, re-confirmed 2026-07-03). No exceptions.
+      if (e.stat === 'hp') p(`${path}(buff): +HP effects are BANNED — max HP is fixed, only healing exists`);
+      else if (e.stat !== undefined && e.stat !== 'atk') p(`${path}(buff): bad stat "${String(e.stat)}"`);
       if (e.duration !== 'endOfTurn' && e.duration !== 'while') p(`${path}(buff): bad duration "${String(e.duration)}"`);
       for (const m of e.modifiers ?? []) if (!has(MODIFIERS, m)) p(`${path}(buff): unknown modifier "${String(m)}"`);
-      for (const g of e.grant ?? []) if (!(keywordBase(g) in KEYWORDS)) p(`${path}(buff): grants unknown keyword "${g}"`);
+      for (const g of e.grant ?? []) if (!(keywordBase(g) in keywords)) p(`${path}(buff): grants unknown keyword "${g}"`);
       if (e.where?.line !== undefined && e.where.line !== 'front' && e.where.line !== 'back') p(`${path}(buff): bad where.line`);
       break;
     case 'draw':
@@ -152,8 +164,8 @@ function validateEffect(e: Effect, path: string, p: (msg: string) => void): void
       target('target'); break;
     case 'dieCheck':
       if (!isInt(e.threshold) || e.threshold < 1 || e.threshold > 6) p(`${path}(dieCheck): threshold must be 1–6`);
-      e.onPass.forEach((sub, i) => validateEffect(sub, `${path}.onPass[${i}]`, p));
-      e.onFail.forEach((sub, i) => validateEffect(sub, `${path}.onFail[${i}]`, p));
+      e.onPass.forEach((sub, i) => validateEffect(sub, `${path}.onPass[${i}]`, p, keywords));
+      e.onFail.forEach((sub, i) => validateEffect(sub, `${path}.onFail[${i}]`, p, keywords));
       break;
     case 'attackDisarm': target('attacker'); target('target'); break;
     case 'moveAnchor': count('count'); break;
@@ -164,7 +176,7 @@ function validateEffect(e: Effect, path: string, p: (msg: string) => void): void
       break; // no fields
     case 'modal':
       if (!Array.isArray(e.options) || !e.options.length) p(`${path}(modal): options required`);
-      else e.options.forEach((o, oi) => o.effects.forEach((sub, i) => validateEffect(sub, `${path}.options[${oi}][${i}]`, p)));
+      else e.options.forEach((o, oi) => o.effects.forEach((sub, i) => validateEffect(sub, `${path}.options[${oi}][${i}]`, p, keywords)));
       break;
     case 'gainControl':
       target('target');
@@ -177,7 +189,7 @@ function validateEffect(e: Effect, path: string, p: (msg: string) => void): void
   }
 }
 
-function validateClause(clause: CardEffect, idx: number, p: (msg: string) => void): void {
+function validateClause(clause: CardEffect, idx: number, p: (msg: string) => void, keywords: Readonly<Record<string, unknown>>): void {
   const path = `effects[${idx}]`;
   if (!has(TRIGGERS, clause.trigger)) p(`${path}: unknown trigger "${String(clause.trigger)}"`);
   if (clause.trigger === 'activated' && !clause.cost && !clause.oncePerTurn) {
@@ -185,20 +197,36 @@ function validateClause(clause: CardEffect, idx: number, p: (msg: string) => voi
   }
   if (clause.cost !== undefined && !validCost(clause.cost)) p(`${path}: bad cost ${JSON.stringify(clause.cost)}`);
   if (clause.if !== undefined && !validCondition(clause.if)) p(`${path}: bad condition ${JSON.stringify(clause.if)}`);
-  (clause.effects ?? []).forEach((e, i) => validateEffect(e, `${path}.effects[${i}]`, p));
+  (clause.effects ?? []).forEach((e, i) => validateEffect(e, `${path}.effects[${i}]`, p, keywords));
 }
 
-/** Validate a card set. Empty result = mintable. Each problem names the offending card. */
-export function validateCards(cards: readonly Card[]): string[] {
+/**
+ * Validate a candidate card set. Empty result = mintable; each problem names the card.
+ * `existingNames` = names of previously minted cards — a candidate colliding with one is
+ * rejected (unique names are the identity rule; duplicated MECHANICS are fine).
+ * `keywords` = the keyword contract (defaults to the canonical registry).
+ */
+export function validateCards(
+  cards: readonly Card[],
+  existingNames: Iterable<string> = [],
+  keywords: Readonly<Record<string, unknown>> = KEYWORDS,
+): string[] {
   const problems: string[] = [];
   const ids = new Map<string, string>();
+  const minted = new Set(existingNames);
   const names = new Set<string>();
   for (const card of cards) {
     const p = (msg: string) => problems.push(`${card.name}: ${msg}`);
     if (ids.has(card.id)) p(`duplicate id "${card.id}" (also used by ${ids.get(card.id)})`);
     else ids.set(card.id, card.name);
-    if (names.has(card.name)) p('duplicate name (name-keyed CATALOG lookups would silently pick the wrong card)');
+    if (minted.has(card.name)) p('name already taken by a previously minted card (names are unique; mechanics may repeat)');
+    else if (names.has(card.name)) p('duplicate name within this set (name-keyed lookups would silently pick the wrong card)');
     else names.add(card.name);
+
+    // HARD BAN: Initiative was stripped from the game (undefined in the rules) — no
+    // card may reference it in keywords, text, or effects. Absolute, no exceptions.
+    const hay = [(card.keywords ?? []).join(' '), card.text ?? '', JSON.stringify(card.effects ?? [])].join(' ');
+    if (/initiative/i.test(hay)) p('references Initiative — a banned mechanic');
 
     if (!has(CARD_TYPES, card.type)) p(`unknown card type "${card.type}"`);
     if (!isInt(card.level) || card.level < 1 || card.level > 5) p(`level out of range: ${card.level}`);
@@ -217,9 +245,9 @@ export function validateCards(cards: readonly Card[]): string[] {
       if (!isInt(card.hp) || (card.hp as number) < 1) p(`companion hp must be ≥ 1, got ${card.hp}`);
     }
     for (const kw of card.keywords ?? []) {
-      if (!(keywordBase(kw) in KEYWORDS)) p(`unknown keyword "${kw}"`);
+      if (!(keywordBase(kw) in keywords)) p(`unknown keyword "${kw}"`);
     }
-    (card.effects ?? []).forEach((clause, i) => validateClause(clause, i, p));
+    (card.effects ?? []).forEach((clause, i) => validateClause(clause, i, p, keywords));
   }
   return problems;
 }

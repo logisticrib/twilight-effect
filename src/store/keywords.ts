@@ -18,45 +18,11 @@ import { CATALOG } from '../data/catalog';
  *   turnStart — the Ready phase of a controller's turn (endTurn)
  *
  * Status of the full vocabulary lives in KEYWORDS so the gaps stay visible.
+ *
+ * The registry itself lives in `data/keywordRegistry.ts` (dependency-free, shared with
+ * the deck validator / mint-gate) and is re-exported here for engine code.
  */
-export type KwEvent = 'static' | 'enter' | 'attack' | 'damaged' | 'turnStart';
-
-export interface KeywordSpec {
-  event: KwEvent;
-  done: boolean;
-  /** Where the rule currently lives (engine fn or existing combat code). */
-  note: string;
-}
-
-export const KEYWORDS: Record<string, KeywordSpec> = {
-  // Combat & positioning (resolved in resolveAttack today)
-  Ranged:    { event: 'attack',  done: true,  note: 'beginAttack eligibility' },
-  Cleave:    { event: 'attack',  done: true,  note: 'resolveAttack splash' },
-  Evasive:   { event: 'attack',  done: true,  note: 'targeting rules' },
-  Zealous:   { event: 'attack',  done: true,  note: 'summoning-sickness bypass' },
-  Guardian:  { event: 'attack',  done: true,  note: 'targeting rules' },
-  Reckless:  { event: 'attack',  done: true,  note: 'resolveAttack self-damage' },
-  'Hit & Run': { event: 'attack', done: true, note: 'grantHitRun + resolveMove gate' },
-  // Items / defence
-  'Armor':   { event: 'damaged', done: true,  note: 'applyDamageToEntity counters' },
-  Acrobatics:{ event: 'damaged', done: true,  note: 'isImmuneToSplash' },
-  // Static auras
-  Dismay:    { event: 'static',  done: true,  note: 'recomputeStatics' },
-  // Set-specific
-  Oathsworn: { event: 'enter',   done: true,  note: 'oathsworn modal' },
-
-  // ── Not yet implemented (need targeting UI or structured card data) ──────────
-  Reinforce:      { event: 'enter',   done: true,  note: 'pendingTrigger -> resolveTrigger (add anchors)' },
-  Dismantle:      { event: 'enter',   done: true,  note: 'pendingTrigger -> resolveTrigger (remove anchors / sacrifice)' },
-  'Kit-Master':   { event: 'enter',   done: true,  note: 'pendingKit two-step (source item -> dest char)' },
-  Scavenger:      { event: 'enter',   done: false, note: 'return item from Dead Zone' },
-  Coercion:       { event: 'enter',   done: false, note: 'opponent discards or sacrifices' },
-  'Animate Magic':{ event: 'enter',   done: false, note: 'construct -> companion' },
-  Poison:         { event: 'damaged', done: false, note: 'exhaust + poison counter' },
-  Untamed:        { event: 'static',  done: false, note: 'per-card text bonus (needs card data)' },
-  Bane:           { event: 'attack',  done: false, note: 'double damage vs subtype/class' },
-  Paranoia:       { event: 'enter',   done: false, note: 'peek/reorder opponent deck' },
-};
+export { KEYWORDS, type KeywordSpec, type KwEvent } from '../data/keywordRegistry';
 
 /** Transient status marking an entity that may take its Hit & Run bonus move. */
 export const HIT_RUN_STATUS = 'hit-run-ready';

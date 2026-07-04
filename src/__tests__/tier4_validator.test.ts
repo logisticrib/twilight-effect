@@ -74,4 +74,37 @@ describe('the validator catches each class of authoring mistake (mint-gate behav
     expect(problems.some(x => x.includes('duplicate id')), 'duplicate id caught').toBe(true);
     expect(problems.some(x => x.includes('duplicate name')), 'duplicate name caught').toBe(true);
   });
+
+  it('HARD BAN: any effect that increases max HP is rejected', () => {
+    expectCaught(clone({ effects: [{ trigger: 'static',
+      effects: [{ op: 'buff', stat: 'hp', amount: 1, scope: 'ownCompanions', duration: 'while' }] }] }), '+HP static aura');
+    expectCaught(clone({ effects: [{ trigger: 'onPlay',
+      effects: [{ op: 'buff', stat: 'hp', amount: 2, scope: 'ownParty', duration: 'endOfTurn' }] }] }), '+HP temp buff');
+  });
+
+  it('HARD BAN: any Initiative reference (keywords, text, or effects) is rejected', () => {
+    expectCaught(clone({ text: 'INITIATIVE. This character strikes first in combat.' }), 'Initiative in rules text');
+    expectCaught(clone({ keywords: ['Initiative'] }), 'Initiative as a keyword');
+    expectCaught(clone({ effects: [{ trigger: 'onPlay',
+      effects: [{ op: 'buff', grant: ['Initiative'], scope: 'self', duration: 'endOfTurn' }] }] }), 'Initiative as a granted keyword');
+  });
+});
+
+describe('mint-gate semantics: existing card names are a parameter', () => {
+  it('a candidate whose name is already minted is rejected; repeated MECHANICS are fine', () => {
+    const mintedNames = CATALOG.map(c => c.name);
+    // Name collision with a previously minted card → rejected.
+    const nameClash = { ...base, id: 'fresh-id-1' } as Card; // keeps base's minted name
+    expect(validateCards([nameClash], mintedNames).join(' | '), 'minted name rejected')
+      .toContain('already taken');
+    // Identical mechanics under a NEW name → mintable.
+    const retheme = { ...base, id: 'fresh-id-2', name: 'A Familiar Trick, Newly Named' } as Card;
+    expect(validateCards([retheme], mintedNames), 'duplicate mechanics allowed').toEqual([]);
+  });
+
+  it('the keyword contract is injectable', () => {
+    const candidate = clone({ keywords: ['Skyborne'] });
+    expect(validateCards([candidate]).join(' '), 'unknown vs the canonical registry').toContain('Skyborne');
+    expect(validateCards([candidate], [], { Skyborne: true }), 'known under an extended contract').toEqual([]);
+  });
 });
