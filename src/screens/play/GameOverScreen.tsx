@@ -17,6 +17,7 @@ export function GameOverScreen() {
   const localPlayer = useGameStore(s => s.localPlayer);
   const backToLobby = useGameStore(s => s.backToLobby);
   const rec = useSyncExternalStore(recorder.subscribe, recorder.getStatus, recorder.getStatus);
+  const pushToast = useGameStore(s => s.pushToast);
   const [dismissed, setDismissed] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -53,16 +54,14 @@ export function GameOverScreen() {
 
         {rec.recording && (
           <button
-            onClick={() => { if (rec.valid && downloadReplay()) setSaved(true); }}
-            disabled={!rec.valid}
-            title={rec.valid
-              ? 'Save this game as a .replay.json regression fixture'
-              : `Recording invalidated — ${rec.reason ?? 'state changed outside a recorded action'}`}
-            style={{ ...S.replayBtn, ...(rec.valid ? {} : S.replayBtnBad) }}
+            onClick={() => { const r = downloadReplay(); if (r.ok) setSaved(true); else pushToast(`Replay export failed: ${r.error}`); }}
+            disabled={!!rec.invalidReason}
+            title={rec.invalidReason ?? 'Validate (replay) and save this game as a .replay.json regression fixture'}
+            style={{ ...S.replayBtn, ...(rec.invalidReason ? S.replayBtnBad : {}) }}
           >
-            {rec.valid
-              ? (saved ? '✓ Replay saved' : `⭳ Download replay (${rec.steps} actions)`)
-              : '⚠ Replay invalidated — cannot save'}
+            {rec.invalidReason
+              ? '⚠ Can’t record this game'
+              : (saved ? '✓ Replay saved' : `⭳ Download replay (${rec.steps} actions)`)}
           </button>
         )}
       </div>

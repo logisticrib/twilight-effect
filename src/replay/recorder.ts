@@ -8,15 +8,21 @@ import {
 
 export interface RecorderStatus {
   recording: boolean;
-  valid: boolean;
-  reason?: string;
   steps: number;
   turns: number;
+  /** Set only when the recording crosses a hard boundary (resumeGame / an MP start) that
+   *  makes the log unreplayable; export refuses. Undefined during normal recording. */
+  invalidReason?: string;
 }
 
+// Actions that make a recording genuinely unreplayable if they occur mid-recording: they
+// wholesale-replace `game` from outside the recorded action stream, so entries after them
+// can't chain from the log's init. Enumerable + deterministic (unlike the old hash-drift
+// proxy, which fired on benign React interleaving). export() refuses if one was crossed.
+const BOUNDARY = new Set<string>(['resumeGame', 'startMultiplayer', 'assembleMpGame']);
+
 class Recorder {
-  /** True while a game is being recorded (set by startSolo). Read by the middleware to
-   *  decide whether to compute the drift pre-hash. */
+  /** True while a game is being recorded (set by startSolo). */
   active = false;
   /** True while the replay runner re-executes actions — the middleware passes through and
    *  onAction() no-ops so replay doesn't self-record. */
@@ -24,13 +30,10 @@ class Recorder {
 
   private log: ReplayLog | null = null;
   private lastTurn = 0;
-  private lastHash = '';
-  private valid = false;
-  private reason: string | undefined;
-  private get: (() => StoreSlice) | null = null;
+  private invalidReason: string | undefined;
 
   private listeners = new Set<() => void>();
-  private status: RecorderStatus = { recording: false, valid: false, steps: 0, turns: 0 };
+  private status: RecorderStatus = { recording: false, steps: 0, turns: 0 };
 
   subscribe = (cb: () => void): (() => void) => {
     this.listeners.add(cb);
@@ -41,82 +44,69 @@ class Recorder {
   private notify() {
     this.status = {
       recording: this.active,
-      valid: this.valid,
-      reason: this.reason,
       steps: this.log?.entries.length ?? 0,
       turns: this.lastTurn,
+      invalidReason: this.invalidReason,
     };
     for (const l of this.listeners) l();
   }
 
   private startGame(get: () => StoreSlice) {
     const slice = canonical(get());
-    this.get = get;
     this.log = {
       format: LOG_FORMAT_VERSION, commit: COMMIT, mode: slice.conn.mode,
       recordedAt: 0, init: clone(slice), initHash: hashState(slice), entries: [],
     };
     this.lastTurn = slice.game.turn;
-    this.lastHash = this.log.initHash;
     this.active = true;
-    this.valid = true;
-    this.reason = undefined;
+    this.invalidReason = undefined;
     this.notify();
   }
 
-  private invalidate(reason: string) {
-    if (!this.valid) return;
-    this.valid = false;
-    this.reason = reason;
-    this.notify();
-  }
-
-  /** The replay runner suspends recording while it re-executes actions (so replay doesn't
-   *  self-record); the middleware passes through and onAction() no-ops while suspended. */
   suspend() { this.suspended = true; }
   resume() { this.suspended = false; }
 
-  /** Called by the middleware after every recorded (non-nested, non-deny) action. */
-  onAction(name: string, args: unknown[], draws: number[], preHash: string | null, get: () => StoreSlice) {
+  /** Called by the middleware for every non-nested, non-deny action. Recording is a pure
+   *  append — no per-action drift check (validity is decided at export by replay()). */
+  onAction(name: string, args: unknown[], draws: number[], get: () => StoreSlice) {
     if (this.suspended) return;
     if (name === 'startSolo') { this.startGame(get); return; }
-    if (!this.active || !this.valid) return;
-    // Categorical drift: a deny-listed (unrecorded) action mutated hashed state since the
-    // last entry, so entries can no longer chain coherently → invalidate.
-    if (preHash !== null && preHash !== this.lastHash) {
-      this.invalidate(`state changed outside a recorded action before "${name}"`);
-      return;
-    }
+    if (!this.active) return;
     const slice = canonical(get());
-    const postHash = hashState(slice);
     const step = this.log!.entries.length + 1;
     const hasFn = args.some(a => typeof a === 'function');
     const entry: ReplayEntry = hasFn
-      ? { step, kind: 'paste', from: name, state: clone(slice), hash: postHash }
-      : { step, kind: 'action', action: name, args: clone(args), rng: draws.slice(), hash: postHash };
+      ? { step, kind: 'paste', from: name, state: clone(slice), hash: hashState(slice) }
+      : { step, kind: 'action', action: name, args: clone(args), rng: draws.slice(), hash: hashState(slice) };
     if (slice.game.turn > this.lastTurn) {
       this.lastTurn = slice.game.turn;
       entry.turn = { turn: slice.game.turn, state: clone(slice) };
     }
     this.log!.entries.push(entry);
-    this.lastHash = postHash;
     this.notify();
   }
 
-  /** Serialize the log for export. Re-checks live drift; returns null if invalid/empty. */
-  export(): ReplayLog | null {
-    if (this.active && this.valid && this.get) {
-      const live = hashState(canonical(this.get()));
-      if (live !== this.lastHash) this.invalidate('state changed since the last recorded action');
-    }
-    if (!this.active || !this.valid || !this.log) return null;
-    return clone({ ...this.log, recordedAt: Date.now() });
+  /** Called by the middleware when a deny-listed BOUNDARY action fires mid-recording. */
+  onBoundary(name: string) {
+    if (!this.active || this.invalidReason || !BOUNDARY.has(name)) return;
+    this.invalidReason = `recording crossed a "${name}" boundary (game replaced) — start a new game to record`;
+    this.notify();
+  }
+
+  /** The current log (cloned + stamped) for export, or null with a reason. Does NOT run
+   *  replay() — validation is done by the caller (src/replay/exportReplay.ts) to avoid an
+   *  import cycle. */
+  getLog(): { log: ReplayLog | null; reason?: string } {
+    if (!this.active || !this.log) return { log: null, reason: 'No active recording.' };
+    if (this.invalidReason) return { log: null, reason: this.invalidReason };
+    if (this.log.entries.length === 0) return { log: null, reason: 'Nothing recorded yet.' };
+    return { log: clone({ ...this.log, recordedAt: Date.now() }) };
   }
 
   /** Test seam: forget the current game (used by tests between runs). */
   _resetForTest() {
     this.active = false; this.suspended = false; this.log = null;
-    this.lastTurn = 0; this.lastHash = ''; this.valid = false; this.reason = undefined; this.get = null;
+    this.lastTurn = 0; this.invalidReason = undefined;
     this.notify();
   }
 

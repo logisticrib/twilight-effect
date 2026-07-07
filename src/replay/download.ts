@@ -1,15 +1,17 @@
-import { recorder } from './recorder';
+import { tryExport } from './exportReplay';
 import type { ReplayLog } from './format';
 
 function turnsOf(log: ReplayLog): number {
   return log.entries.reduce((m, e) => Math.max(m, e.turn?.turn ?? 0), log.init.game.turn);
 }
 
-/** Export the current recording as a downloaded .replay.json file. Returns false (no-op) if
- *  there is no valid recording to export (the caller should disable the control + show why). */
-export function downloadReplay(): boolean {
-  const log = recorder.export();
-  if (!log) return false;
+/** Validate (via replay) + download the current recording as a .replay.json file. Returns
+ *  `{ ok: false, error }` when there is no recording or the log fails to replay clean — the
+ *  caller shows the reason. */
+export function downloadReplay(): { ok: true } | { ok: false; error: string } {
+  const res = tryExport();
+  if (!res.ok) return res;
+  const log = res.log;
   const name = `twilight-${log.mode}-${log.commit}-t${turnsOf(log)}.replay.json`;
   const blob = new Blob([JSON.stringify(log, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -20,5 +22,5 @@ export function downloadReplay(): boolean {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 0);
-  return true;
+  return { ok: true };
 }

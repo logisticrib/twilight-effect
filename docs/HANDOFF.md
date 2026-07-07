@@ -20,9 +20,18 @@ permanent regression fixture. **Suite: 15 files / 187 tests green; tsc ZERO; val
 - **Recorder** (`src/replay/recorder.ts`): always-on, in-memory. `startSolo` → snapshot `init`
   (post-shuffle) + begin. Each action → `{action,args,rng,hash}` (or a `paste` entry when an arg is
   a function, e.g. setGame(fn) — the primitive MP will reuse). Full snapshot at each turn boundary.
-  **Categorical invalidation:** any deny-listed action that changes the canonical hash invalidates
-  (drift caught at the next recorded action's `preHash != lastHash` and at `export()`'s live check).
-  `subscribe/getStatus` drive the UI.
+  Recording is a **pure append**. `subscribe/getStatus` drive the UI.
+- **Validity is decided at EXPORT by replaying the log** (owner redesign 2026-07-06 — the original
+  per-action hash-drift check was too fragile in a live React runtime: benign interleaving from
+  StrictMode double-invoke / render-driven setGame effects made `preHash != lastHash` fire on
+  normal sandbox play, spuriously invalidating recordings). `src/replay/exportReplay.ts`
+  **`tryExport()`** runs the log through `replay()` in-process against the live store —
+  **non-destructively** (snapshots the store, replays, restores; React never sees the transient
+  state since it's all synchronous) — the deterministic oracle for "is this a valid fixture":
+  clean → export; `ReplayDivergence` → refuse with the full step/action report. Plus a small **hard
+  BOUNDARY list** (`resumeGame`, `startMultiplayer`, `assembleMpGame`) — enumerable, deterministic,
+  genuinely unreplayable game-replacements — that refuses early (`recorder.onBoundary`, surfaced as
+  `status.invalidReason`). Hot-path per-action hashing is GONE (perf + no false drift).
 - **Log format** (`src/replay/format.ts`): `{format, commit (vite `__COMMIT_HASH__` define), mode,
   init, initHash, entries[]}`. Hash = cyrb53 over a key-sorted **canonical slice** = `game +
   localPlayer + conn.mode + the store-local prompts` (pending/pendingPlay/pendingTrigger/pendingKit/
@@ -34,17 +43,19 @@ permanent regression fixture. **Suite: 15 files / 187 tests green; tsc ZERO; val
   **exact-empty after** (surplus); re-execute action / paste `setState`; hash-diff → `ReplayDivergence`
   with step/action/last-good-turn. `recorder.suspend()` during replay so it doesn't self-record.
 - **UI**: `RecorderButton` (bottom-left chip, `useSyncExternalStore`) — "⏺ REC · N actions · T turns"
-  or "⚠ invalidated — <reason>" the instant drift trips; click to download. Same download on the
-  GameOverScreen. Fixtures dir `src/replay/fixtures/*.replay.json` (a Vitest test globs + replays them;
-  none committed yet).
+  during play (NO in-play "invalidated" state anymore — pass/fail moved to export). Click →
+  `downloadReplay()` (validate + download); a failed validation or a boundary surfaces as a toast.
+  Same download on the GameOverScreen (disabled+reasoned on a boundary). Fixtures dir
+  `src/replay/fixtures/*.replay.json` (a Vitest test globs + replays them; none committed yet).
 - **Tests** (`src/__tests__/replay.test.ts`): rng capture→inject reproduces a shuffle; record a real
   die-rolling solo game (Flame-Spinner on-enter, via a seeded position + a `_beginForTest` seam) →
   **replay through actual `JSON.parse(JSON.stringify)`** clean (reference-identity guard); tamper /
-  underrun / surplus throw; resumeGame invalidates (both drift paths). NB confirmed in code: **no
-  engine path mutates hashed state asynchronously after an action** (every store setTimeout writes
-  only toasts, except one saveGame → savedGame — both excluded).
+  underrun / surplus throw; **export validation**: a normal game (incl. a die roll) + inter-action
+  churn `tryExport()` clean, a resumeGame-crossing recording refuses with a `resumeGame` reason.
 - **Preview E2E**: sandbox game runs with the middleware over all 126 actions (no console errors);
-  RecorderButton shows live status; the action counter increments as recorded actions fire.
+  the chip stays "⏺ REC" through setup + endTurn + switchSides (the exact flow that spuriously
+  invalidated under the old drift check); clicking it validates via replay + downloads with no error,
+  and the live game is intact afterwards (non-destructive validation confirmed).
 - **FLAG / next**: v1 is **solo two-handed only** — MP host recording (own actions + guest turns as
   `paste` remote-syncs) is the documented follow-up that reuses the paste primitive. No fixtures are
   committed yet — the owner records real games and drops the JSON into `src/replay/fixtures/`.

@@ -5,7 +5,7 @@
 import type { StateCreator, StoreMutatorIdentifier } from 'zustand';
 import { rng } from './rng';
 import { recorder } from '../replay/recorder';
-import { hashState, canonical, type StoreSlice } from '../replay/format';
+import { type StoreSlice } from '../replay/format';
 
 // Actions that mutate state but must NOT be recorded as replayable entries — cosmetic
 // (hover/toasts/pile), session/connection, or game-lifecycle. A deny-listed action that
@@ -29,12 +29,12 @@ function wrapActions<T extends object>(state: T, get: () => StoreSlice): T {
     out[key] = (...args: unknown[]) => {
       if (depth > 0) return orig(...args);          // nested — subsumed by the outer action
       if (recorder.suspended) return orig(...args); // replay — pass through, no capture/record
-      if (DENY.has(key)) {                          // run, don't record; drift caught at next entry
+      if (DENY.has(key)) {                          // run, don't record
         depth++;
-        try { return orig(...args); } finally { depth--; }
+        try { return orig(...args); }
+        finally { depth--; recorder.onBoundary(key); } // a BOUNDARY action invalidates the log
       }
       depth++;
-      const preHash = recorder.active ? hashState(canonical(get())) : null;
       const draws: number[] = [];
       rng.beginCapture(draws);
       try {
@@ -42,7 +42,7 @@ function wrapActions<T extends object>(state: T, get: () => StoreSlice): T {
       } finally {
         rng.endCapture();
         depth--;
-        recorder.onAction(key, args, draws, preHash, get);
+        recorder.onAction(key, args, draws, get);
       }
     };
   }

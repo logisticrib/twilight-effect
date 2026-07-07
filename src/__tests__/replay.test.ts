@@ -8,6 +8,7 @@ import { shuffle } from '../store/gameStore';
 import { rng } from '../store/rng';
 import { recorder } from '../replay/recorder';
 import { replay, ReplayDivergence } from '../replay/replay';
+import { tryExport } from '../replay/exportReplay';
 import type { ReplayLog, ActionEntry } from '../replay/format';
 
 // Deep clone through ACTUAL JSON text — load-bearing: an in-memory replay would share object
@@ -43,7 +44,7 @@ function recordDieGame(): ReplayLog {
   gs.getState().resolveActionTarget('enemy-1'); // resolves dieCheck → rollD6 → rng captured here
   gs.getState().adjustHp('pc-actor', -1);
   gs.getState().endTurn();
-  const log = recorder.export();
+  const { log } = recorder.getLog();
   rng.reset();
   if (!log) throw new Error('recorder produced no log');
   return log;
@@ -113,7 +114,10 @@ describe('divergence is caught loudly', () => {
   });
 });
 
-describe('categorical invalidation (a deny-listed action that changes hashed state)', () => {
+// Validity is decided at export by replaying the log (the deterministic oracle) — NOT by a
+// per-action hash-drift proxy (which fired on benign React interleaving). A normally-recorded
+// game exports clean; only a hard, enumerable boundary (resumeGame / an MP start) refuses.
+describe('export validation (replay is the oracle)', () => {
   function seedActive() {
     recorder._resetForTest();
     recorder.suspend();
@@ -123,28 +127,30 @@ describe('categorical invalidation (a deny-listed action that changes hashed sta
     recorder._beginForTest(() => gs.getState());
   }
 
-  it('resumeGame (reverts `game`) invalidates — caught at the next recorded action', () => {
-    seedActive();
-    gs.getState().saveGame();             // deny-listed; savedGame = current (selected null)
-    gs.getState().selectEntity('unit-a'); // recorded; game.selected changes → hash changes
-    gs.getState().resumeGame();           // deny-listed; game reverts (selected → null) → drift
-    gs.getState().selectEntity('unit-b'); // next recorded action detects preHash != lastHash
-    expect(recorder.getStatus().valid, 'recording marked invalid').toBe(false);
-    expect(recorder.export(), 'export refused').toBeNull();
+  it('a normally recorded game (incl. a die roll) validates + exports clean', () => {
+    recordDieGame();                 // leaves an active, replayable recording
+    const res = tryExport();
+    expect(res.ok, res.ok ? '' : res.error).toBe(true);
   });
 
-  it('resumeGame is also caught by the export-time live-hash recheck (no trailing action)', () => {
+  it('inter-action churn (selection, no-op setGame) still exports clean', () => {
     seedActive();
-    gs.getState().saveGame();
     gs.getState().selectEntity('unit-a');
-    gs.getState().resumeGame();           // drift, but nothing recorded afterwards
-    expect(recorder.export(), 'export refused via live recheck').toBeNull();
+    gs.getState().setGame(g => ({ ...g, selected: 'unit-b' })); // paste
+    gs.getState().selectEntity('unit-c');
+    const res = tryExport();
+    expect(res.ok, res.ok ? '' : res.error).toBe(true);
   });
 
-  it('a deny-listed action that does NOT change hashed state (backToLobby: only playPhase/conn) does not spuriously invalidate before it', () => {
+  it('a recording that crosses a resumeGame boundary refuses to export', () => {
     seedActive();
-    gs.getState().selectEntity('unit-a'); // valid recorded change
-    expect(recorder.getStatus().valid).toBe(true);
+    gs.getState().saveGame();          // savedGame = current
+    gs.getState().selectEntity('unit-a');
+    gs.getState().resumeGame();        // BOUNDARY (game replaced) → recording unrepayable
+    const res = tryExport();
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toMatch(/resumeGame/i);
+    expect(recorder.getStatus().invalidReason, 'chip reflects the boundary').toMatch(/resumeGame/i);
   });
 });
 
