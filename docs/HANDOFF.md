@@ -50,8 +50,13 @@ permanent regression fixture. **Suite: 15 files / 187 tests green; tsc ZERO; val
 - **Tests** (`src/__tests__/replay.test.ts`): rng capture→inject reproduces a shuffle; record a real
   die-rolling solo game (Flame-Spinner on-enter, via a seeded position + a `_beginForTest` seam) →
   **replay through actual `JSON.parse(JSON.stringify)`** clean (reference-identity guard); tamper /
-  underrun / surplus throw; **export validation**: a normal game (incl. a die roll) + inter-action
-  churn `tryExport()` clean, a resumeGame-crossing recording refuses with a `resumeGame` reason.
+  underrun / surplus throw; **export validation** (`tryExport(logOverride?)`): a normal game (incl.
+  a die roll) + inter-action churn export clean; a resumeGame-crossing recording refuses with a
+  `resumeGame` reason; a **hash-tampered** log AND an **rng-short** log are BOTH refused at export
+  with the divergence/underrun report (tryExport inherits replay()'s rejection, not only boundaries);
+  and export is **non-destructive** — a diverge-every-canonical-field-then-export test asserts the
+  full canonical slice (game + localPlayer + conn.mode + every store-local prompt) is restored
+  exactly (proven non-vacuous: a game-only restore fails it).
 - **Preview E2E**: sandbox game runs with the middleware over all 126 actions (no console errors);
   the chip stays "⏺ REC" through setup + endTurn + switchSides (the exact flow that spuriously
   invalidated under the old drift check); clicking it validates via replay + downloads with no error,

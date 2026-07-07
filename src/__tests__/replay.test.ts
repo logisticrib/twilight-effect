@@ -9,7 +9,8 @@ import { rng } from '../store/rng';
 import { recorder } from '../replay/recorder';
 import { replay, ReplayDivergence } from '../replay/replay';
 import { tryExport } from '../replay/exportReplay';
-import type { ReplayLog, ActionEntry } from '../replay/format';
+import { canonical } from '../replay/format';
+import type { ReplayLog, ActionEntry, StoreSlice } from '../replay/format';
 
 // Deep clone through ACTUAL JSON text — load-bearing: an in-memory replay would share object
 // references with live state and pass even if a reducer compared an arg by reference. A disk
@@ -151,6 +152,60 @@ describe('export validation (replay is the oracle)', () => {
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.error).toMatch(/resumeGame/i);
     expect(recorder.getStatus().invalidReason, 'chip reflects the boundary').toMatch(/resumeGame/i);
+  });
+
+  // Confirmation (1): tryExport's whole value is inheriting replay()'s rejection — a divergent
+  // log must be refused AT EXPORT (not only the boundary case), with the divergence report.
+  it('refuses a hash-tampered log at export (inherits ReplayDivergence)', () => {
+    const bad = roundTrip(recordDieGame());
+    bad.entries[1] = { ...bad.entries[1], hash: 'deadbeef' };
+    const res = tryExport(bad);
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toMatch(/divergence/i);
+  });
+
+  it('refuses an RNG-short log at export (inherits the underrun error)', () => {
+    const bad = roundTrip(recordDieGame());
+    const e = bad.entries.find((x): x is ActionEntry => x.kind === 'action' && x.rng.length > 0)!;
+    e.rng = e.rng.slice(0, -1);
+    const res = tryExport(bad);
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toMatch(/underrun/i);
+  });
+
+  // Confirmation (2): the non-destructive validation must restore the FULL canonical slice —
+  // every field, not just `game`. Made NON-VACUOUS by applying a non-recorded divergent change
+  // to every canonical field right before export: replay lands on the *recorded* (init) state,
+  // which differs from `before` on every field, so `after === before` can only hold if the
+  // restore recovered ALL of them (a game-only restore would leave prompts/localPlayer/mode
+  // stuck at the replayed values).
+  it('export is non-destructive: the entire canonical slice is restored (every field)', () => {
+    recorder._resetForTest();
+    recorder.suspend();
+    gs.getState().startSolo(deckCards, deckCards);           // localPlayer='p1', conn.mode='solo'
+    gs.setState(s => ({ game: { ...s.game, setupQueue: [], currentPhase: 'action' as const } }));
+    recorder.resume();
+    recorder._beginForTest(() => gs.getState());             // init = this clean state
+    gs.getState().selectEntity('rec');                        // one recorded action (log non-empty)
+
+    // Non-recorded divergent change on EVERY canonical field (the log won't reproduce these):
+    gs.setState(s => ({
+      game: { ...s.game, turn: 999, selected: 'DIVERGED' },
+      localPlayer: 'p2' as const,
+      conn: { ...s.conn, mode: 'host' as const },
+      pending: { kind: 'move' } as never,
+      pendingPlay: { cardId: 'c1', actorId: 'a1' } as never,
+      pendingTrigger: { kind: 'reinforce', n: 2, sourceName: 'T' } as never,
+      pendingKit: { sourceName: 'K', step: 'source', eligibleIds: [] } as never,
+      pendingActionTarget: { source: 'action', sourceName: 'A', lp: 'p1', effects: [], eligibleIds: ['e'] } as never,
+      pendingEquipPick: { source: 'E', lp: 'p1', targetId: 't', items: [] } as never,
+      oathContext: { marker: 42 } as never,
+      modalQueue: ['m1', 'm2'],
+    }));
+    const before = JSON.parse(JSON.stringify(canonical(gs.getState() as unknown as StoreSlice)));
+    tryExport();                                              // replay → init state (≠ before); finally restores
+    const after = canonical(gs.getState() as unknown as StoreSlice);
+    expect(after, 'every canonical field restored exactly').toEqual(before);
   });
 });
 

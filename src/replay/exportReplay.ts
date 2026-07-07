@@ -9,9 +9,16 @@ import type { ReplayLog } from './format';
 
 export type ExportResult = { ok: true; log: ReplayLog } | { ok: false; error: string };
 
-export function tryExport(): ExportResult {
-  const { log, reason } = recorder.getLog();
-  if (!log) return { ok: false, error: reason ?? 'No recording to export.' };
+/** Validate + return the current recording (or, for tests, a supplied `logOverride`). A log is
+ *  exportable IFF it replays clean — any `ReplayDivergence`/underrun/surplus from replay() is
+ *  inherited as a refusal, not just the recorder's boundary refusal. */
+export function tryExport(logOverride?: ReplayLog): ExportResult {
+  let log = logOverride ?? null;
+  if (!log) {
+    const g = recorder.getLog();
+    if (!g.log) return { ok: false, error: g.reason ?? 'No recording to export.' };
+    log = g.log;
+  }
 
   // Snapshot the whole live store (shallow is safe — store updates are immutable, so the
   // nested game graph is never mutated in place; replay() swaps in new objects). replay()
