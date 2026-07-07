@@ -14,6 +14,7 @@ import { ModalShell, md } from './play/modals/ModalShell';
 import { CardPickModal } from './play/modals/CardPickModal';
 import { PoisonModal } from './play/modals/PoisonModal';
 import { CoercionModal } from './play/modals/CoercionModal';
+import { RecorderButton } from './play/RecorderButton';
 
 function GameView() {
   // Deliberately NO store subscription here: GameView is the root of the whole board
@@ -83,6 +84,7 @@ function GameView() {
       <ModalHost />
       <PileViewer />
       <GameOverScreen />
+      <RecorderButton />
     </div>
   );
 }

@@ -1,5 +1,7 @@
-import { useState, type CSSProperties } from 'react';
+import { useState, useSyncExternalStore, type CSSProperties } from 'react';
 import { useGameStore, seatName } from '../../store/gameStore';
+import { recorder } from '../../replay/recorder';
+import { downloadReplay } from '../../replay/download';
 import { TBL, Z } from '../../tokens';
 
 /**
@@ -14,7 +16,9 @@ export function GameOverScreen() {
   const game = useGameStore(s => s.game);
   const localPlayer = useGameStore(s => s.localPlayer);
   const backToLobby = useGameStore(s => s.backToLobby);
+  const rec = useSyncExternalStore(recorder.subscribe, recorder.getStatus, recorder.getStatus);
   const [dismissed, setDismissed] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   if (!winnerSide || dismissed) return null;
 
@@ -46,6 +50,21 @@ export function GameOverScreen() {
           <button style={S.btnPrimary} onClick={backToLobby}>Back to Lobby</button>
           <button style={S.btnGhost} onClick={() => setDismissed(true)}>Review board</button>
         </div>
+
+        {rec.recording && (
+          <button
+            onClick={() => { if (rec.valid && downloadReplay()) setSaved(true); }}
+            disabled={!rec.valid}
+            title={rec.valid
+              ? 'Save this game as a .replay.json regression fixture'
+              : `Recording invalidated — ${rec.reason ?? 'state changed outside a recorded action'}`}
+            style={{ ...S.replayBtn, ...(rec.valid ? {} : S.replayBtnBad) }}
+          >
+            {rec.valid
+              ? (saved ? '✓ Replay saved' : `⭳ Download replay (${rec.steps} actions)`)
+              : '⚠ Replay invalidated — cannot save'}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -109,5 +128,14 @@ const S: Record<string, CSSProperties> = {
     fontFamily: "'Inter', sans-serif", fontSize: 13, fontWeight: 600,
     background: 'rgba(255,255,255,0.05)', color: TBL.ink,
     border: `1px solid ${TBL.matLine2}`,
+  },
+  replayBtn: {
+    marginTop: 12, width: '100%', padding: '8px 14px', borderRadius: 7, cursor: 'pointer',
+    fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.05em',
+    background: 'rgba(214,160,80,0.08)', color: TBL.amber2, border: `1px solid ${TBL.matLine2}`,
+  },
+  replayBtnBad: {
+    cursor: 'not-allowed', background: 'rgba(40,18,14,0.5)', color: TBL.danger,
+    border: `1px solid ${TBL.danger}55`,
   },
 };

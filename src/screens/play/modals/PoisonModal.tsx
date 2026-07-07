@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, type CSSProperties } from 'react';
 import { ModalShell, md } from './ModalShell';
 import { useGameStore } from '../../../store/gameStore';
+import { rng } from '../../../store/rng';
 import { currentWillpower } from '../../../store/keywords';
 import { TBL, CLASSCLR, GLYPH } from '../../../tokens';
 
@@ -52,7 +53,7 @@ export function PoisonModal({ player = 'p1', onClose }: Props) {
     if (!c || c.done) return;
     // Roll OUTSIDE the state updater — updaters must be pure (StrictMode re-invokes
     // them in dev, which re-rolled the die and applied the HP damage twice).
-    const roll = 1 + Math.floor(Math.random() * 6);
+    const roll = 1 + Math.floor(rng.next() * 6);
     const cleansed = roll <= willpower;
     if (!cleansed) setPlayerHp(hp => Math.max(0, hp - c.counters));
     setChars(cs => cs.map((x, k) => k !== i ? x : ({

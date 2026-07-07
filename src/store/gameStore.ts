@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { persist, subscribeWithSelector } from 'zustand/middleware';
+import { rng } from './rng';
+import { recordActions } from './recordMiddleware';
 import type { BoardEntity, Card, TapState, Acts, EquippedItem } from '../types/card';
 import type { Effect, Amount, Condition, TargetSpec, Trigger, Cost } from '../types/effects';
 import { CATALOG, SORCERER_WARRIOR_CARDS, WIZARD_BUILDER_CARDS } from '../data/catalog';
@@ -661,7 +663,11 @@ function commitAttack(game: GameState, charId: string, targetEntityId: string, b
   return { paused: false, game: finalizeAttack(res.game, res.ctx), msg: res.ctx.msgs.join(' | ') };
 }
 
-function rollD6(): number { return 1 + Math.floor(Math.random() * 6); }
+function rollD6(): number { return 1 + Math.floor(rng.next() * 6); }
+
+/** Unique entity/card id. Draws from the rng boundary (not Date.now) so the id is captured
+ *  by the replay recorder and reproduced on replay; still effectively unique in normal play. */
+function uid(prefix: string): string { return `${prefix}-${Math.floor(rng.next() * 0xffffffff).toString(16)}`; }
 
 function amountValue(a: Amount, die: number, controlled: number): number {
   if (typeof a === 'number') return a;
@@ -1439,7 +1445,7 @@ function kitDests(game: GameState, controller: 'p1' | 'p2', exceptId: string, is
 export function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = Math.floor(rng.next() * (i + 1));
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
@@ -1725,6 +1731,7 @@ const EMPTY_CONN: ConnState = {
 export const useGameStore = create<GameStoreState>()(
   subscribeWithSelector(
   persist(
+  recordActions(
   (set, get) => ({
   playPhase: 'lobby' as PlayPhase,
   conn: EMPTY_CONN,
@@ -2380,7 +2387,7 @@ export const useGameStore = create<GameStoreState>()(
     if (ps.classZone.length >= 5) return s;     // CZ at max
     const card = ps.hand.find(c => c.id === handCardId);
     if (!card) return s;
-    const newCzCard = { id: `cz-${Date.now()}`, cls: card.class1 || 'Classless', name: card.name, faceDown: false, cardData: card };
+    const newCzCard = { id: uid('cz'), cls: card.class1 || 'Classless', name: card.name, faceDown: false, cardData: card };
     const newCZ = [...ps.classZone, newCzCard];
     const newWillpower = computeWillpower(newCZ);
     return {
@@ -2827,7 +2834,7 @@ export const useGameStore = create<GameStoreState>()(
       return peek ? { ...g, pendingPeek: peek, pendingPeekQueue: [...g.pendingPeekQueue, ...rest] } : g;
     };
     const newEnt: BoardEntity = {
-      id: `placed-${card.id}-${Date.now()}`,
+      id: uid(`placed-${card.id}`),
       kind: isConstruct ? 'construct' : 'companion',
       name: card.name,
       cls: card.class1,
@@ -3320,7 +3327,7 @@ export const useGameStore = create<GameStoreState>()(
     setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 3000);
     return { toasts: [...s.toasts, { id, msg }] };
   }),
-  }),
+  })),
   {
     name: 'twilight-game',
     partialize: (s) => ({ savedGame: s.savedGame }),

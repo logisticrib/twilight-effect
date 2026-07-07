@@ -2,7 +2,54 @@
 
 Self-contained context for continuing the card-effect engine work in a fresh session.
 
-## Latest session (2026-07-04, later) — audit batch 4: guest deck in READY (audit #11) DONE
+## Latest session (2026-07-06) — Phase 2 replay recorder + runner DONE (solo v1)
+test_seed_plan.md Phase 2: record a solo game's action/state sequence to JSON, replay it against
+current code, fail loudly on any divergence. Every real sandbox playtest can now become a
+permanent regression fixture. **Suite: 15 files / 187 tests green; tsc ZERO; validate:decks clean.**
+- **One randomness boundary** (`src/store/rng.ts`): `rng.next()` (delegates to `Math.random()` via
+  a wrapper so `vi.spyOn(Math,'random')` still works). `rollD6` + `shuffle` (gameStore) and the
+  PoisonModal die route through it. `beginCapture/endCapture` (recorder) and `setSource` (replay).
+- **Entity ids were non-reproducible** (`placed-<cardid>-${Date.now()}`, `cz-${Date.now()}`). NEW
+  `uid(prefix)` (gameStore) draws the unique suffix from `rng` → captured + replayed. This was the
+  bug the round-trip test caught. (deckStore's `deck-${Date.now()}` left alone — not game state.)
+- **Interception = a `record` middleware** innermost in the store's create chain
+  (`src/store/recordMiddleware.ts`): wraps every action; re-entrancy depth guard (only the
+  outermost records); a DENY list (cosmetic/session: setHovered, pushToast, open/closePile,
+  setConn, set/clearBroadcast, saveGame, backToLobby, resumeGame, startMultiplayer, assembleMpGame);
+  captures RNG draws per action.
+- **Recorder** (`src/replay/recorder.ts`): always-on, in-memory. `startSolo` → snapshot `init`
+  (post-shuffle) + begin. Each action → `{action,args,rng,hash}` (or a `paste` entry when an arg is
+  a function, e.g. setGame(fn) — the primitive MP will reuse). Full snapshot at each turn boundary.
+  **Categorical invalidation:** any deny-listed action that changes the canonical hash invalidates
+  (drift caught at the next recorded action's `preHash != lastHash` and at `export()`'s live check).
+  `subscribe/getStatus` drive the UI.
+- **Log format** (`src/replay/format.ts`): `{format, commit (vite `__COMMIT_HASH__` define), mode,
+  init, initHash, entries[]}`. Hash = cyrb53 over a key-sorted **canonical slice** = `game +
+  localPlayer + conn.mode + the store-local prompts` (pending/pendingPlay/pendingTrigger/pendingKit/
+  pendingActionTarget/pendingEquipPick/oathContext/modalQueue); EXCLUDES toasts/hovered/pileView/
+  savedGame/_broadcast (volatile). NB: NOT identical to LOCAL_PROMPTS_CLEARED (−pileView, +oathContext
+  +modalQueue). All combat/scry prompts live in `game` → hashed there.
+- **Runner** (`src/replay/replay.ts`): version-gate → apply `init` (assert initHash) → per entry a
+  fresh RNG cursor over `entry.rng` that **throws on underrun** (drawn past the end) and asserts
+  **exact-empty after** (surplus); re-execute action / paste `setState`; hash-diff → `ReplayDivergence`
+  with step/action/last-good-turn. `recorder.suspend()` during replay so it doesn't self-record.
+- **UI**: `RecorderButton` (bottom-left chip, `useSyncExternalStore`) — "⏺ REC · N actions · T turns"
+  or "⚠ invalidated — <reason>" the instant drift trips; click to download. Same download on the
+  GameOverScreen. Fixtures dir `src/replay/fixtures/*.replay.json` (a Vitest test globs + replays them;
+  none committed yet).
+- **Tests** (`src/__tests__/replay.test.ts`): rng capture→inject reproduces a shuffle; record a real
+  die-rolling solo game (Flame-Spinner on-enter, via a seeded position + a `_beginForTest` seam) →
+  **replay through actual `JSON.parse(JSON.stringify)`** clean (reference-identity guard); tamper /
+  underrun / surplus throw; resumeGame invalidates (both drift paths). NB confirmed in code: **no
+  engine path mutates hashed state asynchronously after an action** (every store setTimeout writes
+  only toasts, except one saveGame → savedGame — both excluded).
+- **Preview E2E**: sandbox game runs with the middleware over all 126 actions (no console errors);
+  RecorderButton shows live status; the action counter increments as recorded actions fire.
+- **FLAG / next**: v1 is **solo two-handed only** — MP host recording (own actions + guest turns as
+  `paste` remote-syncs) is the documented follow-up that reuses the paste primitive. No fixtures are
+  committed yet — the owner records real games and drops the JSON into `src/replay/fixtures/`.
+
+## Session (2026-07-04, later) — audit batch 4: guest deck in READY (audit #11) DONE
 *(Landed alongside the same-day keyword/Paranoia session below, on its combined tree — suite
 was green at 14 files / 178 tests after both.)* The guest's built deck used to be **silently
 discarded**: the host assembled the game from its own two Lobby dropdowns ("Your deck" → p1,
