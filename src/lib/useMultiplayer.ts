@@ -103,8 +103,11 @@ export function useMultiplayer() {
             // (id-keyed dead picks, equips, targeting) and the wire is a second entry path.
             const dupes = new Set(ids).size !== ids.length;
             if (ids.length === 0 || guestCards.length !== ids.length || dupes) {
+              // Version is already proven equal here (the READY handler refuses a version
+              // mismatch before this path runs), so this message is strictly about the deck —
+              // fully disjoint from the version-mismatch message.
               sessionRef.current?.rejectOpponent(
-                `${peer.name}'s deck couldn't be read — they need the same app version and a valid deck. Still hosting; ask them to rejoin.`);
+                `${peer.name}'s deck is empty or invalid. Still hosting; ask them to rebuild their deck and rejoin.`);
               pushToast(`Rejected ${peer.name}: invalid deck`);
               return; // seat stays empty — keep hosting on the same code
             }
