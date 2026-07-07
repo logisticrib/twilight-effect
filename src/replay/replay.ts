@@ -5,7 +5,7 @@ import { useGameStore } from '../store/gameStore';
 import { rng } from '../store/rng';
 import { recorder } from './recorder';
 import {
-  LOG_FORMAT_VERSION, hashState, canonical,
+  LOG_FORMAT_VERSION, hashState, canonical, firstDiff,
   type ReplayLog, type CanonicalSlice, type StoreSlice, type TurnSnapshot,
 } from './format';
 
@@ -38,14 +38,17 @@ export class ReplayDivergence extends Error {
   readonly actual: string;
   readonly lastMatchingTurn: TurnSnapshot | null;
   readonly current: CanonicalSlice;
+  /** The first canonical field that differs (recorded vs replayed) — the actionable culprit. */
+  readonly diff: string | null;
   constructor(
     step: number, action: string, expected: string, actual: string,
-    lastMatchingTurn: TurnSnapshot | null, current: CanonicalSlice,
+    lastMatchingTurn: TurnSnapshot | null, current: CanonicalSlice, diff: string | null,
   ) {
     super(
-      `Replay divergence at step ${step}, action "${action}": ` +
-      `expected hash ${expected}, got ${actual}. ` +
-      `Last matching turn: ${lastMatchingTurn ? `#${lastMatchingTurn.turn}` : 'none (init)'}.`,
+      `Replay divergence at step ${step}, action "${action}".\n` +
+      `  expected hash ${expected}, got ${actual}.\n` +
+      `  first diverging field: ${diff ?? '(unavailable)'}\n` +
+      `  last matching turn: ${lastMatchingTurn ? `#${lastMatchingTurn.turn}` : 'none (init)'}.`,
     );
     this.name = 'ReplayDivergence';
     this.step = step;
@@ -54,6 +57,7 @@ export class ReplayDivergence extends Error {
     this.actual = actual;
     this.lastMatchingTurn = lastMatchingTurn;
     this.current = current;
+    this.diff = diff;
   }
 }
 
@@ -101,7 +105,12 @@ export function replay(log: ReplayLog): void {
 
       const actual = hashState(liveSlice());
       if (actual !== entry.hash) {
-        throw new ReplayDivergence(entry.step, label, entry.hash, actual, lastMatchingTurn, liveSlice());
+        // `state` holds the recorded post-entry canonical state (pastes always; actions when
+        // recorded live) → a precise recorded-vs-replayed field diff. Falls back to the last
+        // full checkpoint if this entry has no stored state.
+        const recorded: CanonicalSlice | undefined = entry.state ?? lastMatchingTurn?.state ?? log.init;
+        throw new ReplayDivergence(entry.step, label, entry.hash, actual, lastMatchingTurn, liveSlice(),
+          firstDiff(recorded, liveSlice()));
       }
       if (entry.turn) {
         // The per-action hash already matched; the turn snapshot is a redundant full-state

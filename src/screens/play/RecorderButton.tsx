@@ -1,19 +1,20 @@
-import { useSyncExternalStore, type CSSProperties } from 'react';
+import { useSyncExternalStore, useState, type CSSProperties } from 'react';
 import { recorder } from '../../replay/recorder';
 import { downloadReplay } from '../../replay/download';
-import { useGameStore } from '../../store/gameStore';
 import { btnProps } from '../../lib/a11y';
 import { TBL } from '../../tokens';
 
 /**
  * Unobtrusive replay-recorder chip (bottom-left of the board). Recording is a pure append —
- * validity is decided at DOWNLOAD time by replaying the log (the deterministic oracle). So
- * the chip just shows the running action/turn counts; clicking it validates + downloads, and
- * a failed validation (or a hard boundary like resumeGame) surfaces as a toast.
+ * validity is decided at DOWNLOAD time by replaying the log. Clicking the chip validates +
+ * downloads; if validation fails, the error (which names the first diverging field, plus
+ * hashes) is shown in a COPYABLE panel with a Copy button — those hashes are impossible to
+ * transcribe by hand, so this makes them one click to copy.
  */
 export function RecorderButton() {
   const status = useSyncExternalStore(recorder.subscribe, recorder.getStatus, recorder.getStatus);
-  const pushToast = useGameStore(s => s.pushToast);
+  const [err, setErr] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   if (!status.recording) return null;
 
   const blocked = !!status.invalidReason;
@@ -24,18 +25,41 @@ export function RecorderButton() {
 
   const onClick = () => {
     const res = downloadReplay();
-    if (!res.ok) pushToast(`Replay export failed: ${res.error}`);
+    if (res.ok) { setErr(null); return; }
+    console.error('[replay export failed]\n' + res.error);   // also copyable from devtools
+    setErr(res.error);
+    setCopied(false);
+  };
+
+  const copy = () => {
+    if (!err) return;
+    navigator.clipboard?.writeText(err).then(() => setCopied(true)).catch(() => {});
   };
 
   return (
-    <div
-      {...(blocked ? {} : btnProps(onClick))}
-      title={title}
-      style={{ ...chip, ...(blocked ? chipBad : chipOk), cursor: blocked ? 'default' : 'pointer' }}
-    >
-      {label}
-      {!blocked && <span style={dl}>⭳</span>}
-    </div>
+    <>
+      <div
+        {...(blocked ? {} : btnProps(onClick))}
+        title={title}
+        style={{ ...chip, ...(blocked ? chipBad : chipOk), cursor: blocked ? 'default' : 'pointer' }}
+      >
+        {label}
+        {!blocked && <span style={dl}>⭳</span>}
+      </div>
+
+      {err && (
+        <div style={panel}>
+          <div style={panelHead}>
+            <span style={{ color: TBL.danger, fontWeight: 600 }}>Replay export failed</span>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button {...btnProps(copy)} style={smallBtn}>{copied ? '✓ Copied' : '⧉ Copy'}</button>
+              <button {...btnProps(() => setErr(null))} style={smallBtn}>✕</button>
+            </div>
+          </div>
+          <textarea readOnly value={err} onFocus={e => e.currentTarget.select()} style={errBox} />
+        </div>
+      )}
+    </>
   );
 }
 
@@ -53,3 +77,24 @@ const chipBad: CSSProperties = {
   background: 'rgba(40,18,14,0.92)', border: `1px solid ${TBL.danger}66`, color: TBL.danger,
 };
 const dl: CSSProperties = { fontSize: 12, color: TBL.amber2 };
+
+const panel: CSSProperties = {
+  position: 'fixed', left: 12, bottom: 44, zIndex: 61, width: 'min(560px, 90vw)',
+  background: 'rgba(18,13,10,0.98)', border: `1px solid ${TBL.danger}66`, borderRadius: 9,
+  padding: 10, boxShadow: '0 6px 28px rgba(0,0,0,0.6)',
+  fontFamily: "'Inter', sans-serif", fontSize: 12,
+};
+const panelHead: CSSProperties = {
+  display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6,
+};
+const smallBtn: CSSProperties = {
+  padding: '3px 9px', borderRadius: 5, cursor: 'pointer', fontSize: 11, fontWeight: 600,
+  background: 'rgba(255,255,255,0.06)', color: TBL.ink, border: `1px solid ${TBL.matLine2}`,
+  fontFamily: "'Inter', sans-serif",
+};
+const errBox: CSSProperties = {
+  width: '100%', height: 120, resize: 'vertical', boxSizing: 'border-box',
+  background: 'rgba(0,0,0,0.45)', color: TBL.ink, border: `1px solid ${TBL.matLine}`,
+  borderRadius: 5, padding: 8, fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5,
+  lineHeight: 1.5, whiteSpace: 'pre', outline: 'none',
+};

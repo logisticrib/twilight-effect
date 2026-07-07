@@ -96,6 +96,20 @@ export function hashState(slice: CanonicalSlice): string {
   return cyrb53(stableStringify(slice));
 }
 
+/** First differing path between two states (via stable JSON) — used to turn a hash mismatch
+ *  into an actionable "which field diverged" report. Returns null if identical. */
+export function firstDiff(a: unknown, b: unknown, path = ''): string | null {
+  if (stableStringify(a) === stableStringify(b)) return null;
+  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) {
+    return `${path || '(root)'}: expected ${stableStringify(a).slice(0, 140)} — got ${stableStringify(b).slice(0, 140)}`;
+  }
+  for (const k of new Set([...Object.keys(a as object), ...Object.keys(b as object)])) {
+    const d = firstDiff((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k], path ? `${path}.${k}` : k);
+    if (d) return d;
+  }
+  return `${path} (key set differs)`;
+}
+
 // ─── Log entries ────────────────────────────────────────────────────────────────
 export interface TurnSnapshot { turn: number; state: CanonicalSlice }
 
@@ -108,6 +122,9 @@ export interface ActionEntry {
   rng: number[];
   hash: string;
   turn?: TurnSnapshot;
+  /** Full post-action canonical state, kept IN MEMORY for a precise field-level divergence
+   *  report; stripped from downloaded fixtures (they replay from re-execution, not this). */
+  state?: CanonicalSlice;
 }
 
 /** A state-paste: replay `setState`s `state` (used for non-serializable-arg actions like

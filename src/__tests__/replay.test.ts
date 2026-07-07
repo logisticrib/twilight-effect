@@ -113,6 +113,28 @@ describe('divergence is caught loudly', () => {
     anyAction.rng = [...anyAction.rng, 0.5]; // one more than the reducer will draw
     expect(() => replay(bad)).toThrow(/surplus/i);
   });
+
+  // The divergence report must name the first diverging FIELD (recorded vs replayed), not just
+  // two opaque hashes — that's what makes a copied export error actionable. Forced by tampering
+  // a recorded action's arg so re-execution produces a genuinely different canonical state.
+  it('a divergence report names the first diverging canonical field', () => {
+    recorder._resetForTest();
+    gs.getState().startSolo(deckCards, deckCards); // starts recording
+    gs.getState().selectEntity('entity-X');        // recorded: game.selected = 'entity-X'
+    const bad = roundTrip(recorder.getLog().log!);
+    const e = bad.entries.find((x): x is ActionEntry => x.kind === 'action' && x.action === 'selectEntity')!;
+    e.args = ['entity-Y'];                          // replay selects Y → real state divergence
+    try {
+      replay(bad);
+      throw new Error('expected divergence');
+    } catch (err) {
+      expect(err).toBeInstanceOf(ReplayDivergence);
+      const d = err as ReplayDivergence;
+      expect(d.diff, `diff was: ${d.diff}`).toMatch(/game\.selected/);
+      expect(d.diff).toMatch(/entity-X/); // recorded value present in the report
+      expect(d.diff).toMatch(/entity-Y/); // replayed value present
+    }
+  });
 });
 
 // Validity is decided at export by replaying the log (the deterministic oracle) — NOT by a

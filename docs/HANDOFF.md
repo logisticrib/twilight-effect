@@ -40,13 +40,17 @@ permanent regression fixture. **Suite: 15 files / 187 tests green; tsc ZERO; val
   +modalQueue). All combat/scry prompts live in `game` → hashed there.
 - **Runner** (`src/replay/replay.ts`): version-gate → apply `init` (assert initHash) → per entry a
   fresh RNG cursor over `entry.rng` that **throws on underrun** (drawn past the end) and asserts
-  **exact-empty after** (surplus); re-execute action / paste `setState`; hash-diff → `ReplayDivergence`
-  with step/action/last-good-turn. `recorder.suspend()` during replay so it doesn't self-record.
+  **exact-empty after** (surplus); re-execute action / paste `setState`; hash-diff → `ReplayDivergence`.
+  The divergence report names the **first diverging canonical field** (`firstDiff` in format.ts,
+  recorded-vs-replayed with both values) — not just two opaque hashes. Action entries carry a full
+  `state` snapshot IN MEMORY for that diff; `download.ts` strips it so fixtures stay compact.
+  `recorder.suspend()` during replay so it doesn't self-record.
 - **UI**: `RecorderButton` (bottom-left chip, `useSyncExternalStore`) — "⏺ REC · N actions · T turns"
-  during play (NO in-play "invalidated" state anymore — pass/fail moved to export). Click →
-  `downloadReplay()` (validate + download); a failed validation or a boundary surfaces as a toast.
-  Same download on the GameOverScreen (disabled+reasoned on a boundary). Fixtures dir
-  `src/replay/fixtures/*.replay.json` (a Vitest test globs + replays them; none committed yet).
+  during play (NO in-play "invalidated" state — pass/fail moved to export). Click → `downloadReplay()`
+  (validate + download); a **failed validation shows a COPYABLE error panel** (readonly textarea +
+  Copy button, and `console.error`) because the hashes/field-diff are impossible to transcribe by
+  hand. Same copyable panel on GameOverScreen (its z-index sits above the chip at game-over). Fixtures
+  dir `src/replay/fixtures/*.replay.json` (a Vitest test globs + replays them; none committed yet).
 - **Tests** (`src/__tests__/replay.test.ts`): rng capture→inject reproduces a shuffle; record a real
   die-rolling solo game (Flame-Spinner on-enter, via a seeded position + a `_beginForTest` seam) →
   **replay through actual `JSON.parse(JSON.stringify)`** clean (reference-identity guard); tamper /

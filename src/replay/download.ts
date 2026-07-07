@@ -13,7 +13,10 @@ export function downloadReplay(): { ok: true } | { ok: false; error: string } {
   if (!res.ok) return res;
   const log = res.log;
   const name = `twilight-${log.mode}-${log.commit}-t${turnsOf(log)}.replay.json`;
-  const blob = new Blob([JSON.stringify(log, null, 2)], { type: 'application/json' });
+  // Strip the in-memory diagnostic `state` from action entries — fixtures replay by
+  // re-execution, so this only bloats the file.
+  const lean = { ...log, entries: log.entries.map(e => e.kind === 'action' ? { ...e, state: undefined } : e) };
+  const blob = new Blob([JSON.stringify(lean, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;

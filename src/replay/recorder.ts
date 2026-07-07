@@ -77,7 +77,9 @@ class Recorder {
     const hasFn = args.some(a => typeof a === 'function');
     const entry: ReplayEntry = hasFn
       ? { step, kind: 'paste', from: name, state: clone(slice), hash: hashState(slice) }
-      : { step, kind: 'action', action: name, args: clone(args), rng: draws.slice(), hash: hashState(slice) };
+      // Action entries keep a full-state copy IN MEMORY (for a precise divergence diff);
+      // download.ts strips it so committed fixtures stay compact.
+      : { step, kind: 'action', action: name, args: clone(args), rng: draws.slice(), hash: hashState(slice), state: clone(slice) };
     if (slice.game.turn > this.lastTurn) {
       this.lastTurn = slice.game.turn;
       entry.turn = { turn: slice.game.turn, state: clone(slice) };

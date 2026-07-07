@@ -17,9 +17,10 @@ export function GameOverScreen() {
   const localPlayer = useGameStore(s => s.localPlayer);
   const backToLobby = useGameStore(s => s.backToLobby);
   const rec = useSyncExternalStore(recorder.subscribe, recorder.getStatus, recorder.getStatus);
-  const pushToast = useGameStore(s => s.pushToast);
   const [dismissed, setDismissed] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   if (!winnerSide || dismissed) return null;
 
@@ -54,7 +55,7 @@ export function GameOverScreen() {
 
         {rec.recording && (
           <button
-            onClick={() => { const r = downloadReplay(); if (r.ok) setSaved(true); else pushToast(`Replay export failed: ${r.error}`); }}
+            onClick={() => { const r = downloadReplay(); if (r.ok) { setSaved(true); setErr(null); } else { console.error('[replay export failed]\n' + r.error); setErr(r.error); setCopied(false); } }}
             disabled={!!rec.invalidReason}
             title={rec.invalidReason ?? 'Validate (replay) and save this game as a .replay.json regression fixture'}
             style={{ ...S.replayBtn, ...(rec.invalidReason ? S.replayBtnBad : {}) }}
@@ -63,6 +64,19 @@ export function GameOverScreen() {
               ? '⚠ Can’t record this game'
               : (saved ? '✓ Replay saved' : `⭳ Download replay (${rec.steps} actions)`)}
           </button>
+        )}
+        {err && (
+          <div style={{ marginTop: 8, width: '100%', textAlign: 'left' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <span style={{ color: TBL.danger, fontFamily: "'JetBrains Mono', monospace", fontSize: 10 }}>Export failed — copy this:</span>
+              <button onClick={() => navigator.clipboard?.writeText(err).then(() => setCopied(true)).catch(() => {})}
+                style={{ padding: '3px 9px', borderRadius: 5, cursor: 'pointer', fontSize: 11, fontWeight: 600, background: 'rgba(255,255,255,0.06)', color: TBL.ink, border: `1px solid ${TBL.matLine2}`, fontFamily: "'Inter', sans-serif" }}>
+                {copied ? '✓ Copied' : '⧉ Copy'}
+              </button>
+            </div>
+            <textarea readOnly value={err} onFocus={e => e.currentTarget.select()}
+              style={{ width: '100%', height: 110, boxSizing: 'border-box', background: 'rgba(0,0,0,0.45)', color: TBL.ink, border: `1px solid ${TBL.matLine}`, borderRadius: 5, padding: 8, fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, lineHeight: 1.5, whiteSpace: 'pre', outline: 'none', resize: 'vertical' }} />
+          </div>
         )}
       </div>
     </div>
