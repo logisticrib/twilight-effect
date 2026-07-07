@@ -36,10 +36,15 @@ host picked in the sandbox dropdown. FIX — *guest sends deck ids in READY; the
   (set `myDeck`+`conn` via the internals cast, like the lifecycle test). **typecheck ZERO;
   validate:decks clean.**
 - **Runtime smoke (single-window preview)**: app loads, Lobby renders, **Host** → Matching
-  screen + real PeerJS code generated, no console/server errors. NOT done (single-page harness
-  can't drive two WebRTC contexts): the live two-window "guest plays deck C not B" confirmation —
-  the batch's REQUIRED done-criterion, which doubles as the never-run first live two-peer
-  playtest; it's the owner's manual step (dev server left running on :5173).
+  screen + real PeerJS code generated, no console/server errors.
+- **LIVE TWO-WINDOW PLAYTEST — PASSED (2026-07-04, owner-run).** The guest joined and played
+  their OWN deck (not the host's sandbox pick) — audit #11 confirmed end-to-end over real PeerJS.
+  The batch's REQUIRED done-criterion is met; **audit #11 fully closed.**
+- **CORRECTION to a long-standing handoff error (owner, 2026-07-04):** the owner has live-tested
+  WHOLE GAMES two-window MANY TIMES. The recurring "state-sync has never had a live two-peer
+  playtest" / "STILL NEEDS a live two-peer playtest" caveat threaded through older entries and the
+  DONE §Multiplayer notes is FALSE — do NOT repeat it, and do not treat a first live playtest as
+  outstanding work. Full-game two-window play is an established, working reality.
 - **Open flags for owner**: (1) a refused guest currently sees only a generic disconnect — a
   dedicated `REJECT` message carrying the reason is a possible small follow-up; (2) no deck-SIZE
   gate on received decks (Lobby tolerates <50, warning-only — matched); (3) the "Opponent deck
