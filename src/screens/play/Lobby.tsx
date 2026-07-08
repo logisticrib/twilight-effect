@@ -230,7 +230,7 @@ export function Lobby({ host, join }: LobbyProps) {
             <button onClick={resumeGame} style={{ padding: '5px 12px', background: TBL.amber, color: '#1a1208', border: 'none', borderRadius: 5, cursor: 'pointer', fontWeight: 600, fontSize: 12, fontFamily: "'Inter', sans-serif" }}>
               Resume
             </button>
-            <button onClick={clearSavedGame} style={{ padding: '5px 10px', background: 'transparent', color: TBL.ink3, border: `1px solid ${TBL.matLine}`, borderRadius: 5, cursor: 'pointer', fontSize: 12, fontFamily: "'Inter', sans-serif" }}>
+            <button onClick={() => clearSavedGame()} style={{ padding: '5px 10px', background: 'transparent', color: TBL.ink3, border: `1px solid ${TBL.matLine}`, borderRadius: 5, cursor: 'pointer', fontSize: 12, fontFamily: "'Inter', sans-serif" }}>
               Discard
             </button>
           </div>

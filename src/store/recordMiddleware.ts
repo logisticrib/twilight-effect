@@ -42,7 +42,10 @@ function wrapActions<T extends object>(state: T, get: () => StoreSlice): T {
       } finally {
         rng.endCapture();
         depth--;
-        recorder.onAction(key, args, draws, get);
+        // `orig.length` = the action's DECLARED parameter count. The recorder uses it to tell a
+        // legitimate updater paste (setGame(fn)) from an ACCIDENTAL demotion — a no-arg action
+        // wired straight as onClick, invoked by React with the click event as args[0].
+        recorder.onAction(key, args, draws, get, orig.length);
       }
     };
   }

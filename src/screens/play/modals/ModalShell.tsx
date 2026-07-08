@@ -88,7 +88,7 @@ interface ModalShellProps {
 
 export function ModalShell({ glyph, color, eyebrow, title, sub, children, footer, width, onScrimClick }: ModalShellProps) {
   return (
-    <div style={md.scrim} onClick={onScrimClick}>
+    <div style={md.scrim} onClick={onScrimClick && (() => onScrimClick())}>
       <div style={width ? { ...md.panel, width } : md.panel} onClick={e => e.stopPropagation()}>
         <div style={md.head}>
           <div style={md.glyph(color)}>{glyph}</div>

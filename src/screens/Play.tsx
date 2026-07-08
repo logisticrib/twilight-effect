@@ -102,7 +102,7 @@ function PromptBanner({ tag, text, onCancel }: { tag: string; text: string; onCa
         {tag}
       </span>
       <span>{text}</span>
-      <button onClick={onCancel} style={{
+      <button onClick={() => onCancel()} style={{
         padding: '4px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600,
         background: 'rgba(255,255,255,0.05)', color: TBL.ink2, border: `1px solid ${TBL.matLine2}`,
         fontFamily: "'Inter', sans-serif",
@@ -190,7 +190,7 @@ function PeekModal() {
       footer={
         <>
           <div style={md.spacer} />
-          <button style={md.btn('ghost')} onClick={cancelPeek}>Cancel</button>
+          <button style={md.btn('ghost')} onClick={() => cancelPeek()}>Cancel</button>
           <button disabled={overHand} onClick={() => resolvePeek(assign)}
             style={overHand ? { ...md.btn('primary'), opacity: 0.5, cursor: 'not-allowed' } : md.btn('primary')}>
             Confirm

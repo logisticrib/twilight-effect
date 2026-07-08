@@ -2,7 +2,7 @@
 // recordMiddleware.ts), which calls onAction() for every non-nested, non-deny-listed store
 // action. Holds one game's log; exports it as JSON (GameOverScreen / RecorderButton).
 import {
-  LOG_FORMAT_VERSION, COMMIT, hashState, canonical, isReplayable,
+  LOG_FORMAT_VERSION, COMMIT, hashState, canonical, isReplayable, accidentalArg,
   type CanonicalSlice, type ReplayEntry, type ReplayLog, type StoreSlice,
 } from './format';
 
@@ -10,6 +10,10 @@ export interface RecorderStatus {
   recording: boolean;
   steps: number;
   turns: number;
+  /** Count of accidental action→paste demotions so far (a leaked handler arg). Non-zero means
+   *  the recording is CORRECT but under-tests those reducers — surfaced so the bare-wired
+   *  component is caught the day it's written, not when a fixture mysteriously loses fidelity. */
+  demotions: number;
   /** Set only when the recording crosses a hard boundary (resumeGame / an MP start) that
    *  makes the log unreplayable; export refuses. Undefined during normal recording. */
   invalidReason?: string;
@@ -33,7 +37,7 @@ class Recorder {
   private invalidReason: string | undefined;
 
   private listeners = new Set<() => void>();
-  private status: RecorderStatus = { recording: false, steps: 0, turns: 0 };
+  private status: RecorderStatus = { recording: false, steps: 0, turns: 0, demotions: 0 };
 
   subscribe = (cb: () => void): (() => void) => {
     this.listeners.add(cb);
@@ -46,6 +50,7 @@ class Recorder {
       recording: this.active,
       steps: this.log?.entries.length ?? 0,
       turns: this.lastTurn,
+      demotions: this.log?.demotions.length ?? 0,
       invalidReason: this.invalidReason,
     };
     for (const l of this.listeners) l();
@@ -55,7 +60,7 @@ class Recorder {
     const slice = canonical(get());
     this.log = {
       format: LOG_FORMAT_VERSION, commit: COMMIT, mode: slice.conn.mode,
-      recordedAt: 0, init: clone(slice), initHash: hashState(slice), entries: [],
+      recordedAt: 0, init: clone(slice), initHash: hashState(slice), entries: [], demotions: [],
     };
     this.lastTurn = slice.game.turn;
     this.active = true;
@@ -68,7 +73,7 @@ class Recorder {
 
   /** Called by the middleware for every non-nested, non-deny action. Recording is a pure
    *  append — no per-action drift check (validity is decided at export by replay()). */
-  onAction(name: string, args: unknown[], draws: number[], get: () => StoreSlice) {
+  onAction(name: string, args: unknown[], draws: number[], get: () => StoreSlice, arity = 0) {
     if (this.suspended) return;
     if (name === 'startSolo') { this.startGame(get); return; }
     if (!this.active) return;
@@ -81,6 +86,13 @@ class Recorder {
       // falls back to a state-paste that setStates the post-action result. This is why a
       // non-serializable arg can no longer crash clone() and silently drop the advance.
       const replayable = args.every(a => isReplayable(a));
+      if (!replayable) {
+        // Correct, but is it INTENDED? A function in a declared slot (setGame(fn)) is a genuine
+        // updater paste. Anything else is a leaked handler arg: the paste is right, yet the
+        // reducer will never re-execute on replay, so the recording quietly under-tests it.
+        const bad = accidentalArg(args, arity);
+        if (bad) this.log!.demotions.push({ step, action: name, argIndex: bad.index, argType: bad.type, arity });
+      }
       const entry: ReplayEntry = replayable
         // Action entries keep a full-state copy IN MEMORY (for a precise divergence diff);
         // download.ts strips it so committed fixtures stay compact.

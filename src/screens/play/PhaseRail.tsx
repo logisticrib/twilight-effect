@@ -105,7 +105,7 @@ export function PhaseRail() {
 
       {/* Sandbox: switch which side you're controlling */}
       {isSandbox && (
-        <button onClick={switchSides} title="Control the other player's side" style={{
+        <button onClick={() => switchSides()} title="Control the other player's side" style={{
           display: 'inline-flex', alignItems: 'center', gap: 5,
           padding: '5px 11px', borderRadius: 5, cursor: 'pointer',
           fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, fontWeight: 600,
@@ -121,7 +121,7 @@ export function PhaseRail() {
         {conn.mode === 'solo' ? '◐ SANDBOX' : `◉ ${conn.code} · ${conn.latency}ms`}
       </div>
       <div style={leaveBtn} onClick={backToLobby} title="Leave match">⏻</div>
-      <button style={btnStyle} onClick={btnCfg.action}>
+      <button style={btnStyle} onClick={() => btnCfg.action()}>
         {btnCfg.label}
         {btnCfg.hint && <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10 }}>{btnCfg.hint}</span>}
       </button>

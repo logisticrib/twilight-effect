@@ -13,6 +13,7 @@ import { recorder } from '../replay/recorder';
 import { tryExport } from '../replay/exportReplay';
 import { ModalHost } from '../screens/play/modals/ModalHost';
 import { PoisonModal } from '../screens/play/modals/PoisonModal';
+import { PhaseRail } from '../screens/play/PhaseRail';
 
 /** Click the last button whose label matches (footer buttons render after body buttons). */
 function clickBtn(re: RegExp) {
@@ -42,6 +43,8 @@ describe('setup + poison record and replay clean through real components', () =>
     // The class-bonus advanceSetups must be present as entries (the bug dropped them).
     const steps = recorder.getStatus().steps;
     expect(steps).toBeGreaterThanOrEqual(6);
+    // ...and recorded as re-executable actions, not demoted to pastes by a leaked click event.
+    expect(recorder.getLog().log!.demotions).toEqual([]);
 
     const res = tryExport();
     expect(res.ok ? 'ok' : res.error).toBe('ok'); // replay() validated the whole log
@@ -67,6 +70,37 @@ describe('setup + poison record and replay clean through real components', () =>
     clickBtn(/Continue/);  // commit → resolvePoison(p1, [{id,cleansed}]) [action] + onClose [paste]
 
     expect(gs.getState().game.pendingPoison).toBeNull();
+    const res = tryExport();
+    expect(res.ok ? 'ok' : res.error).toBe('ok');
+  }, 30_000);
+
+  // THE GUARD. Clicking real buttons is the only way a leaked DOM event ever reaches a store
+  // action, so this drives the real PhaseRail and asserts the recording keeps FULL re-execution
+  // fidelity: zero demotions, and the turn-cycle reducers recorded as re-executable actions (not
+  // full-state pastes). Wire a store action bare (`onClick={endTurn}`) and this test goes red.
+  it('real PhaseRail clicks record as re-executable actions — zero accidental demotions', () => {
+    recorder.suspend();
+    gs.getState().startSolo(deckCards, deckCards);
+    gs.setState(s => ({ game: { ...s.game,
+      setupQueue: [], currentPhase: 'action' as const, activePlayer: 'p1' as const,
+      p1: { ...s.game.p1, board: { b3: mkPc('pc-1') } },
+    } }));
+    recorder.resume();
+    recorder._beginForTest(() => gs.getState());
+    render(<PhaseRail />);
+
+    clickBtn(/End Phase/);              // → endTurnToEndPhase (was a paste when bare-wired)
+    clickBtn(/Other side|⇄|Control/);   // → switchSides       (was a paste when bare-wired)
+
+    const log = recorder.getLog().log!;
+    expect(log.demotions, `demoted: ${JSON.stringify(log.demotions)}`).toEqual([]);
+    expect(recorder.getStatus().demotions).toBe(0);
+    // Fidelity: these reducers must RE-EXECUTE on replay, so they must be action entries.
+    const kinds = log.entries.map(e => (e.kind === 'action' ? e.action : `paste:${e.from}`));
+    expect(kinds).toContain('endTurnToEndPhase');
+    expect(kinds).toContain('switchSides');
+    expect(kinds.filter(k => k.startsWith('paste:'))).toEqual([]);
+
     const res = tryExport();
     expect(res.ok ? 'ok' : res.error).toBe('ok');
   }, 30_000);

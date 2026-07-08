@@ -9,7 +9,7 @@ import { rng } from '../store/rng';
 import { recorder } from '../replay/recorder';
 import { replay, ReplayDivergence } from '../replay/replay';
 import { tryExport } from '../replay/exportReplay';
-import { canonical, isReplayable, stableStringify, hashState } from '../replay/format';
+import { canonical, isReplayable, stableStringify, hashState, accidentalArg } from '../replay/format';
 import type { ReplayLog, ActionEntry, StoreSlice } from '../replay/format';
 
 // Deep clone through ACTUAL JSON text — load-bearing: an in-memory replay would share object
@@ -218,6 +218,34 @@ describe('export validation (replay is the oracle)', () => {
     expect(res.ok, res.ok ? '' : res.error).toBe(true);
   });
 
+  // Fidelity audit. A leaked handler arg demotes a re-executable action into a state-paste: the
+  // log stays CORRECT but that reducer never re-runs on replay, so the fixture silently
+  // under-tests it. The recorder now flags exactly that, while leaving genuine setGame(fn)
+  // updater pastes alone. Goal: the next bare-wired component fails a test the day it's written.
+  it('flags an accidental action→paste demotion (no-arg action invoked with a leaked event)', () => {
+    seedActive();
+    const evt: Record<string, unknown> = { type: 'click' }; evt.currentTarget = evt;
+    // `advanceSetup: () => void` (arity 0) wired as onClick → React passes the event as args[0].
+    (gs.getState().advanceSetup as unknown as (a: unknown) => void)(evt);
+
+    const log = recorder.getLog().log!;
+    expect(log.entries[log.entries.length - 1].kind).toBe('paste'); // correct...
+    expect(log.demotions).toHaveLength(1);                           // ...but flagged as accidental
+    expect(log.demotions[0]).toMatchObject({ action: 'advanceSetup', argIndex: 0, arity: 0 });
+    expect(recorder.getStatus().demotions).toBe(1);                  // surfaced in the chip
+    // Still exports clean — a demotion is a fidelity warning, not a correctness failure.
+    expect(tryExport().ok).toBe(true);
+  });
+
+  it('does NOT flag a genuine setGame(fn) updater paste', () => {
+    seedActive();
+    gs.getState().setGame(g => ({ ...g, selected: 'unit-a' })); // function in a DECLARED slot
+    const log = recorder.getLog().log!;
+    expect(log.entries[log.entries.length - 1].kind).toBe('paste');
+    expect(log.demotions).toEqual([]);
+    expect(recorder.getStatus().demotions).toBe(0);
+  });
+
   it('a recording that crosses a resumeGame boundary refuses to export', () => {
     seedActive();
     gs.getState().saveGame();          // savedGame = current
@@ -295,7 +323,35 @@ describe('committed replay fixtures', () => {
     it(`replays clean: ${name.split('/').pop()}`, () => {
       expect(() => replay(fixtures[name].default)).not.toThrow();
     });
+    // A committed fixture must be a HIGH-FIDELITY regression: every recordable action re-executes
+    // on replay. Any demotion means a bare-wired call site turned a reducer into a setState.
+    it(`records zero accidental demotions: ${name.split('/').pop()}`, () => {
+      const log = fixtures[name].default;
+      expect(log.demotions, 'fixture predates the demotion audit (log format v3) — re-record it').toBeDefined();
+      expect(log.demotions, "a demoted action never re-executes on replay — fix the bare onClick={action} call site (use onClick={() => action()}) and re-record").toEqual([]);
+    });
   }
+});
+
+// The categorical rule behind the demotion audit. Arity ALONE is not the test: a leaked event
+// landing on a declared parameter slot (selectEntity(event)) is still junk the action never asked
+// for. Only a FUNCTION in a declared slot — setGame(fn) — is a legitimate updater paste.
+describe('accidentalArg — legitimate updater vs leaked handler arg', () => {
+  const fn = () => {};
+  const evt: Record<string, unknown> = { type: 'click' }; evt.currentTarget = evt; // cyclic, like a DOM event
+
+  it('returns null for replayable args and for a declared updater function', () => {
+    expect(accidentalArg([], 0)).toBeNull();                    // endTurn()
+    expect(accidentalArg(['b1', 'p1'], 2)).toBeNull();          // placePc('b1','p1')
+    expect(accidentalArg([fn], 1)).toBeNull();                  // setGame(fn) — GENUINE paste
+  });
+
+  it('flags a non-replayable arg the action never declared', () => {
+    expect(accidentalArg([evt], 0)).toEqual({ index: 0, type: 'Object' });   // endTurn(event)
+    expect(accidentalArg([evt], 1)).toEqual({ index: 0, type: 'Object' });   // selectEntity(event) — declared slot, still junk
+    expect(accidentalArg([fn], 0)).toEqual({ index: 0, type: 'function' });  // fn to a no-arg action
+    expect(accidentalArg(['ok', new Map()], 2)).toEqual({ index: 1, type: 'Map' });
+  });
 });
 
 // The recorder decides action-vs-paste by "is this arg replayable" (round-trips through JSON),

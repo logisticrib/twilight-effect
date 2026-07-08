@@ -40,7 +40,7 @@ export function CardPickModal({ glyph, color, eyebrow, title, sub, picks, onPick
       footer={cancel && (
         <>
           <div style={md.spacer} />
-          <button style={md.btn('ghost')} onClick={cancel.onClick}>{cancel.label}</button>
+          <button style={md.btn('ghost')} onClick={() => cancel.onClick()}>{cancel.label}</button>
         </>
       )}>
       <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', justifyContent: 'center' }}>

@@ -18,10 +18,18 @@ export function RecorderButton() {
   if (!status.recording) return null;
 
   const blocked = !!status.invalidReason;
-  const label = blocked ? '⚠ can’t record' : `⏺ REC · ${status.steps} actions · ${status.turns} turns`;
+  // A demotion means a store action was wired straight as a DOM handler, so it recorded as a
+  // full-state paste instead of a re-executable action: the log stays CORRECT but that reducer
+  // is never re-run on replay. Surface it — a silent fidelity loss is worse than a loud one.
+  const demoted = status.demotions > 0;
+  const label = blocked
+    ? '⚠ can’t record'
+    : `⏺ REC · ${status.steps} actions · ${status.turns} turns${demoted ? ` · ⚠ ${status.demotions} demoted` : ''}`;
   const title = blocked
     ? status.invalidReason
-    : 'Validate (replay) and download this game as a .replay.json regression fixture';
+    : demoted
+      ? `${status.demotions} action(s) demoted to state-pastes by a leaked handler argument — those reducers won't re-execute on replay. Fix the bare onClick={action} call site (use onClick={() => action()}), then re-record.`
+      : 'Validate (replay) and download this game as a .replay.json regression fixture';
 
   const onClick = () => {
     const res = downloadReplay();
@@ -41,7 +49,7 @@ export function RecorderButton() {
       <div
         {...(blocked ? {} : btnProps(onClick))}
         title={title}
-        style={{ ...chip, ...(blocked ? chipBad : chipOk), cursor: blocked ? 'default' : 'pointer' }}
+        style={{ ...chip, ...(blocked ? chipBad : demoted ? chipWarn : chipOk), cursor: blocked ? 'default' : 'pointer' }}
       >
         {label}
         {!blocked && <span style={dl}>⭳</span>}
@@ -75,6 +83,10 @@ const chipOk: CSSProperties = {
 };
 const chipBad: CSSProperties = {
   background: 'rgba(40,18,14,0.92)', border: `1px solid ${TBL.danger}66`, color: TBL.danger,
+};
+/** Recording is valid but has lost re-execution fidelity (accidental action→paste demotions). */
+const chipWarn: CSSProperties = {
+  background: 'rgba(38,28,10,0.92)', border: `1px solid ${TBL.amber2}66`, color: TBL.amber2,
 };
 const dl: CSSProperties = { fontSize: 12, color: TBL.amber2 };
 

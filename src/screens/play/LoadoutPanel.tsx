@@ -273,7 +273,7 @@ export function LoadoutPanel() {
         <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
           <ActBtn icon="✓" label="Resolve" state={gate.ok ? 'primary' : 'used'} title={gate.ok ? undefined : gate.reason}
                   onClick={() => { playAction(pendingCard.id); cancelPlay(); }} />
-          <ActBtn icon="✕" label="Cancel" state="available" onClick={cancelPlay} />
+          <ActBtn icon="✕" label="Cancel" state="available" onClick={() => cancelPlay()} />
         </div>
       </div>
     );
@@ -290,7 +290,7 @@ export function LoadoutPanel() {
         <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 12, color: TBL.ink2, lineHeight: 1.4 }}>
           Click one of your characters to equip.
         </div>
-        <div style={cancelBtn} onClick={cancelPlay}>✕ Cancel</div>
+        <div style={cancelBtn} onClick={() => cancelPlay()}>✕ Cancel</div>
       </div>
     );
   }

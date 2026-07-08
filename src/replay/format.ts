@@ -8,8 +8,9 @@ import type {
 import type { PendingKit } from '../store/gameStore';
 
 /** Bump when the log shape OR the hash algorithm changes; the runner refuses a mismatched
- *  fixture. v2: stableStringify omits undefined-valued keys (round-trip-stable hash). */
-export const LOG_FORMAT_VERSION = 2;
+ *  fixture. v2: stableStringify omits undefined-valued keys (round-trip-stable hash).
+ *  v3: logs carry `demotions` (accidental action→paste fidelity audit). */
+export const LOG_FORMAT_VERSION = 3;
 
 // Build-time git short hash, injected by vite `define` (see vite.config.ts). Undefined
 // under Vitest (standalone config, no define) → falls back to 'unknown'. `typeof` guards
@@ -108,6 +109,51 @@ export function isReplayable(v: unknown, seen: WeakSet<object> = new WeakSet()):
   return Object.values(v as Record<string, unknown>).every(x => isReplayable(x, seen));
 }
 
+/**
+ * An action that was demoted to a state-paste by an ACCIDENTAL argument — i.e. a store action
+ * wired straight as a DOM handler (`onClick={endTurn}`), which React invokes with the click
+ * event as `args[0]`. The paste keeps the log CORRECT, but the entry no longer re-executes the
+ * reducer: the recording silently loses regression fidelity (a fixture full of pastes proves
+ * nothing about `endTurn`) and stores a full canonical snapshot per entry (bloat).
+ *
+ * A GENUINE updater paste — a function occupying a DECLARED parameter slot, e.g. `setGame(fn)` —
+ * is legitimate and is never flagged.
+ */
+export interface Demotion {
+  step: number;
+  action: string;
+  /** Index of the offending argument. */
+  argIndex: number;
+  /** Constructor / typeof name of the offending argument (e.g. "PointerEvent"). */
+  argType: string;
+  /** The action's declared parameter count (`Function.length`). */
+  arity: number;
+}
+
+function typeNameOf(v: unknown): string {
+  if (v === null) return 'null';
+  if (typeof v !== 'object') return typeof v;
+  try { return (v as object).constructor?.name ?? 'object'; } catch { return 'object'; }
+}
+
+/**
+ * Classify a paste: return the first argument that made the call non-replayable AND is not a
+ * declared updater, or null when the paste is legitimate. An arg is a legitimate updater iff it
+ * is a FUNCTION sitting in a DECLARED parameter slot (`i < arity`) — that's exactly `setGame(fn)`.
+ * Anything else non-replayable (a DOM/React event, a Map, a class instance, a cycle) is junk the
+ * action never asked for, so its demotion is accidental. Arity alone is not the test: a leaked
+ * event landing on a DECLARED slot (`selectEntity(event)`) is still accidental.
+ */
+export function accidentalArg(args: unknown[], arity: number): { index: number; type: string } | null {
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (isReplayable(a)) continue;
+    if (typeof a === 'function' && i < arity) continue; // declared updater (setGame(fn)) — legitimate
+    return { index: i, type: typeNameOf(a) };
+  }
+  return null;
+}
+
 /** cyrb53 — a fast, well-distributed 53-bit string hash (not cryptographic). */
 function cyrb53(str: string): string {
   let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
@@ -177,4 +223,8 @@ export interface ReplayLog {
   init: CanonicalSlice;
   initHash: string;
   entries: ReplayEntry[];
+  /** Fidelity audit: actions accidentally demoted to pastes by a leaked handler argument.
+   *  EMPTY in a clean recording — a non-empty list means some reducer was never re-executed
+   *  on replay, so the fixture silently under-tests it. See `accidentalArg`. */
+  demotions: Demotion[];
 }
