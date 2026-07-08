@@ -35,11 +35,23 @@ still passes), and stored a full canonical snapshot per entry (4.2 MB).
   re-executable actions with no pastes at all; and every committed fixture must have
   `demotions: []`. Non-vacuous: restoring `onClick={btnCfg.action}` fails the guard with
   `{"action":"endTurnToEndPhase","argIndex":0,"argType":"SyntheticBaseEvent","arity":0}`.
-- **FLAG:** the owner deleted the stale v2 fixture; the next recording will be `format: 3` with
-  `demotions: []`, far smaller (≈25 fewer full-state snapshots), and will actually regression-test
-  the turn-cycle reducers by re-execution. Runtime detection only fires for components a test
-  drives — a brand-new bare-wired component still needs to be exercised (by the guard test or a
-  real recording) to be caught.
+- **FIRST FIXTURE COMMITTED (2026-07-08, `ae4da36`):** the owner deleted the stale v2 fixture and
+  re-recorded. **`src/replay/fixtures/twilight-solo-b9c3607-t4.replay.json`** is now committed and
+  runs on every `npm test` — the seed plan's payoff (a real playtest is now a permanent regression).
+  `format 3`, 4 turns, 155 entries (151 actions, 4 pastes — all genuine `setGame(fn)`),
+  **`demotions: []`**, 0.99 MB (vs 4.2 MB / 30 pastes / 25 demotions for the pre-fix recording of
+  the same game). The turn-cycle reducers the old recording pasted over now re-execute on replay
+  (`endTurn` 6, `switchSides` 8, `advancePhase` 5, `endTurnToEndPhase` 6, `cancelPlay` 9).
+  Tamper-verified: flipping one char of an entry hash fails `npm test` naming the fixture + step;
+  an `endTurn` turn-counter bug → step 33, an anchor-decay off-by-one → step 98, `switchSides` not
+  flipping `localPlayer` → step 34.
+- **FLAG:** runtime demotion detection only fires for components a test drives — a brand-new
+  bare-wired component still needs to be exercised (by the guard test or a real recording) to be
+  caught. Also queued in `tasks/todo.md` (ride with the next batch): RecorderButton should show the
+  commit stamp it's recording under (a stale dev server bakes an old commit into the fixture name —
+  the vite `define` freezes at server boot); and the action-divergence field line is misleading
+  for stripped action entries (it reports cumulative drift from the last checkpoint, not this
+  entry's change) — label it honestly + enrich `ReplayDivergence` with the live failing state.
 
 ## Session (2026-07-08, earlier) — replay: paste-path divergence fixed (hash not JSON-round-trip-stable)
 After the setup fix (below), a longer recording failed export at step 39 — a **paste** entry
@@ -161,7 +173,8 @@ permanent regression fixture. **Suite: 15 files / 187 tests green; tsc ZERO; val
   (validate + download); a **failed validation shows a COPYABLE error panel** (readonly textarea +
   Copy button, and `console.error`) because the hashes/field-diff are impossible to transcribe by
   hand. Same copyable panel on GameOverScreen (its z-index sits above the chip at game-over). Fixtures
-  dir `src/replay/fixtures/*.replay.json` (a Vitest test globs + replays them; none committed yet).
+  dir `src/replay/fixtures/*.replay.json` (a Vitest test globs + replays them; none committed *then*
+  — ⚠️ UPDATE 2026-07-08: first fixture committed, see the latest session at the top).
 - **Tests** (`src/__tests__/replay.test.ts`): rng capture→inject reproduces a shuffle; record a real
   die-rolling solo game (Flame-Spinner on-enter, via a seeded position + a `_beginForTest` seam) →
   **replay through actual `JSON.parse(JSON.stringify)`** clean (reference-identity guard); tamper /
@@ -177,8 +190,10 @@ permanent regression fixture. **Suite: 15 files / 187 tests green; tsc ZERO; val
   invalidated under the old drift check); clicking it validates via replay + downloads with no error,
   and the live game is intact afterwards (non-destructive validation confirmed).
 - **FLAG / next**: v1 is **solo two-handed only** — MP host recording (own actions + guest turns as
-  `paste` remote-syncs) is the documented follow-up that reuses the paste primitive. No fixtures are
-  committed yet — the owner records real games and drops the JSON into `src/replay/fixtures/`.
+  `paste` remote-syncs) is the documented follow-up that reuses the paste primitive. The owner
+  records real sandbox games and drops the JSON into `src/replay/fixtures/`. ⚠️ UPDATE 2026-07-08:
+  the first such fixture is now committed (`twilight-solo-b9c3607-t4.replay.json`) — see the latest
+  session at the top; the "none committed yet" status here is historical.
 
 ## Session (2026-07-04, later) — audit batch 4: guest deck in READY (audit #11) DONE
 *(Landed alongside the same-day keyword/Paranoia session below, on its combined tree — suite
