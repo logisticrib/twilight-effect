@@ -2,7 +2,7 @@
 // recordMiddleware.ts), which calls onAction() for every non-nested, non-deny-listed store
 // action. Holds one game's log; exports it as JSON (GameOverScreen / RecorderButton).
 import {
-  LOG_FORMAT_VERSION, COMMIT, hashState, canonical,
+  LOG_FORMAT_VERSION, COMMIT, hashState, canonical, isReplayable,
   type CanonicalSlice, type ReplayEntry, type ReplayLog, type StoreSlice,
 } from './format';
 
@@ -72,20 +72,35 @@ class Recorder {
     if (this.suspended) return;
     if (name === 'startSolo') { this.startGame(get); return; }
     if (!this.active) return;
-    const slice = canonical(get());
-    const step = this.log!.entries.length + 1;
-    const hasFn = args.some(a => typeof a === 'function');
-    const entry: ReplayEntry = hasFn
-      ? { step, kind: 'paste', from: name, state: clone(slice), hash: hashState(slice) }
-      // Action entries keep a full-state copy IN MEMORY (for a precise divergence diff);
-      // download.ts strips it so committed fixtures stay compact.
-      : { step, kind: 'action', action: name, args: clone(args), rng: draws.slice(), hash: hashState(slice), state: clone(slice) };
-    if (slice.game.turn > this.lastTurn) {
-      this.lastTurn = slice.game.turn;
-      entry.turn = { turn: slice.game.turn, state: clone(slice) };
+    try {
+      const slice = canonical(get());
+      const step = this.log!.entries.length + 1;
+      // Allowlist routing: an entry is re-executable (kind:"action") ONLY if every arg is a
+      // pure JSON value (isReplayable). Anything else — setGame(fn), a Map/class instance, or
+      // a leaked DOM/React event from a store action wired straight as an onClick handler —
+      // falls back to a state-paste that setStates the post-action result. This is why a
+      // non-serializable arg can no longer crash clone() and silently drop the advance.
+      const replayable = args.every(a => isReplayable(a));
+      const entry: ReplayEntry = replayable
+        // Action entries keep a full-state copy IN MEMORY (for a precise divergence diff);
+        // download.ts strips it so committed fixtures stay compact.
+        ? { step, kind: 'action', action: name, args: clone(args), rng: draws.slice(), hash: hashState(slice), state: clone(slice) }
+        : { step, kind: 'paste', from: name, state: clone(slice), hash: hashState(slice) };
+      if (slice.game.turn > this.lastTurn) {
+        this.lastTurn = slice.game.turn;
+        entry.turn = { turn: slice.game.turn, state: clone(slice) };
+      }
+      this.log!.entries.push(entry);
+      this.notify();
+    } catch (err) {
+      // A recorder must NEVER silently drop an action: the state change already happened, so a
+      // missing entry corrupts the log. If capture fails unexpectedly (the allowlist should
+      // prevent it), invalidate loudly so export() refuses rather than emit a broken fixture.
+      if (!this.invalidReason) {
+        this.invalidReason = `recorder failed to capture "${name}" (${err instanceof Error ? err.message : String(err)}) — start a new game to record`;
+        this.notify();
+      }
     }
-    this.log!.entries.push(entry);
-    this.notify();
   }
 
   /** Called by the middleware when a deny-listed BOUNDARY action fires mid-recording. */

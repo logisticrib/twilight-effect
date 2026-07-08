@@ -9,7 +9,7 @@ import { rng } from '../store/rng';
 import { recorder } from '../replay/recorder';
 import { replay, ReplayDivergence } from '../replay/replay';
 import { tryExport } from '../replay/exportReplay';
-import { canonical } from '../replay/format';
+import { canonical, isReplayable } from '../replay/format';
 import type { ReplayLog, ActionEntry, StoreSlice } from '../replay/format';
 
 // Deep clone through ACTUAL JSON text — load-bearing: an in-memory replay would share object
@@ -165,6 +165,34 @@ describe('export validation (replay is the oracle)', () => {
     expect(res.ok, res.ok ? '' : res.error).toBe(true);
   });
 
+  // Categorical fix for the setup-divergence bug: a store action wired straight as an onClick
+  // handler is invoked with the click event as args[0]. The event is a cyclic DOM object, so the
+  // old clone(args) threw AFTER the action mutated state but BEFORE pushing the entry — the
+  // advance applied to live state but vanished from the log, and replay under-walked setupQueue.
+  // Now a non-JSON arg routes to a state-paste (isReplayable) and an entry is never dropped.
+  it('an action called with a leaked (circular) event arg records as a paste, never dropped, exports clean', () => {
+    recorder._resetForTest();
+    recorder.suspend();
+    gs.getState().startSolo(deckCards, deckCards);
+    gs.setState(s => ({ game: { ...s.game, setupQueue: ['classbonus:p1', 'place-pc:p1'] } }));
+    recorder.resume();
+    recorder._beginForTest(() => gs.getState());     // init snapshots this setupQueue
+
+    const evt: Record<string, unknown> = { type: 'click', nativeEvent: {} };
+    evt.currentTarget = evt;                          // cyclic, like a DOM node / SyntheticEvent
+    // advanceSetup is typed () => void; wiring it as onClick passes the event anyway at runtime.
+    (gs.getState().advanceSetup as unknown as (a: unknown) => void)(evt);
+
+    // The advance applied live AND was captured (no silent drop, no invalidation).
+    expect(gs.getState().game.setupQueue).toEqual(['place-pc:p1']);
+    expect(recorder.getStatus().invalidReason).toBeUndefined();
+    const entries = recorder.getLog().log!.entries;
+    expect(entries[entries.length - 1].kind).toBe('paste'); // non-serializable arg → paste
+
+    const res = tryExport();
+    expect(res.ok, res.ok ? '' : res.error).toBe(true);
+  });
+
   it('a recording that crosses a resumeGame boundary refuses to export', () => {
     seedActive();
     gs.getState().saveGame();          // savedGame = current
@@ -243,4 +271,22 @@ describe('committed replay fixtures', () => {
       expect(() => replay(fixtures[name].default)).not.toThrow();
     });
   }
+});
+
+// The recorder decides action-vs-paste by "is this arg replayable" (round-trips through JSON),
+// an allowlist — NOT a blocklist of banned DOM/event types — so the next non-serializable arg
+// class (Map, class instance, function, cycle) can't reintroduce the silent-drop bug.
+describe('isReplayable — the arg allowlist', () => {
+  it('accepts pure JSON values (recorded as re-executable actions)', () => {
+    for (const v of ['b1', 42, 0, -1, true, false, null, ['a', 1, { k: [2, 3] }], { id: 'x', n: { a: [1] } }]) {
+      expect(isReplayable(v), `${JSON.stringify(v)} should be replayable`).toBe(true);
+    }
+  });
+  it('rejects anything that cannot round-trip through JSON (→ state-paste)', () => {
+    class Widget { x = 1; }
+    const cyc: Record<string, unknown> = { type: 'click' }; cyc.currentTarget = cyc; // like a React event
+    for (const v of [() => {}, undefined, Symbol('s'), 10n, NaN, Infinity, new Map([['a', 1]]), new Set([1]), new Widget(), cyc, { ok: 'y', bad: () => {} }, [1, () => {}]]) {
+      expect(isReplayable(v), `${String(v)} should NOT be replayable`).toBe(false);
+    }
+  });
 });

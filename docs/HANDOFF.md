@@ -2,7 +2,44 @@
 
 Self-contained context for continuing the card-effect engine work in a fresh session.
 
-## Latest session (2026-07-06) — Phase 2 replay recorder + runner DONE (solo v1)
+## Latest session (2026-07-07) — replay: setup-divergence root cause fixed (event-arg → silent drop)
+A recorded sandbox game failed export validation: `ReplayDivergence at step "placePc" —
+game.setupQueue.0 expected "place-pc:p2", got "classbonus:p1"`. **Root cause (proved with a
+headless-React repro that crashed at the exact line): a store action wired DIRECTLY as a DOM
+handler.** `ClassBonusModal`'s footer was `<button onClick={onClose}>` where `onClose` = the
+`advanceSetup` action, so React invoked it as `advanceSetup(clickEvent)` — the click event landed
+as `args[0]`. The recorder's `clone(args)` (`JSON.stringify`) then threw on the event's circular
+DOM refs **after** the queue advanced but **before** the entry was pushed → the advance hit live
+state but was **silently dropped** from the log. Both class-bonus footers dropped, so headless
+`replay()` under-walked `setupQueue`; `placePc`'s guard (`setupQueue[0] !== 'place-pc:pN'`) then
+no-op'd and the states diverged. (NOT a `placePc` non-determinism bug, and NOT the `PCPlacementModal`
+render effect — `placePc` self-advances the queue so that effect never commits in the normal path.)
+- **Fix is categorical, at the recorder chokepoint** (`recorder.ts` `onAction` + new `isReplayable`
+  in `format.ts`): route action-vs-paste by an **allowlist** — an entry stays `kind:"action"` only
+  if every arg is a pure JSON value (primitive / plain array / plain object, no cycles). Anything
+  else — a leaked DOM/React event, `setGame(fn)`, a Map/Set/class instance, a non-finite number —
+  falls back to the existing `kind:"paste"` (setState the post-action result). Defined by "is this
+  replayable", NOT a blocklist of banned types, so the next non-serializable arg class can't
+  reintroduce the bug. `onAction` is now wrapped so a capture failure **invalidates loudly**
+  (`invalidReason`) instead of ever silently dropping an entry — a missing action corrupts the log.
+- **Call-site tidy (defense-in-depth):** `ClassBonusModal:287` `onClick={onClose}` →
+  `onClick={() => onClose()}` so no event reaches the action even before the recorder sanitizes.
+- **PoisonModal: CONFIRMED clean, left unchanged.** Its die roll happens in component-local state
+  (`rollFor`); only `commit()` writes via `resolvePoison(player, outcomes)` — a serializable
+  `{id,cleansed}[]` action that replays deterministically from its arg. The empty-case
+  `useEffect → setGame(fn)` records as a paste. No fix needed (verified by test, not just reasoning).
+- **Tests (+5 → 16 files / 196 green; tsc ZERO; validate:decks clean):** NEW
+  `src/__tests__/setupReplay.test.tsx` (jsdom) drives the REAL `ModalHost` through mulligan → class
+  bonus → PC placement and `PoisonModal` through a roll, asserting `tryExport()` validates clean —
+  the end-to-end regression. Plus `replay.test.ts`: an `isReplayable` allowlist unit test
+  (function/undefined/symbol/bigint/NaN/Infinity/Map/Set/class/cycle rejected) and a recorder test
+  that feeds `advanceSetup` a cyclic "event" arg and asserts it records as a **paste**, is never
+  dropped or invalidated, and exports clean (proves the categorical fix independent of call sites).
+- Blast-radius grep: the only other bare `onClick={action}` sites are `backToLobby`
+  (GameOverScreen/PhaseRail) — DENY-listed, never recorded, so harmless; `OathswornModal` calls
+  `onClose()` explicitly (no event). App reloads clean (no console errors).
+
+## Session (2026-07-06) — Phase 2 replay recorder + runner DONE (solo v1)
 test_seed_plan.md Phase 2: record a solo game's action/state sequence to JSON, replay it against
 current code, fail loudly on any divergence. Every real sandbox playtest can now become a
 permanent regression fixture. **Suite: 15 files / 187 tests green; tsc ZERO; validate:decks clean.**

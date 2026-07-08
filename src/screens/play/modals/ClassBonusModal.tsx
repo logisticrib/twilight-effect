@@ -284,7 +284,7 @@ export function ClassBonusModal({ onClose, isSequence, player = 'p1' }: Props) {
         <>
           <span style={md.costNote}>{Object.keys(resolved).length} / {czClasses.length} resolved</span>
           <div style={md.spacer} />
-          <button style={md.btn(allDone ? 'primary' : 'ghost')} onClick={onClose}>
+          <button style={md.btn(allDone ? 'primary' : 'ghost')} onClick={() => onClose()}>
             {allDone ? (isSequence ? 'Continue ›' : 'Begin encounter') : 'Skip'}
           </button>
         </>

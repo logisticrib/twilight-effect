@@ -79,6 +79,28 @@ export function stableStringify(v: unknown): string {
   return '{' + keys.map(k => JSON.stringify(k) + ':' + stableStringify(obj[k])).join(',') + '}';
 }
 
+/** Allowlist predicate: is `v` a pure JSON value — primitive, plain array, or plain object,
+ *  with no cycles — i.e. does it round-trip through JSON without loss? The recorder uses this
+ *  to decide whether an action's args are re-executable (kind:"action") or must be captured as
+ *  a state-paste (kind:"paste"). Rejects functions, undefined, symbols, bigints, non-finite
+ *  numbers, class instances (Date/Map/Set), DOM nodes / React synthetic events, and cyclic
+ *  structures — categorically. Defined by "is this replayable", not a blocklist, so the next
+ *  non-serializable arg class (e.g. a store action wired straight as an onClick handler, which
+ *  leaks the event in as args[0]) can't reintroduce a silently-dropped entry. */
+export function isReplayable(v: unknown, seen: WeakSet<object> = new WeakSet()): boolean {
+  if (v === null) return true;
+  const t = typeof v;
+  if (t === 'string' || t === 'boolean') return true;
+  if (t === 'number') return Number.isFinite(v as number); // NaN/Infinity → JSON null (lossy)
+  if (t !== 'object') return false;                          // function / undefined / symbol / bigint
+  if (seen.has(v as object)) return false;                   // cycle — not JSON-representable
+  seen.add(v as object);
+  if (Array.isArray(v)) return v.every(x => isReplayable(x, seen));
+  const proto = Object.getPrototypeOf(v);
+  if (proto !== Object.prototype && proto !== null) return false; // class instance / Map / DOM / event
+  return Object.values(v as Record<string, unknown>).every(x => isReplayable(x, seen));
+}
+
 /** cyrb53 — a fast, well-distributed 53-bit string hash (not cryptographic). */
 function cyrb53(str: string): string {
   let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
