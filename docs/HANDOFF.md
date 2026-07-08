@@ -2,7 +2,46 @@
 
 Self-contained context for continuing the card-effect engine work in a fresh session.
 
-## Latest session (2026-07-08) — replay: paste-path divergence fixed (hash not JSON-round-trip-stable)
+## Latest session (2026-07-08, later) — replay: accidental action→paste demotion audit
+The first real 4-turn recording exported + replayed clean, but its entry mix showed **25 of 30
+pastes were accidental**. A store action wired straight as a DOM handler (`onClick={endTurn}`) is
+invoked by React with the click event as `args[0]`; `isReplayable` correctly demotes it to a
+state-paste. That keeps the log CORRECT — but a paste replays by `setState`, **not** by
+re-executing the reducer. So the fixture proved nothing about `endTurn`/`switchSides`/
+`advancePhase`/`cancelPlay` (break `endTurn`'s draw / start-of-turn / poison logic and the fixture
+still passes), and stored a full canonical snapshot per entry (4.2 MB).
+- **Categorical detection, not a per-call-site check** (owner directive: "the NEXT bare-wired
+  component fails a test the day it's written"). `accidentalArg(args, arity)` in format.ts: a paste
+  is **legitimate iff every non-replayable arg is a FUNCTION in a DECLARED parameter slot**
+  (`i < arity`) — i.e. exactly `setGame(fn)`. Anything else is an arg the action never asked for.
+  **Arity alone is NOT the test:** a leaked event landing on a declared slot (`selectEntity(event)`)
+  is still junk and is flagged. `recordMiddleware` passes `orig.length` (declared arity).
+- **Surfaced, not silent.** `recorder` records `Demotion{step,action,argIndex,argType,arity}` →
+  `RecorderStatus.demotions` (RecorderButton chip turns amber: `⏺ REC · N actions · T turns ·
+  ⚠ 2 demoted`, tooltip names the fix) and `ReplayLog.demotions`, so **every fixture carries its own
+  fidelity audit**. A demotion is a WARNING, not a correctness failure — export still succeeds.
+  `LOG_FORMAT_VERSION` bumped **2 → 3** (logs gained `demotions`; a v2 fixture is refused).
+- **Tidied every bare-wired recordable action — a sweep found 7 sites / 11 actions, not the 4
+  first spotted:** PhaseRail (`switchSides`; `btnCfg.action` = endTurnToEndPhase/endTurn/
+  advancePhase), LoadoutPanel ×2 (`cancelPlay`), **Play.tsx `PromptBanner`** (one bare
+  `onClick={onCancel}` leaked cancelTrigger/cancelKit/cancelActionTarget), Play.tsx (`cancelPeek`),
+  **CardPickModal** (`cancel.onClick` leaked cancelKit/cancelDeadPick/cancelEquipPick), plus
+  defensive wraps on the unused `ModalShell.onScrimClick` and Lobby's `clearSavedGame`.
+  CONVENTION: never write `onClick={someStoreAction}` — use `onClick={() => someStoreAction()}`.
+- **Tests (+5 → 16 files / 203 green; tsc ZERO):** the `accidentalArg` classifier (updater vs leaked
+  arg, incl. the declared-slot event case); the recorder flags `advanceSetup(event)` as one demotion
+  and does NOT flag `setGame(fn)`; **THE GUARD** (`setupReplay.test.tsx`) drives the REAL PhaseRail
+  buttons and asserts zero demotions AND that endTurnToEndPhase/switchSides recorded as
+  re-executable actions with no pastes at all; and every committed fixture must have
+  `demotions: []`. Non-vacuous: restoring `onClick={btnCfg.action}` fails the guard with
+  `{"action":"endTurnToEndPhase","argIndex":0,"argType":"SyntheticBaseEvent","arity":0}`.
+- **FLAG:** the owner deleted the stale v2 fixture; the next recording will be `format: 3` with
+  `demotions: []`, far smaller (≈25 fewer full-state snapshots), and will actually regression-test
+  the turn-cycle reducers by re-execution. Runtime detection only fires for components a test
+  drives — a brand-new bare-wired component still needs to be exercised (by the guard test or a
+  real recording) to be caught.
+
+## Session (2026-07-08, earlier) — replay: paste-path divergence fixed (hash not JSON-round-trip-stable)
 After the setup fix (below), a longer recording failed export at step 39 — a **paste** entry
 (`paste:endTurnToEndPhase`), with `first diverging field: (unavailable)`. **Root cause: the hash
 was not invariant across a JSON round-trip.** A paste stores `state: clone(slice)` (a
