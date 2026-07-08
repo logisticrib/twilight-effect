@@ -9,7 +9,7 @@ import { rng } from '../store/rng';
 import { recorder } from '../replay/recorder';
 import { replay, ReplayDivergence } from '../replay/replay';
 import { tryExport } from '../replay/exportReplay';
-import { canonical, isReplayable } from '../replay/format';
+import { canonical, isReplayable, stableStringify, hashState } from '../replay/format';
 import type { ReplayLog, ActionEntry, StoreSlice } from '../replay/format';
 
 // Deep clone through ACTUAL JSON text — load-bearing: an in-memory replay would share object
@@ -193,6 +193,31 @@ describe('export validation (replay is the oracle)', () => {
     expect(res.ok, res.ok ? '' : res.error).toBe(true);
   });
 
+  // Paste-path regression: a paste snapshot is stored as a JSON clone, but its hash used to be
+  // computed on the pre-clone slice. An undefined-valued canonical field (game.pN._pc, set by
+  // placePc) is emitted as null by the pre-clone hash but DROPPED by the clone, so the stored
+  // hash disagreed with the installed snapshot and the paste diverged on replay (owner's step-39
+  // endTurnToEndPhase). Fixed by making stableStringify omit undefined keys (round-trip-stable).
+  it('an event-wired paste after PC placement (_pc undefined) exports clean', () => {
+    recorder._resetForTest();
+    recorder.suspend();
+    gs.getState().startSolo(deckCards, deckCards);
+    // Clean init at a place-pc step with the PC staged (real object → no undefined field yet).
+    gs.setState(s => ({ game: { ...s.game, setupQueue: ['place-pc:p1'],
+      currentPhase: 'action' as const, p1: { ...s.game.p1, _pc: mkPc('pc-stage'), board: {} } } }));
+    recorder.resume();
+    recorder._beginForTest(() => gs.getState());       // init: _pc is a real object → clean
+    gs.getState().placePc('b1', 'p1');                  // ACTION → sets p1._pc = undefined, advances queue
+    // endTurnToEndPhase wired as onClick (PhaseRail:124) passes the event → recorded as a paste
+    // whose JSON snapshot drops the undefined _pc key.
+    const evt: Record<string, unknown> = { type: 'click' }; evt.currentTarget = evt;
+    (gs.getState().endTurnToEndPhase as unknown as (a: unknown) => void)(evt);
+    const entries = recorder.getLog().log!.entries;
+    expect(entries[entries.length - 1].kind).toBe('paste');
+    const res = tryExport();
+    expect(res.ok, res.ok ? '' : res.error).toBe(true);
+  });
+
   it('a recording that crosses a resumeGame boundary refuses to export', () => {
     seedActive();
     gs.getState().saveGame();          // savedGame = current
@@ -287,6 +312,27 @@ describe('isReplayable — the arg allowlist', () => {
     const cyc: Record<string, unknown> = { type: 'click' }; cyc.currentTarget = cyc; // like a React event
     for (const v of [() => {}, undefined, Symbol('s'), 10n, NaN, Infinity, new Map([['a', 1]]), new Set([1]), new Widget(), cyc, { ok: 'y', bad: () => {} }, [1, () => {}]]) {
       expect(isReplayable(v), `${String(v)} should NOT be replayable`).toBe(false);
+    }
+  });
+});
+
+// The hash MUST be invariant across a JSON round-trip — fixtures are JSON and paste snapshots
+// are JSON clones, so a hash that counted undefined keys (as null) while JSON dropped them made
+// pastes diverge. Pins the property itself (not just the _pc case) so it can't silently regress.
+describe('stableStringify / hashState round-trip stability', () => {
+  const rt = (x: unknown) => JSON.parse(JSON.stringify(x));
+  it('are invariant across JSON.parse(JSON.stringify(x)) for undefined (top-level, nested, in-array)', () => {
+    const samples: unknown[] = [
+      { a: undefined },                                    // top-level undefined key → dropped
+      { a: 1, b: undefined, c: null },                     // null stays, undefined goes
+      { nested: { x: undefined, y: 2 } },                  // nested undefined key
+      { arr: [1, undefined, 3] },                          // undefined IN an array → null (kept)
+      { deep: { arr: [{ k: undefined, j: 5 }], z: undefined } },
+      { _pc: undefined, board: { b1: { id: 'x', hp: 3 } } }, // the real placement shape
+    ];
+    for (const s of samples) {
+      expect(stableStringify(s), `stableStringify not stable: ${JSON.stringify(s)}`).toBe(stableStringify(rt(s)));
+      expect(hashState(s as never), `hashState not stable: ${JSON.stringify(s)}`).toBe(hashState(rt(s) as never));
     }
   });
 });

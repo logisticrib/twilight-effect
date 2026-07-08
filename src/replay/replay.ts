@@ -108,9 +108,18 @@ export function replay(log: ReplayLog): void {
         // `state` holds the recorded post-entry canonical state (pastes always; actions when
         // recorded live) → a precise recorded-vs-replayed field diff. Falls back to the last
         // full checkpoint if this entry has no stored state.
-        const recorded: CanonicalSlice | undefined = entry.state ?? lastMatchingTurn?.state ?? log.init;
-        throw new ReplayDivergence(entry.step, label, entry.hash, actual, lastMatchingTurn, liveSlice(),
-          firstDiff(recorded, liveSlice()));
+        const recorded: CanonicalSlice = entry.state ?? lastMatchingTurn?.state ?? log.init;
+        const live = liveSlice();
+        let diff = firstDiff(recorded, live);
+        if (diff === null) {
+          // Recorded snapshot and replayed state stringify identically, yet the hash differs →
+          // the entry's stored `hash` disagrees with its OWN snapshot content (a stale hash
+          // computed on a different serialization than the stored state). Name that explicitly
+          // instead of "(unavailable)" — it points at a recorder/format bug, not a replay one.
+          diff = `entry self-inconsistent — stored hash ${entry.hash} != snapshot content hash ${hashState(recorded)} ` +
+            `(recorded snapshot matches the replayed state; the stored hash predates JSON serialization)`;
+        }
+        throw new ReplayDivergence(entry.step, label, entry.hash, actual, lastMatchingTurn, live, diff);
       }
       if (entry.turn) {
         // The per-action hash already matched; the turn snapshot is a redundant full-state

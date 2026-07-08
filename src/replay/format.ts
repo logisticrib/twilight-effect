@@ -7,8 +7,9 @@ import type {
 } from '../store/gameStore';
 import type { PendingKit } from '../store/gameStore';
 
-/** Bump when the log shape changes; the runner refuses a mismatched fixture. */
-export const LOG_FORMAT_VERSION = 1;
+/** Bump when the log shape OR the hash algorithm changes; the runner refuses a mismatched
+ *  fixture. v2: stableStringify omits undefined-valued keys (round-trip-stable hash). */
+export const LOG_FORMAT_VERSION = 2;
 
 // Build-time git short hash, injected by vite `define` (see vite.config.ts). Undefined
 // under Vitest (standalone config, no define) → falls back to 'unknown'. `typeof` guards
@@ -69,13 +70,19 @@ export function canonical(s: StoreSlice): CanonicalSlice {
 }
 
 /** Deterministic, key-order-insensitive JSON of a value. Arrays stay ordered (deck/board
- *  order is significant); object keys are sorted. undefined is normalized to null. */
+ *  order is significant); object keys are sorted. Must be INVARIANT across a JSON round-trip:
+ *  fixtures are JSON and paste snapshots are `JSON.parse(JSON.stringify(...))` clones, so the
+ *  hash MUST see only what survives serialization. JSON.stringify DROPS undefined-valued object
+ *  keys (e.g. `_pc: undefined` after placement) — so we omit them here too; including them (as
+ *  null) made a paste's stored hash disagree with its serialized snapshot and diverge on replay.
+ *  (An undefined INSIDE an array becomes null under JSON, which `stableStringify(undefined)`
+ *  already matches — so only object keys need filtering.) */
 export function stableStringify(v: unknown): string {
   if (v === undefined || v === null) return 'null';
   if (typeof v !== 'object') return JSON.stringify(v);
   if (Array.isArray(v)) return '[' + v.map(stableStringify).join(',') + ']';
   const obj = v as Record<string, unknown>;
-  const keys = Object.keys(obj).sort();
+  const keys = Object.keys(obj).filter(k => obj[k] !== undefined).sort();
   return '{' + keys.map(k => JSON.stringify(k) + ':' + stableStringify(obj[k])).join(',') + '}';
 }
 

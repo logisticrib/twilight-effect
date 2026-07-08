@@ -2,7 +2,42 @@
 
 Self-contained context for continuing the card-effect engine work in a fresh session.
 
-## Latest session (2026-07-07) — replay: setup-divergence root cause fixed (event-arg → silent drop)
+## Latest session (2026-07-08) — replay: paste-path divergence fixed (hash not JSON-round-trip-stable)
+After the setup fix (below), a longer recording failed export at step 39 — a **paste** entry
+(`paste:endTurnToEndPhase`), with `first diverging field: (unavailable)`. **Root cause: the hash
+was not invariant across a JSON round-trip.** A paste stores `state: clone(slice)` (a
+`JSON.parse(JSON.stringify(...))` clone) but `hash: hashState(slice)` (the pre-clone live slice).
+`stableStringify` walked `Object.keys`, so an `undefined`-valued field — `game.p1._pc` /
+`game.p2._pc`, set by `placePc` (`gameStore.ts:1801` `_pc: undefined`) — was emitted as
+`"_pc":null`, but `JSON.stringify` **drops** undefined keys. So `entry.hash` (with `_pc:null`) ≠
+`hashState(entry.state)` (clone dropped `_pc`). On replay the paste installs the stripped snapshot,
+its live hash equals `hashState(entry.state)`, and mismatches the stored `entry.hash` → divergence.
+- **Why paste-only / why step 39:** actions RE-EXECUTE on replay and the reducer recreates the
+  `undefined` key (`_pc:null` again) → they match. Only pastes INSTALL the JSON-stripped snapshot
+  and lose the key. `_pc` goes undefined at placement (~step 6-8); steps 9-38 were all actions;
+  step 39 `endTurnToEndPhase` is the first paste after placement (it's wired `onClick={action}` in
+  PhaseRail:124, so the event arg routes it to a paste via the 2026-07-07 isReplayable rule).
+- **Why the diff was "(unavailable)":** for a paste, `recorded = entry.state` equals `liveSlice()`
+  after install (both the stripped snapshot) → `firstDiff` is null. The real disagreement is
+  `entry.hash` vs `hashState(entry.state)` (the entry is self-inconsistent), which firstDiff never
+  inspects. NOT a partial install and NOT re-execution — a serialization mismatch in the hash.
+- **Fix (root cause, one place):** `stableStringify` (format.ts) now **omits undefined-valued
+  object keys** — matching JSON — so the hash sees only what survives serialization and is
+  round-trip-stable. Fixtures ARE JSON and paste snapshots ARE JSON clones, so this is the correct
+  invariant (hashing the clone for pastes only would leave the landmine for any future undefined
+  field). `LOG_FORMAT_VERSION` bumped **1 → 2** (hash algorithm changed; no fixtures committed yet).
+- **Reporter hardening (replay.ts):** on a divergence where recorded ≡ replayed by stringify but
+  hashes differ, it now reports `entry self-inconsistent — stored hash X != snapshot content hash Y
+  (…the stored hash predates JSON serialization)` instead of "(unavailable)" — points at a
+  recorder/format bug, not a replay one.
+- **Tests (+2 → 16 files / 198 green; tsc ZERO; validate:decks clean):** in `replay.test.ts` — an
+  event-wired paste after PC placement (`_pc` undefined) exports clean (reproduces step 39); and a
+  general round-trip-stability invariant: `stableStringify(x) === stableStringify(rt(x))` AND
+  `hashState(x) === hashState(rt(x))` over `undefined` top-level / nested / inside-an-array.
+  Proven non-vacuous: reverting only the stableStringify filter fails both (the regression shows
+  `divergence at step 2, paste:endTurnToEndPhase` with the new self-inconsistency message).
+
+## Session (2026-07-07) — replay: setup-divergence root cause fixed (event-arg → silent drop)
 A recorded sandbox game failed export validation: `ReplayDivergence at step "placePc" —
 game.setupQueue.0 expected "place-pc:p2", got "classbonus:p1"`. **Root cause (proved with a
 headless-React repro that crashed at the exact line): a store action wired DIRECTLY as a DOM
