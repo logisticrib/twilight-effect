@@ -206,13 +206,16 @@ const s = {
 
 // ─── PC card variant ──────────────────────────────────────────────────────────
 function PcCard({
-  data, scale = 1, selected = false, hoverable = false, scrollText, textboxRef, onWheel, onClick, onMouseEnter, onMouseLeave,
+  data, scale = 1, selected = false, hoverable = false, scrollText, textboxRef, onWheel, upright = false, onClick, onMouseEnter, onMouseLeave,
 }: CardFaceProps & { data: BoardEntity & { kind: 'pc' } }) {
   const cls = CLASSCLR[data.cls] ?? TBL.violet;
   const dark = CLASSDARK[data.cls] ?? '#3a2f5c';
   const low = data.hp / data.maxHp < 0.4;
+  // The PC exhausts like any character (attacking is a Major Action — rules ruling
+  // 2026-07-08), so its board card must rotate too; a fixed 0 hid the state.
+  const rot = upright ? 0 : (TAP_DEG[data.tapped] ?? (data.exhausted ? 90 : 0));
   return (
-    <div style={s.wrap(scale, 0, hoverable)}
+    <div style={s.wrap(scale, rot, hoverable)}
       onClick={onClick} onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave} onWheel={onWheel}>
       <div style={{ ...s.card(dark, selected), transform: `scale(${scale})` }}>
         <div style={s.inner(cls, true)}>
@@ -289,15 +292,23 @@ export function CardFace({
       ? effectiveMaxHp(data as BoardEntity, s.game)
       : null
   );
+  const setHovered = useGameStore(s => s.setHovered);
   if (!data) return null;
+
+  // Default hover → the Play-screen preview pane (owner QoL 2026-07-08): any CardFace
+  // without explicit hover handlers populates the preview — this is what makes cards
+  // inside modals (class bonus, mulligan, pickers) previewable. Call sites with their
+  // own handlers (board slots, hand fan) keep them.
+  const hoverEnter = onMouseEnter ?? (() => setHovered({ data, owner: 'preview' }));
+  const hoverLeave = onMouseLeave ?? (() => setHovered(null));
 
   if ('kind' in data && data.kind === 'pc') {
     return (
       <PcCard
         data={data as BoardEntity & { kind: 'pc' }}
         scale={scale} selected={selected} hoverable={hoverable} scrollText={scrollText}
-        textboxRef={textboxRef} onWheel={onWheel}
-        onClick={onClick} onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}
+        textboxRef={textboxRef} onWheel={onWheel} upright={upright}
+        onClick={onClick} onMouseEnter={hoverEnter} onMouseLeave={hoverLeave}
       />
     );
   }
@@ -341,7 +352,7 @@ export function CardFace({
 
   return (
     <div style={s.wrap(scale, rot, hoverable)}
-      onClick={onClick} onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave} onWheel={onWheel}>
+      onClick={onClick} onMouseEnter={hoverEnter} onMouseLeave={hoverLeave} onWheel={onWheel}>
       <div style={{ ...s.card(dark, selected), transform: `scale(${scale})` }}>
         <div style={s.inner(cls)}>
 

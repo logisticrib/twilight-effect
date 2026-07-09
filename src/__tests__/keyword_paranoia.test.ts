@@ -19,7 +19,10 @@ function seed(handCard: typeof emberAdept, p2Board: Record<string, ReturnType<ty
   gs.setState(s => ({ game: { ...s.game,
     p1: { ...s.game.p1, hand: [handCard], deck: [d1, d2, d3], board: p1Board,
       classZone: CATALOG.slice(20, 25).map((c, i) => mkCz(c, 'Warrior', `cz-${i}`)), willpower: 5 },
-    p2: { ...s.game.p2, board: p2Board },
+    // p2's hand must be KNOWN-empty: the dealt hand is a random slice of CATALOG(0..50),
+    // which contains d1/d2/d3 — a dealt copy of d1 made the "not stolen to the
+    // controller's hand" id-assertion flake (rng-dependent) before this pin.
+    p2: { ...s.game.p2, board: p2Board, hand: [] },
   } }));
 }
 

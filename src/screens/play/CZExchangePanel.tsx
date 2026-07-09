@@ -95,7 +95,7 @@ export function CZExchangePanel() {
         <div>
           <div style={eyebrow}>Class Zone Exchange Phase</div>
           <div style={title}>
-            {mode === 'choose'      && 'Choose an action — or pass'}
+            {mode === 'choose'      && 'Choose an exchange — or skip'}
             {mode === 'cz-to-hand'  && 'Select a CZ card to return to hand'}
             {mode === 'hand-to-cz'  && 'Select a hand card to add to CZ'}
           </div>
@@ -106,7 +106,8 @@ export function CZExchangePanel() {
       {mode === 'choose' && (
         <>
           <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 12, color: TBL.ink2, marginBottom: 10 }}>
-            Once per turn you may move one card between your hand and Class Zone — or pass.
+            Once per turn you may move one card between your hand and Class Zone — or skip.
+            Actions are blocked until this exchange is resolved or skipped.
             {ps.classZone.length >= 5 && <span style={{ color: TBL.amber2 }}> CZ is full (5/5) — can only move out.</span>}
           </div>
           <div style={btnRow}>
@@ -117,7 +118,7 @@ export function CZExchangePanel() {
               Hand → CZ →
             </div>
             <div style={choiceBtn} {...btnProps(doPass)}>
-              Pass
+              Skip exchange →
             </div>
           </div>
         </>
@@ -151,7 +152,7 @@ export function CZExchangePanel() {
           </div>
           <div style={btnRow}>
             <div style={choiceBtn} {...btnProps(() => setMode('choose'))}>← Back</div>
-            <div style={choiceBtn} {...btnProps(doPass)}>Pass</div>
+            <div style={choiceBtn} {...btnProps(doPass)}>Skip exchange →</div>
           </div>
         </>
       )}
@@ -189,7 +190,7 @@ export function CZExchangePanel() {
           </div>
           <div style={btnRow}>
             <div style={choiceBtn} {...btnProps(() => setMode('choose'))}>← Back</div>
-            <div style={choiceBtn} {...btnProps(doPass)}>Pass</div>
+            <div style={choiceBtn} {...btnProps(doPass)}>Skip exchange →</div>
           </div>
         </>
       )}

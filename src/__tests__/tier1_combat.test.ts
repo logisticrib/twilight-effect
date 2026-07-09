@@ -295,3 +295,118 @@ describe('Poison: a character damaged by a Poison attacker is exhausted + counte
     expect(g.p2.board.f2?.poison, 'splash target poisoned too').toBe(1);
   });
 });
+
+// ─── Owner bug batch 2026-07-08 — combat rulings ────────────────────────────────
+describe('batch 2026-07-08: Cleave splash hits characters only', () => {
+  // Canon: "deals damage equal to its attack to each CHARACTER on the same line as the
+  // target" (§Evergreen Keywords) + "Constructs cannot be attacked" (§Targeting Rules).
+  // The splash used to push ANY line-mate — a construct on the target's line was hit
+  // (and could be destroyed outright, bypassing its Anchor counters).
+  it('a construct on the target\'s line is untouched; a PC on the line IS splashed', () => {
+    freshGame();
+    const att = mkComp('cs-att', compCard.name, { atk: 4, keywords: ['Cleave'] });
+    const def = mkComp('cs-def', compCard2.name, { hp: 9 });
+    const wall = mkConstruct('cs-wall', 'Test Wall', 3, { subtype: 'Fortification' });
+    const pc = mkPc('cs-pc', { hp: 20 });
+    gs.setState(s => ({ game: { ...s.game,
+      p1: { ...s.game.p1, board: { f1: att } },
+      p2: { ...s.game.p2, board: { f1: def, f2: wall, f3: pc } },
+    }, pending: { action: 'attack', charId: 'cs-att' } }));
+    gs.getState().resolveAttack('cs-def');
+    const g = gs.getState().game;
+    expect(g.p2.board.f1?.hp, 'primary target hit').toBe(5);
+    expect(g.p2.board.f2, 'construct NOT splashed (still on board)').toBeTruthy();
+    expect(g.p2.board.f2?.hp, 'construct hp untouched').toBe(3);
+    expect(g.p2.board.f2?.anchors, 'anchors untouched').toBe(3);
+    expect(g.p2.board.f3?.hp, 'the PC is a character — splashed').toBe(16);
+  });
+});
+
+describe('batch 2026-07-08: attacking exhausts the attacker — PC included (ruled)', () => {
+  // Rules Note 2026-07-08 (§Exhaustion): an attack exhausts the attacking character,
+  // the Player Character included — no second attack or activated ability until ready.
+  it('PC attacks → exhausted; second attack and activated abilities refused until ready', () => {
+    freshGame();
+    const pc = mkPc('px-pc', { loadout: { weapon: mkItem('px-w', 'Iron Sword'), gear: [mkItem('px-as', 'Anchor Stone'), null] } });
+    const wall = mkConstruct('px-wall', 'Test Wall', 2, { subtype: 'Fortification' });
+    const def = mkComp('px-def', compCard2.name, { hp: 9 });
+    gs.setState(s => ({ game: { ...s.game,
+      p1: { ...s.game.p1, board: { f1: pc, f2: wall } },
+      p2: { ...s.game.p2, board: { f1: def } },
+    }, pending: { action: 'attack', charId: 'px-pc' } }));
+    gs.getState().resolveAttack('px-def');
+    let g = gs.getState().game;
+    expect(g.p1.board.f1?.exhausted, 'PC exhausted by its attack').toBe(true);
+    expect(g.p1.board.f1?.tapped, 'rotated 90° (Major)').toBe('major');
+
+    gs.getState().beginAttack('px-pc');
+    expect(gs.getState().pending, 'second attack refused').toBeNull();
+    gs.getState().activateAbility('px-pc', 0); // Anchor Stone's activated ability
+    expect(gs.getState().pendingActionTarget, 'activated ability refused while exhausted').toBeNull();
+
+    // Readying at the start of the controller's next turn lifts it.
+    gs.getState().endTurn(); // p1 → p2
+    gs.getState().endTurn(); // p2 → p1: p1 readies
+    g = gs.getState().game;
+    expect(g.p1.board.f1?.exhausted, 'PC readied at own turn start').toBe(false);
+    expect(g.p1.board.f1?.tapped).toBe('none');
+  });
+});
+
+describe('batch 2026-07-08: Hit & Run per canon', () => {
+  // Canon: "After this character attacks, it may take an extra move action." Optional,
+  // and an explicit exception to movement-must-be-first (Rules Note 2026-07-08) —
+  // exhaustion blocks attacks/abilities, not movement.
+  it('grants an optional extra move after the attack (despite Major used + exhausted)', () => {
+    freshGame();
+    const att = mkComp('hr-att', compCard.name, { atk: 2, keywords: ['Hit & Run'] });
+    const def = mkComp('hr-def', compCard2.name, { hp: 9 });
+    gs.setState(s => ({ game: { ...s.game,
+      p1: { ...s.game.p1, board: { f1: att } },
+      p2: { ...s.game.p2, board: { f1: def } },
+    }, pending: { action: 'attack', charId: 'hr-att' } }));
+    gs.getState().resolveAttack('hr-def');
+    let g = gs.getState().game;
+    expect(g.p1.board.f1?.statuses, 'bonus-move marker granted').toContain('hit-run-ready');
+    expect(g.p1.board.f1?.exhausted, 'attacker exhausted as usual').toBe(true);
+
+    gs.getState().beginMove('hr-att');
+    gs.getState().resolveMove('f2');
+    g = gs.getState().game;
+    expect(g.p1.board.f2?.id, 'extra move taken AFTER the attack').toBe('hr-att');
+    expect(g.p1.board.f2?.statuses, 'marker consumed by the move').not.toContain('hit-run-ready');
+  });
+
+  it('without Hit & Run, moving after an attack stays illegal (the exception is the keyword)', () => {
+    freshGame();
+    const att = mkComp('nk-att', compCard.name, { atk: 2 });
+    const def = mkComp('nk-def', compCard2.name, { hp: 9 });
+    gs.setState(s => ({ game: { ...s.game,
+      p1: { ...s.game.p1, board: { f1: att } },
+      p2: { ...s.game.p2, board: { f1: def } },
+    }, pending: { action: 'attack', charId: 'nk-att' } }));
+    gs.getState().resolveAttack('nk-def');
+    gs.getState().beginMove('nk-att');
+    gs.getState().resolveMove('f2');
+    expect(gs.getState().game.p1.board.f1?.id, 'move refused — still in place').toBe('nk-att');
+  });
+
+  it('declining is legal — the unused marker expires at ready with no penalty', () => {
+    freshGame();
+    const att = mkComp('dc-att', compCard.name, { atk: 2, keywords: ['Hit & Run'] });
+    const def = mkComp('dc-def', compCard2.name, { hp: 9 });
+    gs.setState(s => ({ game: { ...s.game,
+      p1: { ...s.game.p1, board: { f1: att } },
+      p2: { ...s.game.p2, board: { f1: def } },
+    }, pending: { action: 'attack', charId: 'dc-att' } }));
+    gs.getState().resolveAttack('dc-def');
+    expect(gs.getState().game.p1.board.f1?.statuses).toContain('hit-run-ready');
+    // Decline: never move. Two endTurns bring p1's ready phase around.
+    gs.getState().endTurn();
+    gs.getState().endTurn();
+    const ent = gs.getState().game.p1.board.f1;
+    expect(ent, 'companion unharmed by declining').toBeTruthy();
+    expect(ent?.statuses, 'unused marker dropped at ready').not.toContain('hit-run-ready');
+    expect(ent?.exhausted, 'readied normally').toBe(false);
+  });
+});

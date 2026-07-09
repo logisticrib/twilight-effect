@@ -136,6 +136,9 @@ describe('ruling 3: Translocation Circle is a sanctioned §11 exception', () => 
     g = gs.getState().game;
     expect(g.p1.board.f1?.statuses.some(st => st.startsWith('ability-used:')), 'marker cleared on ready').toBe(false);
     expect(g.p1.board.f1?.anchors, 'circle decayed normally meanwhile').toBe(2);
+    // endTurn lands on the Draw stop; actions are reducer-gated to the Action Phase
+    // (2026-07-08), so fast-forward past Draw/CZ as a real player would.
+    gs.setState(s => ({ game: { ...s.game, currentPhase: 'action' as const } }));
     gs.getState().activateAbility('tc-2', 0);
     expect(gs.getState().pendingActionTarget, 'usable again next turn').not.toBeNull();
   });
@@ -175,6 +178,8 @@ describe('ruling 6: companion entry restriction', () => {
     expect(gs.getState().game.p1.board.f1?.fresh, 'still fresh through the opponent turn').toBe(true);
     gs.getState().endTurn(); // p2 → p1: controller's ready lifts it
     expect(gs.getState().game.p1.board.f1?.fresh, 'auto-passed at own turn start').toBe(false);
+    // Fast-forward past the Draw/CZ stops — actions are reducer-gated to the Action Phase (2026-07-08).
+    gs.setState(s => ({ game: { ...s.game, currentPhase: 'action' as const } }));
     gs.getState().beginAttack('en-2');
     expect(gs.getState().pending?.action, 'attack now allowed').toBe('attack');
   });

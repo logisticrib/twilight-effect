@@ -135,6 +135,36 @@ describe('divergence is caught loudly', () => {
       expect(d.diff).toMatch(/entity-Y/); // replayed value present
     }
   });
+
+  // download.ts strips `state` from action entries (fixtures stay lean), so a FIXTURE
+  // divergence can only field-diff against the last turn checkpoint — that diff is CUMULATIVE
+  // drift since the checkpoint, not this entry's change (observed 2026-07-08: a switchSides
+  // divergence printed `game.activePlayer: p1 → p2`, which was just turn progression). The
+  // report must label the anchor honestly and carry the live failing state instead.
+  it('a stripped (fixture-shaped) entry labels its diff as cumulative drift + includes the live state', () => {
+    recorder._resetForTest();
+    gs.getState().startSolo(deckCards, deckCards); // starts recording
+    gs.getState().selectEntity('entity-X');
+    const bad = roundTrip(recorder.getLog().log!);
+    // What download.ts ships: no per-entry state on actions.
+    bad.entries = bad.entries.map(e => e.kind === 'action' ? { ...e, state: undefined } : e);
+    const e = bad.entries.find((x): x is ActionEntry => x.kind === 'action' && x.action === 'selectEntity')!;
+    e.args = ['entity-Y']; // replay selects Y → real state divergence
+    try {
+      replay(bad);
+      throw new Error('expected divergence');
+    } catch (err) {
+      expect(err).toBeInstanceOf(ReplayDivergence);
+      const d = err as ReplayDivergence;
+      expect(d.diff, `diff was: ${d.diff}`).toMatch(/CUMULATIVE drift/);
+      expect(d.diff).toMatch(/vs (init|last checkpoint \(turn \d+\))/);
+      expect(d.diff).not.toContain('first diverging field:'); // the precise-diff label must not appear
+      // The report carries the actual failing (replayed) state — d.current AND the message.
+      expect(d.current.game.selected).toBe('entity-Y');
+      expect(d.message).toContain('live post-action state');
+      expect(d.message).toContain(stableStringify(d.current));
+    }
+  });
 });
 
 // Validity is decided at export by replaying the log (the deterministic oracle) — NOT by a

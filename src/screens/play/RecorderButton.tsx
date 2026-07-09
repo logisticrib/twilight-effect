@@ -1,6 +1,7 @@
 import { useSyncExternalStore, useState, type CSSProperties } from 'react';
 import { recorder } from '../../replay/recorder';
 import { downloadReplay } from '../../replay/download';
+import { COMMIT } from '../../replay/format';
 import { btnProps } from '../../lib/a11y';
 import { TBL } from '../../tokens';
 
@@ -22,9 +23,12 @@ export function RecorderButton() {
   // full-state paste instead of a re-executable action: the log stays CORRECT but that reducer
   // is never re-run on replay. Surface it — a silent fidelity loss is worse than a loud one.
   const demoted = status.demotions > 0;
+  // @COMMIT is the build-time stamp the log will carry (vite `define`, frozen at dev-server
+  // boot — HMR never refreshes it). Showing it DURING play makes a stale server visible
+  // before a mis-stamped fixture gets recorded (bit us 2026-07-08).
   const label = blocked
     ? '⚠ can’t record'
-    : `⏺ REC · ${status.steps} actions · ${status.turns} turns${demoted ? ` · ⚠ ${status.demotions} demoted` : ''}`;
+    : `⏺ REC @${COMMIT} · ${status.steps} actions · ${status.turns} turns${demoted ? ` · ⚠ ${status.demotions} demoted` : ''}`;
   const title = blocked
     ? status.invalidReason
     : demoted

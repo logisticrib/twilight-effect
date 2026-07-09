@@ -81,6 +81,8 @@ Each item is always considered attached to a single character. There is no "free
 - This ability is used separately for each item attached to the departing character
 - Any items not equipped to another character through this ability are moved to the Dead Zone
 
+**Rules Note (ruled 2026-07-08):** Item Transfer on Character Exit applies to ALL ways a character leaves the encounter — death/destruction included (as well as fleeing, bounce effects, sacrifice, and any other exit). This supersedes any earlier reading that a destroyed character's items go straight to the Dead Zone with no transfer window.
+
 **CONSTRUCTS**
 
 Unlike items, constructs are not attached to characters—they occupy COMMAND ZONE slots and degrade over time.
@@ -196,6 +198,7 @@ Companions whose Level exceeds your current Willpower flee at the start of your 
 - Cards rotate 90° when exhausted
 - Exhausted characters cannot attack or use activated abilities
 - Characters ready (rotate back to upright) at start of controller's turn
+- **Rules Note (ruled 2026-07-08):** Performing an attack exhausts the attacking character. This is universal — the Player Character included: a PC that attacks is exhausted like any other character and cannot attack again or use activated abilities until it readies at the start of its controller's next turn.
 
 **Health (HP):**
 - Companions have the HP printed on the card; the Player Character starts at 20 HP (modified by class bonuses)
@@ -384,6 +387,8 @@ Class bonuses are applied in turn order. The player who will take the first turn
 **EVASIVE** - This character can target any opponent character regardless of positioning. Still subject to Guardian targeting requirement. *Common:* Rogue. *Occasional:* Druid, Doom-Whisperer.
 
 **HIT & RUN** - After this character attacks, it may take an extra move action. Common on Rogues and some stealthy, agile animal companions.
+
+**Rules Note (ruled 2026-07-08):** The extra move is optional (declining has no cost) and is an explicit exception to the movement-must-be-first rule — it is taken after the attack. Exhaustion does not prevent it: exhaustion blocks attacks and activated abilities, not movement.
 
 **GUARDIAN** - While this character is ready (not exhausted), opponents must attack it before any other character. Targeting restriction. *Common:* Paladin. *Occasional:* Druid, Builder
 

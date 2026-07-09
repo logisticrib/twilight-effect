@@ -14,6 +14,8 @@ import { tryExport } from '../replay/exportReplay';
 import { ModalHost } from '../screens/play/modals/ModalHost';
 import { PoisonModal } from '../screens/play/modals/PoisonModal';
 import { PhaseRail } from '../screens/play/PhaseRail';
+import { RecorderButton } from '../screens/play/RecorderButton';
+import { COMMIT } from '../replay/format';
 
 /** Click the last button whose label matches (footer buttons render after body buttons). */
 function clickBtn(re: RegExp) {
@@ -104,4 +106,16 @@ describe('setup + poison record and replay clean through real components', () =>
     const res = tryExport();
     expect(res.ok ? 'ok' : res.error).toBe('ok');
   }, 30_000);
+
+  // The chip must show the build-time commit stamp the log will carry (`ReplayLog.commit`).
+  // The stamp is a vite `define` frozen at dev-server boot — HMR never refreshes it — so a
+  // server left running across commits stamps fixtures with a stale hash (bit us 2026-07-08).
+  // On the chip it's visible DURING play, before a mis-stamped fixture gets recorded.
+  it('the REC chip shows the commit stamp it is recording under', () => {
+    act(() => { gs.getState().startSolo(deckCards, deckCards); }); // starts recording
+    render(<RecorderButton />);
+    // Under Vitest (standalone config, no define) COMMIT falls back to 'unknown' — assert
+    // against the same constant the recorder stamps into the log, whatever it resolves to.
+    screen.getByText(new RegExp(`⏺ REC @${COMMIT} · \\d+ actions`));
+  });
 });

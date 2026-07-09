@@ -5,7 +5,7 @@ import { useGameStore } from '../store/gameStore';
 import { rng } from '../store/rng';
 import { recorder } from './recorder';
 import {
-  LOG_FORMAT_VERSION, hashState, canonical, firstDiff,
+  LOG_FORMAT_VERSION, hashState, canonical, firstDiff, stableStringify,
   type ReplayLog, type CanonicalSlice, type StoreSlice, type TurnSnapshot,
 } from './format';
 
@@ -38,17 +38,23 @@ export class ReplayDivergence extends Error {
   readonly actual: string;
   readonly lastMatchingTurn: TurnSnapshot | null;
   readonly current: CanonicalSlice;
-  /** The first canonical field that differs (recorded vs replayed) — the actionable culprit. */
-  readonly diff: string | null;
+  /** The pre-labeled field-diff line. Precise (recorded vs replayed, THIS entry) when the
+   *  entry carried its own `state`; otherwise labeled as CUMULATIVE drift vs the last
+   *  checkpoint — download.ts strips `state` from action entries, so for a fixture the
+   *  nearest recorded state is a turn snapshot, not this entry's. */
+  readonly diff: string;
   constructor(
     step: number, action: string, expected: string, actual: string,
-    lastMatchingTurn: TurnSnapshot | null, current: CanonicalSlice, diff: string | null,
+    lastMatchingTurn: TurnSnapshot | null, current: CanonicalSlice, diff: string,
   ) {
     super(
       `Replay divergence at step ${step}, action "${action}".\n` +
       `  expected hash ${expected}, got ${actual}.\n` +
-      `  first diverging field: ${diff ?? '(unavailable)'}\n` +
-      `  last matching turn: ${lastMatchingTurn ? `#${lastMatchingTurn.turn}` : 'none (init)'}.`,
+      `  ${diff}\n` +
+      `  last matching turn: ${lastMatchingTurn ? `#${lastMatchingTurn.turn}` : 'none (init)'}.\n` +
+      // The actual failing state, so a copied report is diagnosable without re-running —
+      // fixtures stay lean; this exists only in the report of the failing run.
+      `  live post-action state (replayed): ${stableStringify(current)}`,
     );
     this.name = 'ReplayDivergence';
     this.step = step;
@@ -105,21 +111,35 @@ export function replay(log: ReplayLog): void {
 
       const actual = hashState(liveSlice());
       if (actual !== entry.hash) {
-        // `state` holds the recorded post-entry canonical state (pastes always; actions when
-        // recorded live) → a precise recorded-vs-replayed field diff. Falls back to the last
-        // full checkpoint if this entry has no stored state.
-        const recorded: CanonicalSlice = entry.state ?? lastMatchingTurn?.state ?? log.init;
         const live = liveSlice();
-        let diff = firstDiff(recorded, live);
-        if (diff === null) {
-          // Recorded snapshot and replayed state stringify identically, yet the hash differs →
-          // the entry's stored `hash` disagrees with its OWN snapshot content (a stale hash
-          // computed on a different serialization than the stored state). Name that explicitly
-          // instead of "(unavailable)" — it points at a recorder/format bug, not a replay one.
-          diff = `entry self-inconsistent — stored hash ${entry.hash} != snapshot content hash ${hashState(recorded)} ` +
-            `(recorded snapshot matches the replayed state; the stored hash predates JSON serialization)`;
+        let diffLine: string;
+        if (entry.state) {
+          // The entry carries its own recorded post-entry state (pastes always; actions when
+          // recorded live) → a precise recorded-vs-replayed field diff for THIS entry.
+          const diff = firstDiff(entry.state, live);
+          diffLine = diff !== null
+            ? `first diverging field: ${diff}`
+            // Recorded snapshot and replayed state stringify identically, yet the hash differs →
+            // the entry's stored `hash` disagrees with its OWN snapshot content (a stale hash
+            // computed on a different serialization than the stored state). Name that explicitly
+            // — it points at a recorder/format bug, not a replay one.
+            : `entry self-inconsistent — stored hash ${entry.hash} != snapshot content hash ${hashState(entry.state)} ` +
+              `(recorded snapshot matches the replayed state; the stored hash predates JSON serialization)`;
+        } else {
+          // Stripped action entry (a downloaded fixture — download.ts removes `state`): the
+          // nearest recorded state is the last turn checkpoint, so this field diff shows how
+          // far the game has moved SINCE that checkpoint — NOT what this entry changed. The
+          // old unqualified "first diverging field:" here misread e.g. normal turn progression
+          // (`game.activePlayer: p1 → p2`) as the divergence (observed 2026-07-08).
+          const checkpoint = lastMatchingTurn?.state ?? log.init;
+          const anchor = lastMatchingTurn ? `last checkpoint (turn ${lastMatchingTurn.turn})` : 'init';
+          const diff = firstDiff(checkpoint, live);
+          diffLine = diff !== null
+            ? `first differing field vs ${anchor} — CUMULATIVE drift since that checkpoint, not this entry's change: ${diff}`
+            : `replayed state is identical to ${anchor}, but this entry's recorded hash expects a different state ` +
+              `(the replayed action changed nothing since that checkpoint)`;
         }
-        throw new ReplayDivergence(entry.step, label, entry.hash, actual, lastMatchingTurn, live, diff);
+        throw new ReplayDivergence(entry.step, label, entry.hash, actual, lastMatchingTurn, live, diffLine);
       }
       if (entry.turn) {
         // The per-action hash already matched; the turn snapshot is a redundant full-state

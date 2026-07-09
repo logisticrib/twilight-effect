@@ -7,7 +7,9 @@ export const md = {
     display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
     // No backdropFilter blur: full-screen blur hangs the preview tooling (see
     // memory gotcha) and costs GPU over a live board — the dark gradient carries it.
-    background: 'radial-gradient(ellipse at center, rgba(10,8,5,0.78), rgba(6,5,3,0.93))',
+    // Kept LIGHT (owner QoL 2026-07-08): the board — the preview pane especially —
+    // must stay readable behind a modal, so hovers inside it are useful.
+    background: 'radial-gradient(ellipse at center, rgba(10,8,5,0.30), rgba(6,5,3,0.50))',
   } as CSSProperties,
   panel: {
     width: 'min(880px, 94vw)', maxHeight: '90vh', display: 'flex', flexDirection: 'column',

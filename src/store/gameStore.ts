@@ -646,6 +646,9 @@ function commitAttack(game: GameState, charId: string, targetEntityId: string, b
     if (tgtSlot) for (const ls of (isFront(tgtSlot as SlotId) ? FRONT_SLOTS : BACK_SLOTS)) {
       const lineEnt = newGame[oppPlayer].board[ls];
       if (!lineEnt || lineEnt.id === targetEntityId) continue;
+      // Cleave hits "each CHARACTER on the same line" (rules §Evergreen Keywords) —
+      // constructs are not characters and cannot be attacked (§Targeting Rules).
+      if (!isCharacter(lineEnt)) continue;
       if (isImmuneToSplash(lineEnt, game)) { acroMsgs.push(`${lineEnt.name} evades the Cleave (Acrobatics)`); continue; }
       hitQueue.push(lineEnt.id);
     }
@@ -1197,6 +1200,22 @@ export function reactiveHold(game: GameState, localPlayer: 'p1' | 'p2'): string 
   const pac = game.pendingAttackChoice;
   if (pac && pac.lp !== localPlayer) return `${pac.sourceName} (attack choice)`;
   return null;
+}
+
+/** Once the game is decided, every gameplay reducer refuses — the board is frozen for
+ *  review. (Session/UI actions — backToLobby, switchSides, selection, pile viewing —
+ *  stay live.) Before this gate, a post-game endTurn even WIPED `gameOver` back to null. */
+function gameIsOver(game: GameState): boolean {
+  return game.gameOver !== null;
+}
+
+/** Action-phase actions are legal only IN the Action Phase: the Draw stop and the
+ *  Class Zone Exchange must be resolved (or deliberately skipped) first. Reducer-level —
+ *  the CZ panel overlay alone used to be the only block, so clicks/keys that bypassed
+ *  the UI could act mid-CZ-phase. Prompt RESOLUTIONS (peeks, dead-picks, armor, poison)
+ *  are exempt: they arm across phase boundaries and must resolve where they armed. */
+function notActionPhase(game: GameState): boolean {
+  return game.currentPhase !== 'action';
 }
 
 // ─── Damage modifiers (passive, consulted by the damage pipeline) ──────────────
@@ -1790,6 +1809,7 @@ export const useGameStore = create<GameStoreState>()(
   },
 
   placePc: (slot, targetPlayer) => set(s => {
+    if (gameIsOver(s.game)) return s;
     const tp = targetPlayer ?? s.localPlayer;
     // Serialized setup: only the player whose place-pc step is current may place.
     if (s.game.setupQueue[0] !== `place-pc:${tp}`) return s;
@@ -1836,6 +1856,7 @@ export const useGameStore = create<GameStoreState>()(
 
   // ── Draw card ──────────────────────────────────────────────────────────────
   drawCard: (player) => set(s => {
+    if (gameIsOver(s.game)) return s;
     const ps = s.game[player];
     if (ps.deck.length === 0) return s;
     const [drawn, ...rest] = ps.deck;
@@ -1853,6 +1874,7 @@ export const useGameStore = create<GameStoreState>()(
   // ── Phase advancement ──────────────────────────────────────────────────────
   /** Draw → CZ phase. */
   advancePhase: () => set(s => {
+    if (gameIsOver(s.game)) return s;
     const { currentPhase } = s.game;
     // Only advances draw→cz. CZ→action must go through completeCzPhase.
     const next: Phase = currentPhase === 'draw' ? 'cz' : currentPhase;
@@ -1861,18 +1883,21 @@ export const useGameStore = create<GameStoreState>()(
 
   /** CZ phase → Action phase. Called by CZExchangePanel after any valid choice (exchange or pass). */
   completeCzPhase: () => set(s => {
+    if (gameIsOver(s.game)) return s;
     if (s.game.currentPhase !== 'cz') return s;
     return { game: { ...s.game, currentPhase: 'action' as Phase } };
   }),
 
   // Move active player to End Phase (they confirm before passing the turn)
-  endTurnToEndPhase: () => set(s => ({
-    game: { ...s.game, currentPhase: 'end' as Phase },
-  })),
+  endTurnToEndPhase: () => set(s => {
+    if (gameIsOver(s.game)) return s;
+    return { game: { ...s.game, currentPhase: 'end' as Phase } };
+  }),
 
   // ── Equip item ─────────────────────────────────────────────────────────────
   equipItem: (entityId, handCardId) => set(s => {
     if (reactiveHold(s.game, s.localPlayer)) return s;
+    if (gameIsOver(s.game) || notActionPhase(s.game)) return s;
     const lp = s.localPlayer;
     const card = s.game[lp].hand.find(c => c.id === handCardId);
     if (!card || card.type !== 'Item') return s;
@@ -1917,6 +1942,7 @@ export const useGameStore = create<GameStoreState>()(
   // immediately. Either way the card ends up in the Dead Zone.
   playAction: (handCardId) => set(s => {
     if (reactiveHold(s.game, s.localPlayer)) return s;
+    if (gameIsOver(s.game) || notActionPhase(s.game)) return s;
     const lp = s.localPlayer;
     const card = s.game[lp].hand.find(c => c.id === handCardId);
     if (!card || card.type !== 'Action') return s;
@@ -2045,6 +2071,7 @@ export const useGameStore = create<GameStoreState>()(
   }),
 
   resolveActionTarget: (targetId) => set(s => {
+    if (gameIsOver(s.game)) return s;
     const pa = s.pendingActionTarget;
     if (!pa || !pa.eligibleIds.includes(targetId)) return s;
 
@@ -2125,6 +2152,7 @@ export const useGameStore = create<GameStoreState>()(
   }),
 
   resolveActionSlot: (slot) => set(s => {
+    if (gameIsOver(s.game)) return s;
     const pa = s.pendingActionTarget;
     if (!pa || pa.twoStep !== 'reposition' || !pa.firstId || !pa.eligibleSlots?.includes(slot)) return s;
     const loc = findEntityAnywhere(s.game, pa.firstId);
@@ -2147,6 +2175,7 @@ export const useGameStore = create<GameStoreState>()(
 
   activateAbility: (entityId, idx) => set(s => {
     if (reactiveHold(s.game, s.localPlayer)) return s;
+    if (gameIsOver(s.game) || notActionPhase(s.game)) return s;
     const loc = findEntityAnywhere(s.game, entityId);
     if (!loc) return s;
     const ability = gatherActivated(loc.ent)[idx];
@@ -2252,6 +2281,7 @@ export const useGameStore = create<GameStoreState>()(
 
   // ── Deck-peek (scry): apply the player's per-card destinations ─────────────
   resolvePeek: (assignments) => set(s => {
+    if (gameIsOver(s.game)) return s;
     const pk = s.game.pendingPeek;
     if (!pk) return s;
     const side = pk.deckSide;
@@ -2295,6 +2325,7 @@ export const useGameStore = create<GameStoreState>()(
 
   // ── Dead-Zone recovery (Library of Memory) ────────────────────────────────
   resolveDeadPick: (idx) => set(s => {
+    if (gameIsOver(s.game)) return s;
     const dp = s.game.pendingDeadPick;
     if (!dp) return s;
     const ps = s.game[dp.lp];
@@ -2348,6 +2379,7 @@ export const useGameStore = create<GameStoreState>()(
 
   // ── Equip from hand (Veteran of the Ashgrove on-enter) ────────────────────
   resolveEquipPick: (handCardId) => set(s => {
+    if (gameIsOver(s.game)) return s;
     const ep = s.pendingEquipPick;
     if (!ep) return s;
     const card = s.game[ep.lp].hand.find(c => c.id === handCardId);
@@ -2362,6 +2394,10 @@ export const useGameStore = create<GameStoreState>()(
 
   // ── Class Zone exchange ─────────────────────────────────────────────────────
   czToHand: (czCardId) => set(s => {
+    if (gameIsOver(s.game)) return s;
+    // Reducer-level CZ-phase gate: the exchange happens in the CZ phase, once per turn
+    // (the panel enforced this in the UI only — czExchangeUsed was set but never checked).
+    if (s.game.currentPhase !== 'cz' || s.game.czExchangeUsed) return s;
     const lp = s.localPlayer;
     const ps = s.game[lp];
     const cz = ps.classZone.find(c => c.id === czCardId);
@@ -2382,6 +2418,8 @@ export const useGameStore = create<GameStoreState>()(
   }),
 
   handToCz: (handCardId) => set(s => {
+    if (gameIsOver(s.game)) return s;
+    if (s.game.currentPhase !== 'cz' || s.game.czExchangeUsed) return s; // reducer-level gate (see czToHand)
     const lp = s.localPlayer;
     const ps = s.game[lp];
     if (ps.classZone.length >= 5) return s;     // CZ at max
@@ -2432,10 +2470,19 @@ export const useGameStore = create<GameStoreState>()(
   closePile: () => set({ pileView: null }),
 
   // ── Move ───────────────────────────────────────────────────────────────────
-  beginMove: (charId) => set({ pending: { action: 'move', charId } }),
+  beginMove: (charId) => set(s => {
+    if (gameIsOver(s.game)) return s;
+    if (notActionPhase(s.game)) {
+      const id = ++toastId;
+      setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 3000);
+      return { toasts: [...s.toasts, { id, msg: 'Not in the Action Phase — resolve the Class Zone Exchange (or Skip) first.' }] };
+    }
+    return { pending: { action: 'move', charId } };
+  }),
 
   resolveMove: (targetSlot) => set(s => {
     if (reactiveHold(s.game, s.localPlayer)) return s;
+    if (gameIsOver(s.game) || notActionPhase(s.game)) return s;
     const { pending, game } = s;
     if (!pending || pending.action !== 'move') return s;
     const src = findEntityAnywhere(game, pending.charId);
@@ -2489,6 +2536,7 @@ export const useGameStore = create<GameStoreState>()(
 
   // ── Attack ─────────────────────────────────────────────────────────────────
   beginAttack: (charId) => set(s => {
+    if (gameIsOver(s.game)) return s;
     const attLoc = findEntityAnywhere(s.game, charId);
     if (!attLoc) return s;
     const ent = attLoc.ent;
@@ -2498,6 +2546,8 @@ export const useGameStore = create<GameStoreState>()(
       setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 3000);
       return { toasts: [...s.toasts, { id, msg }] };
     };
+
+    if (notActionPhase(s.game)) return { ...toast('Not in the Action Phase — resolve the Class Zone Exchange (or Skip) first.') };
 
     // Atomic activation: can't return to a character once you've activated another.
     if (isSealed(s.game, charId)) return { ...toast(`${ent.name} has already finished its activation this turn.`) };
@@ -2525,6 +2575,7 @@ export const useGameStore = create<GameStoreState>()(
 
   resolveAttack: (targetEntityId) => set(s => {
     if (reactiveHold(s.game, s.localPlayer)) return s;
+    if (gameIsOver(s.game) || notActionPhase(s.game)) return s;
     const { pending, game } = s;
     if (!pending || pending.action !== 'attack') return s;
 
@@ -2595,6 +2646,7 @@ export const useGameStore = create<GameStoreState>()(
 
   // ── Optional pre-attack ability (Mara): pay HP for +damage, or decline ─────────
   resolveAttackChoice: (accept) => set(s => {
+    if (gameIsOver(s.game)) return s;
     const pac = s.game.pendingAttackChoice;
     if (!pac) return s;
     let game: GameState = { ...s.game, pendingAttackChoice: null };
@@ -2612,6 +2664,7 @@ export const useGameStore = create<GameStoreState>()(
 
   // ── Armor choice (mid-combat): the defender picks which piece absorbs the hit ──
   resolveArmor: (pieceId) => set(s => {
+    if (gameIsOver(s.game)) return s;
     const pa = s.game.pendingArmor;
     if (!pa) return s;
     const chosen = pa.candidates.find(c => c.id === pieceId);
@@ -2644,18 +2697,27 @@ export const useGameStore = create<GameStoreState>()(
   cancelPending: () => set({ pending: null }),
 
   // ── Play card ──────────────────────────────────────────────────────────────
-  beginPlay: (cardId) => set(s => ({
+  beginPlay: (cardId) => set(s => {
+    if (gameIsOver(s.game)) return s;
+    if (notActionPhase(s.game)) {
+      const id = ++toastId;
+      setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 3000);
+      return { toasts: [...s.toasts, { id, msg: 'Not in the Action Phase — resolve the Class Zone Exchange (or Skip) first.' }] };
+    }
     // Capture the selected character as the activating actor before clearing the
     // selection (Action cards charge this character's action economy).
-    pendingPlay: s.pendingPlay?.cardId === cardId ? null : { cardId, actorId: s.game.selected },
-    pending: null,
-    game: { ...s.game, selected: null },
-  })),
+    return {
+      pendingPlay: s.pendingPlay?.cardId === cardId ? null : { cardId, actorId: s.game.selected },
+      pending: null,
+      game: { ...s.game, selected: null },
+    };
+  }),
 
   cancelPlay: () => set({ pendingPlay: null }),
 
   // ── On-enter trigger targeting (Reinforce / Dismantle) ─────────────────────
   resolveTrigger: (targetId) => set(s => {
+    if (gameIsOver(s.game)) return s;
     const pt = s.pendingTrigger;
     if (!pt || !pt.eligibleIds.includes(targetId)) return s;
     const loc = findEntityAnywhere(s.game, targetId);
@@ -2687,6 +2749,7 @@ export const useGameStore = create<GameStoreState>()(
 
   // ── Kit-Master: move an item from one of your characters to another ─────────
   resolveKit: (targetId) => set(s => {
+    if (gameIsOver(s.game)) return s;
     const pk = s.pendingKit;
     if (!pk || !pk.eligibleIds.includes(targetId)) return s;
 
@@ -2759,6 +2822,7 @@ export const useGameStore = create<GameStoreState>()(
 
   // Kit-Master: choose which item to move when the source holds 2+ (KitItemModal).
   pickKitItem: (itemId) => set(s => {
+    if (gameIsOver(s.game)) return s;
     const pk = s.pendingKit;
     if (!pk || pk.step !== 'item' || !pk.fromId) return s;
     const picked = pk.items?.find(i => i.id === itemId);
@@ -2775,6 +2839,7 @@ export const useGameStore = create<GameStoreState>()(
 
   placeCard: (slot) => set(s => {
     if (reactiveHold(s.game, s.localPlayer)) return s;
+    if (gameIsOver(s.game) || notActionPhase(s.game)) return s;
     const { pendingPlay, game, localPlayer } = s;
     if (!pendingPlay) return s;
 
@@ -3066,6 +3131,7 @@ export const useGameStore = create<GameStoreState>()(
   // ── Action bookkeeping ─────────────────────────────────────────────────────
   markAction: (entityId, type) => set(s => {
     if (reactiveHold(s.game, s.localPlayer)) return s;
+    if (gameIsOver(s.game) || notActionPhase(s.game)) return s;
     const loc = findEntityAnywhere(s.game, entityId);
     if (!loc) return s;
     const ent = loc.ent;
@@ -3084,6 +3150,7 @@ export const useGameStore = create<GameStoreState>()(
   }),
 
   resetActions: (entityId) => set(s => {
+    if (gameIsOver(s.game)) return s;
     // Playtest helper: also lift the activation lock for this character.
     const finishedActors = s.game.finishedActors.filter(x => x !== entityId);
     const currentActor = s.game.currentActor === entityId ? null : s.game.currentActor;
@@ -3092,6 +3159,7 @@ export const useGameStore = create<GameStoreState>()(
 
   // ── Poison check resolution (ready phase) ──────────────────────────────────
   resolvePoison: (player, outcomes) => set(s => {
+    if (gameIsOver(s.game)) return s;
     let g = s.game;
     let dmg = 0;
     for (const o of outcomes) {
@@ -3113,6 +3181,7 @@ export const useGameStore = create<GameStoreState>()(
 
   // ── Coercion resolution (the VICTIM's choice: discard or sacrifice) ────────
   resolveCoercionDiscard: (cardId) => set(s => {
+    if (gameIsOver(s.game)) return s;
     const co = s.game.pendingCoercion;
     if (!co) return s;
     if (s.conn.mode !== 'solo' && co.victim !== s.localPlayer) return s; // victim-only
@@ -3127,6 +3196,7 @@ export const useGameStore = create<GameStoreState>()(
   }),
 
   resolveCoercionSacrifice: (entityId) => set(s => {
+    if (gameIsOver(s.game)) return s;
     const co = s.game.pendingCoercion;
     if (!co) return s;
     if (s.conn.mode !== 'solo' && co.victim !== s.localPlayer) return s; // victim-only
@@ -3150,6 +3220,7 @@ export const useGameStore = create<GameStoreState>()(
 
   // ── HP nudge ──────────────────────────────────────────────────────────────
   adjustHp: (entityId, delta) => set(s => {
+    if (gameIsOver(s.game)) return s;
     const loc = findEntityAnywhere(s.game, entityId);
     if (!loc) return s;
     const newHp = Math.max(0, Math.min(effectiveMaxHp(loc.ent, s.game), loc.ent.hp + delta));
@@ -3164,6 +3235,7 @@ export const useGameStore = create<GameStoreState>()(
   // ── Turn end / ready phase ────────────────────────────────────────────────
   endTurn: () => set(s => {
     if (reactiveHold(s.game, s.localPlayer)) return s;
+    if (gameIsOver(s.game)) return s;
     const g = s.game;
     const nextPlayer: 'p1' | 'p2' = g.activePlayer === 'p1' ? 'p2' : 'p1';
     const nextTurn = nextPlayer === 'p1' ? g.turn + 1 : g.turn;
