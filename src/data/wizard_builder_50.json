@@ -89,7 +89,8 @@
       "text": "RANGED. When you play a Magical Construct, this character heals 1.",
       "flavor": "",
       "createdAt": "2026-05-16T19:02:21.324090Z",
-      "updatedAt": "2026-05-16T19:02:21.324091Z"
+      "updatedAt": "2026-05-16T19:02:21.324091Z",
+      "effectsFlag": "awaiting engine capability: on-play-construct trigger event (owner 2026-07-08)"
     },
     {
       "id": "eb29a579",
@@ -383,7 +384,8 @@
       "text": "When a Wizard companion you control would take damage, prevent 1 of that damage.",
       "flavor": "",
       "createdAt": "2026-05-16T19:02:21.324227Z",
-      "updatedAt": "2026-05-16T19:02:21.324229Z"
+      "updatedAt": "2026-05-16T19:02:21.324229Z",
+      "effectsFlag": "awaiting engine capability: damage-prevention replacement system (owner 2026-07-08)"
     },
     {
       "id": "cdbf2f86",
@@ -437,7 +439,8 @@
       "text": "Opposing back-line companions cannot attack.",
       "flavor": "A held breath, frozen.",
       "createdAt": "2026-05-16T19:02:21.324242Z",
-      "updatedAt": "2026-05-16T19:02:21.324243Z"
+      "updatedAt": "2026-05-16T19:02:21.324243Z",
+      "effectsFlag": "awaiting engine capability: attack-eligibility restriction aura (owner 2026-07-08)"
     },
     {
       "id": "9cf32caf",
@@ -1057,7 +1060,8 @@
       "text": "When an opposing companion enters the encounter, deal 1 damage to it. Sacrifice this construct.",
       "flavor": "",
       "createdAt": "2026-05-16T19:02:21.324479Z",
-      "updatedAt": "2026-05-16T19:02:21.324482Z"
+      "updatedAt": "2026-05-16T19:02:21.324482Z",
+      "effectsFlag": "awaiting engine capability: trap reactive-trigger system (owner 2026-07-08)"
     },
     {
       "id": "ffa9ba63",
@@ -1078,7 +1082,8 @@
       "text": "When an opposing companion moves into the front line, exhaust it and sacrifice this construct.",
       "flavor": "",
       "createdAt": "2026-05-16T19:02:21.324493Z",
-      "updatedAt": "2026-05-16T19:02:21.324495Z"
+      "updatedAt": "2026-05-16T19:02:21.324495Z",
+      "effectsFlag": "awaiting engine capability: trap reactive-trigger system (owner 2026-07-08)"
     },
     {
       "id": "348b9285",
@@ -1132,7 +1137,17 @@
       "text": "Your back-line companions may attack as if they had Ranged.",
       "flavor": "",
       "createdAt": "2026-05-16T19:02:21.324509Z",
-      "updatedAt": "2026-05-16T19:02:21.324510Z"
+      "updatedAt": "2026-05-16T19:02:21.324510Z",
+      "effects": [
+        {
+          "trigger": "static",
+          "effects": [
+            {
+              "op": "backLineAttack"
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "98d038ff",
@@ -1153,7 +1168,8 @@
       "text": "Whenever an opposing companion attacks one of your companions, deal 1 damage to the attacker.",
       "flavor": "",
       "createdAt": "2026-05-16T19:02:21.324549Z",
-      "updatedAt": "2026-05-16T19:02:21.324552Z"
+      "updatedAt": "2026-05-16T19:02:21.324552Z",
+      "effectsFlag": "awaiting engine capability: trap reactive-trigger system (owner 2026-07-08)"
     },
     {
       "id": "47c06500",
@@ -1174,7 +1190,24 @@
       "text": "Your front-line companions have GUARDIAN.",
       "flavor": "Built once. Held forever, or so it was claimed.",
       "createdAt": "2026-05-16T19:02:21.324564Z",
-      "updatedAt": "2026-05-16T19:02:21.324566Z"
+      "updatedAt": "2026-05-16T19:02:21.324566Z",
+      "effects": [
+        {
+          "trigger": "static",
+          "effects": [
+            {
+              "op": "grantKeywords",
+              "keywords": [
+                "Guardian"
+              ],
+              "scope": "ownCompanions",
+              "where": {
+                "line": "front"
+              }
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "c70954e4",
@@ -1195,7 +1228,8 @@
       "text": "Opposing companions cannot move between front and back lines.",
       "flavor": "",
       "createdAt": "2026-05-16T19:02:21.324573Z",
-      "updatedAt": "2026-05-16T19:02:21.324574Z"
+      "updatedAt": "2026-05-16T19:02:21.324574Z",
+      "effectsFlag": "awaiting engine capability: movement-restriction aura (owner 2026-07-08)"
     },
     {
       "id": "78dd05de",
@@ -1252,7 +1286,8 @@
       "text": "Your Physical Constructs have +1 maximum Anchor counters. When one of your Physical Constructs is sacrificed, draw a card.",
       "flavor": "",
       "createdAt": "2026-05-16T19:02:21.324587Z",
-      "updatedAt": "2026-05-16T19:02:21.324588Z"
+      "updatedAt": "2026-05-16T19:02:21.324588Z",
+      "effectsFlag": "awaiting engine capability: anchor-cap system + on-sacrifice trigger (owner 2026-07-08)"
     },
     {
       "id": "598d3180",

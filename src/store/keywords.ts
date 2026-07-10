@@ -231,8 +231,34 @@ export function wardedLines(board: PlayerState['board']): Set<'front' | 'back'> 
   return out;
 }
 
-/** Keywords currently in effect: printed + granted by buffs + granted by items,
- *  unless suppressed by an opposing aura (then none). */
+/** Keywords granted to `ent` by friendly static `grantKeywords` auras (Bastion Wall:
+ *  "Your front-line companions have GUARDIAN"). Scope covers own companions/party,
+ *  optionally line-filtered by the AFFECTED entity's position. */
+function auraGrantedKeywords(ent: BoardEntity, game: GameState): string[] {
+  if (ent.kind === 'construct') return [];
+  const side = controllerOf(game, ent.id);
+  if (!side) return [];
+  const slot = (Object.entries(game[side].board).find(([, e]) => e?.id === ent.id) ?? [])[0] as string | undefined;
+  const entLine = slot ? (slot[0] === 'f' ? 'front' : 'back') : null;
+  const out: string[] = [];
+  for (const src of Object.values(game[side].board)) {
+    if (!src) continue;
+    for (const ce of effectsOf(src.name) ?? []) {
+      if (ce.trigger !== 'static') continue;
+      for (const e of ce.effects) {
+        if (e.op !== 'grantKeywords') continue;
+        if (e.scope === 'ownCompanions' && ent.kind !== 'companion') continue;
+        if (e.scope !== 'ownCompanions' && e.scope !== 'ownParty') continue;
+        if (e.where?.line && e.where.line !== entLine) continue;
+        out.push(...e.keywords);
+      }
+    }
+  }
+  return out;
+}
+
+/** Keywords currently in effect: printed + granted by buffs + granted by items +
+ *  granted by friendly static auras, unless suppressed by an opposing aura (then none). */
 export function effectiveKeywords(ent: BoardEntity, game: GameState): string[] {
   if (isKeywordSuppressed(ent, game)) return [];
   const set = new Set(ent.keywords);
@@ -245,7 +271,18 @@ export function effectiveKeywords(ent: BoardEntity, game: GameState): string[] {
       card?.keywords.forEach(k => { if (ITEM_GRANTED_KEYWORDS.has(k)) set.add(k); });
     }
   }
+  auraGrantedKeywords(ent, game).forEach(k => set.add(k));
   return [...set];
+}
+
+/** Watchtower — "Your back-line companions may attack as if they had Ranged": a
+ *  static permission for ATTACK ELIGIBILITY only. Deliberately NOT a Ranged grant —
+ *  full Ranged would also make the companions targetable in the back line (targeting
+ *  rule: "…or the defender has Ranged"), a defensive downside the text doesn't carry. */
+export function hasBackLineAttackAura(game: GameState, side: 'p1' | 'p2'): boolean {
+  return Object.values(game[side].board).some(src => !!src
+    && (effectsOf(src.name) ?? []).some(ce => ce.trigger === 'static'
+      && ce.effects.some(e => e.op === 'backLineAttack')));
 }
 
 /** Whether a flag modifier (e.g. 'hpFloor1') is currently active on an entity. */

@@ -64,12 +64,14 @@ export type Condition =
 export type Amount = number | { die: number } | { halfDie: number } | { halfDieUp: number } | { perControlled: 'companions' };
 
 // ─── Activated-ability costs ───────────────────────────────────────────────────
+// 'sacrifice' (targeted) and 'discard' were REMOVED 2026-07-08 (owner ruling): no
+// engine path paid them — a card carrying one resolved its ability COST-FREE. The
+// contract must not advertise unimplemented design space (perControlled precedent);
+// re-add together with engine support when a card needs them.
 export type Cost =
   | { kind: 'exhaustSelf' }
   | { kind: 'sacrificeSelf' }
-  | { kind: 'sacrifice'; target: TargetSpec }
   | { kind: 'payHP'; amount: number }
-  | { kind: 'discard'; count: number }
   | { kind: 'removeAnchor'; count: number };
 
 // ─── WHAT an effect does (the primitive vocabulary) ────────────────────────────
@@ -111,6 +113,8 @@ export type Effect =
   | { op: 'modal'; options: { label: string; effects: Effect[] }[] }  // Blueprint
   | { op: 'gainControl'; target: TargetSpec; duration: 'while' }
   | { op: 'suppressKeywords'; scope: TargetSpec; where?: { line?: 'front' | 'back' } }  // static aura: affected lose all keywords
+  | { op: 'grantKeywords'; keywords: string[]; scope: TargetSpec; where?: { line?: 'front' | 'back' } }  // static aura: affected GAIN keywords (Bastion Wall)
+  | { op: 'backLineAttack' }  // static: your back-line COMPANIONS may attack as if they had Ranged — attack eligibility ONLY, no defensive Ranged targetability (Watchtower)
   | { op: 'counterAction' };  // sacrifice this; the opponent's Action is countered to their Dead Zone
 
 /** Non-stat continuous modifiers a buff can grant (rules-flavored flags). */

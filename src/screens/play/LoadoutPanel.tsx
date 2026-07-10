@@ -4,7 +4,7 @@ import { CATALOG } from '../../data/catalog';
 import { TBL, CLASSCLR, GLYPH } from '../../tokens';
 import { btnProps } from '../../lib/a11y';
 import { useGameStore, gatherActivated, abilityUsedTag, type GameState } from '../../store/gameStore';
-import { canPlayActionCard } from '../../store/keywords';
+import { canPlayActionCard, hasBackLineAttackAura } from '../../store/keywords';
 import { handlePreviewWheel } from './previewScroll';
 import type { BoardEntity, EquippedItem } from '../../types/card';
 
@@ -86,7 +86,11 @@ function computeActions(
 
   const inFrontLine = entSlot ? ['f1', 'f2', 'f3'].includes(entSlot) : false;
   const hasRanged = keywords.includes('Ranged');
-  const canAttackFromPosition = inFrontLine || hasRanged;
+  // Watchtower-style aura: back-line companions may attack as if Ranged (mirrors the
+  // beginAttack gate — the entity's side is whichever board it sits on).
+  const side: 'p1' | 'p2' = Object.values(game.p1.board).some(e => e?.id === ent.id) ? 'p1' : 'p2';
+  const towerCovered = ent.kind === 'companion' && hasBackLineAttackAura(game, side);
+  const canAttackFromPosition = inFrontLine || hasRanged || towerCovered;
 
   // Atomic activation: once you've activated another character, this one is sealed.
   const sealed = game.finishedActors.includes(ent.id);
@@ -227,6 +231,7 @@ export function LoadoutPanel() {
   const equipItem       = useGameStore(s => s.equipItem);
   const playAction      = useGameStore(s => s.playAction);
   const activateAbility = useGameStore(s => s.activateAbility);
+  const sacrificeEntity = useGameStore(s => s.sacrificeEntity);
 
   const pendingCard = pendingPlay
     ? game[localPlayer].hand.find(c => c.id === pendingPlay.cardId)
@@ -477,8 +482,11 @@ export function LoadoutPanel() {
                   />
                 );
               })}
+              {/* A REAL sacrifice (destroyEntity → Dead Zone; Item Transfer window if
+                  items) — the old adjustHp(-999) clamped to 0 HP and removed NOTHING
+                  while toasting success: the archetypal silent no-op (owner 2026-07-08). */}
               <ActBtn icon="✕" label="Sacrifice" state="available"
-                onClick={() => { adjustHp(ent.id, -999); selectEntity(null); pushToast(`${ent.name} sacrificed`); }}
+                onClick={() => sacrificeEntity(ent.id)}
               />
             </div>
           )}

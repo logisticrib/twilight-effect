@@ -3,13 +3,13 @@ import { persist, subscribeWithSelector } from 'zustand/middleware';
 import { rng } from './rng';
 import { recordActions } from './recordMiddleware';
 import type { BoardEntity, Card, TapState, Acts, EquippedItem } from '../types/card';
-import type { Effect, Amount, Condition, TargetSpec, Trigger, Cost } from '../types/effects';
+import type { Effect, Amount, Condition, TargetSpec, Trigger, Cost, CardEffect } from '../types/effects';
 import { CATALOG, SORCERER_WARRIOR_CARDS, WIZARD_BUILDER_CARDS } from '../data/catalog';
 import { recomputeStatics, isImmuneToSplash, grantHitRun, HIT_RUN_STATUS,
          isPhysicalConstruct, parseEnterTrigger, type EnterTriggerKind,
          isCharacter, firstItemOf, allItemsOf, canHoldItem, effectiveAttack, effectiveKeywords, hasModifier, effectiveMaxHp, wardedLines,
          canPlayActionCard, actionTypeOf, currentWillpower, parseBanes, isBaneTarget,
-         poisonHitPatch, POISONED_STATUS, parseAnimateMagic } from './keywords';
+         poisonHitPatch, POISONED_STATUS, parseAnimateMagic, hasBackLineAttackAura } from './keywords';
 
 export type Phase = 'ready' | 'draw' | 'cz' | 'action' | 'end';
 export type PlayPhase = 'lobby' | 'setup' | 'game';
@@ -95,6 +95,21 @@ export interface GameState {
   /** Pre-attack optional ability prompt (Mara: "you may pay HP from your PC: +N damage").
    *  Routed to the attacker; combat commits once they choose via `resolveAttackChoice`. */
   pendingAttackChoice: PendingAttackChoice | null;
+  /** Deferred start-of-turn modal choice (Pyre) — the controller picks a mode (or
+   *  declines, for "you may" clauses); the clause cost is paid at resolution. */
+  pendingModalChoice: PendingModalChoice | null;
+  /** Further modal choices queued behind the active one. */
+  pendingModalChoiceQueue: PendingModalChoice[];
+  /** Item Transfer on Character Exit window (rules §Items; ruled 2026-07-08: applies to
+   *  ALL exits, death included). The departed character's item cards are ALREADY in the
+   *  owner's Dead Zone — claiming one removes it from there, so nothing sits in limbo
+   *  and an abandoned prompt just leaves them dead (canon's default). Routed to the
+   *  departed character's controller; the other player is held (see `reactiveHold`). */
+  pendingItemTransfer: PendingItemTransfer | null;
+  /** Further transfer windows queued behind the active one (one per departing
+   *  character — e.g. a Cleave that kills two item-bearers). Held back until the
+   *  Poison check / earlier forced prompts resolve (Rules Note 2026-07-08). */
+  pendingItemTransferQueue: PendingItemTransfer[];
   /** Remaining setup steps as `"<step>:<player>"`, e.g. "mulligan:p1". Synced so MP
    *  setup is SERIALIZED — only the head step's owner acts (turn-like, so the wholesale
    *  state-sync stays correct even for cross-half class bonuses); the other peer waits.
@@ -268,6 +283,36 @@ export interface PendingArmor extends ArmorChoiceData {
   queue?: ArmorChoiceData[];
 }
 
+/** One Item Transfer on Character Exit window (rules §Items): "When a character leaves
+ *  the encounter with one or more items attached, the controlling player may exhaust a
+ *  ready character in their party with an open slot of the appropriate type to
+ *  immediately equip one of those items." Ruled 2026-07-08: applies to ALL exits —
+ *  death, fleeing, bounce, sacrifice. Items resolve head-first; `usedIds` enforces
+ *  "each character can only be exhausted once in this way per triggering event"
+ *  (one event per departing character). The item cards already sit in the owner's
+ *  Dead Zone; claiming removes them (save-safe — no limbo zone). Constructs cannot
+ *  carry items, so no window ever opens for them (ruled N/A 2026-07-08). */
+export interface PendingItemTransfer {
+  lp: 'p1' | 'p2';                        // departed character's controller — the chooser
+  sourceName: string;                     // the departed character (prompt title)
+  items: { id: string; name: string }[];  // unclaimed item cards (ids = Dead-Zone card ids)
+  usedIds: string[];                      // characters already exhausted this event
+}
+
+/** A deferred start-of-turn MODAL choice (Pyre of the Unbound: "you may sacrifice this
+ *  construct: deal 4 damage to target character OR 2 damage to each opposing
+ *  character"). The clause-level cost is paid at RESOLUTION — declining (optional
+ *  clauses) pays nothing. A chosen option that needs a target chains into
+ *  pendingActionTarget. Synced + recorded like every game-level prompt. */
+export interface PendingModalChoice {
+  lp: 'p1' | 'p2';                                   // the option chooser (controller)
+  sourceName: string;
+  sourceId: string;                                  // the source permanent
+  options: { label: string; effects: Effect[] }[];
+  cost?: 'sacrificeSelf';                            // paid when an option is chosen
+  optional: boolean;                                 // "you may" — decline allowed
+}
+
 /** A pre-attack "you may pay HP: +N damage" prompt (Mara). Captures the attack so it
  *  can be committed (with or without the bonus) once the attacker decides. */
 export interface PendingAttackChoice {
@@ -384,21 +429,99 @@ function deadCardsOf(ent: BoardEntity): Card[] {
   return names.map(n => CATALOG.find(c => c.name === n)).filter((c): c is Card => !!c);
 }
 
+/** The catalog cards of an entity's equipped items (deduped — a heavy item is one card). */
+function itemCardsOf(ent: BoardEntity): Card[] {
+  const seen = new Set<string>();
+  const out: Card[] = [];
+  for (const it of [ent.loadout?.weapon, ...(ent.loadout?.gear ?? [])]) {
+    if (!it || seen.has(it.id)) continue;
+    seen.add(it.id);
+    const c = CATALOG.find(x => x.name === it.name);
+    if (c) out.push(c);
+  }
+  return out;
+}
+
+/** The Item Transfer window a departing character opens for its controller, or null
+ *  (no items, or not a character — constructs can't carry items, PC exits end the game). */
+function itemTransferOf(ent: BoardEntity, controller: 'p1' | 'p2'): PendingItemTransfer | null {
+  if (!isCharacter(ent)) return null;
+  const items = itemCardsOf(ent).map(c => ({ id: c.id, name: c.name }));
+  return items.length ? { lp: controller, sourceName: ent.name, items, usedIds: [] } : null;
+}
+
 /** Remove a destroyed/sacrificed entity from the board AND move its card (plus its
  *  equipped items') to its owner's Dead Zone; a tucked Oathsworn card returns to its
  *  owner's hand. Every destruction path must use this — bare `removeEntity` loses the
- *  cards from the game. (Bounce and cost-sacrifice paths do their own zone moves.) */
-function destroyEntity(game: GameState, entityId: string): GameState {
+ *  cards from the game. (Bounce and cost-sacrifice paths do their own zone moves.)
+ *  A departing character with items also QUEUES an Item Transfer window (rules §Items,
+ *  ruled 2026-07-08: all exits) — queued here, ARMED later at a resolution boundary
+ *  (`armNextItemTransfer` via armPrompts / prompt resolvers), so mid-combat kills
+ *  defer the window until the attack completes (owner ruling 2026-07-08). */
+function destroyEntity(game: GameState, entityId: string, sink?: PendingDeadPick[], armorSink?: ArmorChoiceData[]): { game: GameState; msgs: string[] } {
   const loc = findEntityAnywhere(game, entityId);
-  if (!loc) return game;
+  if (!loc) return { game, msgs: [] };
   const dead = deadCardsOf(loc.ent);
   const sworn = loc.ent.sworn;
-  const g = removeEntity(game, entityId);
-  return { ...g, [loc.player]: {
-    ...g[loc.player],
-    dead: dead.length ? [...g[loc.player].dead, ...dead] : g[loc.player].dead,
-    hand: sworn ? [...g[loc.player].hand, sworn] : g[loc.player].hand,
-  } };
+  const transfer = itemTransferOf(loc.ent, loc.player);
+  const removed = removeEntity(game, entityId);
+  let g: GameState = { ...removed,
+    pendingItemTransferQueue: transfer ? [...removed.pendingItemTransferQueue, transfer] : removed.pendingItemTransferQueue,
+    [loc.player]: {
+      ...removed[loc.player],
+      dead: dead.length ? [...removed[loc.player].dead, ...dead] : removed[loc.player].dead,
+      hand: sworn ? [...removed[loc.player].hand, sworn] : removed[loc.player].hand,
+    } };
+  const msgs: string[] = [];
+  // Death triggers fire HERE, for every removal path uniformly. RULED 2026-07-08:
+  // a SACRIFICE is a death — it fires death/destroy triggers (Memory Stone included)
+  // exactly like dying to damage. Centralizing in the shared exit path covers ability
+  // costs, Coercion, Dismantle/anchor-loss, Manifest leave-sacrifice and the sandbox
+  // sacrifice without per-caller wiring. (Ready-phase decay is ALSO worded as a
+  // sacrifice but runs inside readyPlayer — no shipped construct carries a death
+  // trigger, so wiring it there is deferred and FLAGGED, not silently skipped.)
+  if (hasRemovalTrigger(loc.ent)) {
+    const rt = resolveRemovalTriggers(g, loc.ent, loc.player, sink, armorSink);
+    g = rt.game;
+    msgs.push(...rt.msgs);
+  }
+  return { game: g, msgs };
+}
+
+/** Eligible rescuers for one item of a transfer window, re-derived LIVE: ready
+ *  characters (not exhausted / major-tapped) in the controller's party, not already
+ *  exhausted this event, with an open slot of the appropriate type. Exported for the
+ *  ItemTransferModal. */
+export function itemTransferCandidates(game: GameState, it: PendingItemTransfer, itemId: string): string[] {
+  const card = CATALOG.find(c => c.id === itemId);
+  if (!card) return [];
+  const { isWeapon, isHeavy } = itemProfileOf(card);
+  return (Object.values(game[it.lp].board) as (BoardEntity | undefined)[])
+    .filter((e): e is BoardEntity => !!e && isCharacter(e)
+      && !(e.tapped === 'major' || e.exhausted)
+      && !it.usedIds.includes(e.id)
+      && canHoldItem(e, isWeapon, isHeavy))
+    .map(e => e.id);
+}
+
+/** Arm the next Item Transfer window from the queue. Held back while the Poison check
+ *  or an earlier forced prompt (peek / dead-pick / armor) is up — start-of-turn prompts
+ *  resolve in canonical Ready Phase step order, Poison BEFORE transfer windows (Rules
+ *  Note 2026-07-08) — every such resolver calls this again when it drains. Items whose
+ *  eligible-rescuer pool is empty simply stay in the Dead Zone (canon's default), so a
+ *  window with nothing claimable evaporates without a prompt. */
+function armNextItemTransfer(game: GameState): GameState {
+  if (game.pendingItemTransfer) return game;
+  if (game.pendingPoison || game.pendingPeek || game.pendingDeadPick || game.pendingArmor || game.pendingModalChoice) return game;
+  const queue = [...game.pendingItemTransferQueue];
+  while (queue.length) {
+    const req = queue.shift()!;
+    const items = req.items.filter(x => itemTransferCandidates(game, req, x.id).length > 0);
+    if (!items.length) continue; // nothing claimable — items rest in the Dead Zone
+    return { ...game, pendingItemTransfer: { ...req, items }, pendingItemTransferQueue: queue };
+  }
+  // Fell through the whole queue — every window evaporated (or it was empty).
+  return game.pendingItemTransferQueue.length ? { ...game, pendingItemTransferQueue: [] } : game;
 }
 
 /** Set a Player Character's HP. The PC board entity is the single source of truth,
@@ -485,12 +608,9 @@ function applyDamage(game: GameState, entityId: string, dmg: number, sourceName:
 
   if (newHp <= 0) {
     msgs.push(`${sourceName} destroys ${ent.name}!`);
-    let g = destroyEntity(game, entityId);
-    if (hasRemovalTrigger(ent)) {
-      const rt = resolveRemovalTriggers(g, ent, loc.player, sink, armorSink);
-      g = rt.game; msgs.push(...rt.msgs);
-    }
-    return { game: g, msgs };
+    const d = destroyEntity(game, entityId, sink, armorSink); // fires death triggers
+    msgs.push(...d.msgs);
+    return { game: d.game, msgs };
   }
   msgs.push(`${sourceName} hits ${ent.name} for ${dmg} (${newHp} HP left)`);
   return { game: updateEntity(game, entityId, { hp: newHp }), msgs };
@@ -574,11 +694,8 @@ function driveAttack(game: GameState, ctx: AttackCtx):
       if (aLoc.ent.kind === 'pc') {
         g = setPcHp(g, aLoc.player, ctx.charId, atkHp); // mirrors the headline; recoil at 0 HP loses the game
       } else if (atkHp <= 0) {
-        g = destroyEntity(g, ctx.charId);
-        if (hasRemovalTrigger(aLoc.ent)) {
-          const rt = resolveRemovalTriggers(g, aLoc.ent, aLoc.player, ctx.deadSink, ctx.armorSink);
-          g = rt.game; ctx.msgs.push(...rt.msgs);
-        }
+        const d = destroyEntity(g, ctx.charId, ctx.deadSink, ctx.armorSink); // fires death triggers
+        g = d.game; ctx.msgs.push(...d.msgs);
       } else {
         g = updateEntity(g, ctx.charId, { hp: atkHp });
       }
@@ -687,6 +804,42 @@ function charsOf(game: GameState, side: 'p1' | 'p2', row?: 'front' | 'back'): st
     .filter(([slot, e]) => e && (e.kind === 'companion' || e.kind === 'pc')
       && (row === undefined || (row === 'front') === isFront(slot)))
     .map(([, e]) => e!.id);
+}
+
+/** Would ANY of these NON-INTERACTIVE effects affect something right now? Ruled
+ *  2026-07-08: an ability that would affect nothing cannot be activated — this is the
+ *  pre-cost recipient check for auto-scoped group targets (interactive targets are
+ *  checked via eligibleTargets). Deliberately conservative: ops/scopes this doesn't
+ *  model count as "yes" so a new op can never be falsely refused. */
+function effectsWouldAffectSomething(game: GameState, lp: 'p1' | 'p2', effects: Effect[], selfId?: string): boolean {
+  const opp: 'p1' | 'p2' = lp === 'p1' ? 'p2' : 'p1';
+  for (const e of effects) {
+    switch (e.op) {
+      case 'damage':
+      case 'heal': {
+        const t = e.target;
+        if (t === 'allEnemies') { if (charsOf(game, opp).length) return true; break; }
+        if (t === 'frontLineEnemy') { if (charsOf(game, opp, 'front').length) return true; break; }
+        if (t === 'backLineEnemy') { if (charsOf(game, opp, 'back').length) return true; break; }
+        if (t === 'ownParty') { if (charsOf(game, lp).length) return true; break; }
+        if (t === 'ownCompanions') { if (companionIds(game, lp).length) return true; break; }
+        if (t === 'self') { if (selfId) return true; break; }
+        return true; // interactive / unmodeled scope — handled by the eligibleTargets path
+      }
+      case 'anchor': {
+        if (e.target === 'ownPhysicalConstructs') {
+          // The group op excludes the source itself (owner ruling 2026-07-03).
+          if ((Object.values(game[lp].board) as (BoardEntity | undefined)[])
+            .some(x => !!x && isPhysicalConstruct(x) && x.id !== selfId)) return true;
+          break;
+        }
+        return true;
+      }
+      default:
+        return true; // draw, buffs, dice, peeks… always meaningful (or unmodeled)
+    }
+  }
+  return false;
 }
 
 function pcIdOf(game: GameState, side: 'p1' | 'p2'): string | null {
@@ -870,24 +1023,26 @@ function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceName: stri
           if (!loc || loc.ent.kind === 'pc') continue; // can't bounce the Player Character
           const owner = loc.player;
           // Manifest (animated construct): sacrificed instead of returning to hand.
+          // Via destroyEntity so its card AND any equipped items reach the Dead Zone
+          // (the old inline removal LOST the items) and an Item Transfer window queues.
           if (loc.ent.statuses.includes('manifest')) {
-            const mc = CATALOG.find(c => c.name === loc.ent.name);
-            g = removeEntity(g, id);
-            if (mc) g = { ...g, [owner]: { ...g[owner], dead: [...g[owner].dead, mc] } };
-            msgs.push(`${loc.ent.name} is sacrificed (Manifest)`);
+            const d = destroyEntity(g, id, sink, armorSink); // sacrifice = death (fires triggers)
+            g = d.game;
+            msgs.push(`${loc.ent.name} is sacrificed (Manifest)`, ...d.msgs);
             continue;
           }
           const cardObj = CATALOG.find(c => c.name === loc.ent.name);
-          // Companions drop their items to the Dead Zone; constructs have none.
-          const items = [loc.ent.loadout?.weapon, ...(loc.ent.loadout?.gear ?? [])]
-            .filter((it): it is EquippedItem => !!it)
-            .map(it => CATALOG.find(c => c.name === it.name))
-            .filter((c): c is Card => !!c);
+          // Companions drop their items to the Dead Zone; constructs have none. A bounce
+          // is an exit, so it opens an Item Transfer window too (ruled 2026-07-08).
+          const items = itemCardsOf(loc.ent);
+          const transfer = itemTransferOf(loc.ent, owner);
           g = removeEntity(g, id);
-          g = { ...g, [owner]: { ...g[owner],
-            hand: cardObj ? [...g[owner].hand, cardObj] : g[owner].hand,
-            dead: items.length ? [...g[owner].dead, ...items] : g[owner].dead,
-          } };
+          g = { ...g,
+            pendingItemTransferQueue: transfer ? [...g.pendingItemTransferQueue, transfer] : g.pendingItemTransferQueue,
+            [owner]: { ...g[owner],
+              hand: cardObj ? [...g[owner].hand, cardObj] : g[owner].hand,
+              dead: items.length ? [...g[owner].dead, ...items] : g[owner].dead,
+            } };
           msgs.push(`${loc.ent.name} returns to ${owner === lp ? 'your' : "owner's"} hand`);
         }
         break;
@@ -938,7 +1093,11 @@ function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceName: stri
         if (!loc) break;
         const cur = loc.ent.anchors ?? 0;
         const next = Math.max(0, cur + e.delta);
-        if (e.delta < 0 && next <= 0) { g = destroyEntity(g, targetId); msgs.push(`${loc.ent.name} loses its last anchor — sacrificed!`); }
+        if (e.delta < 0 && next <= 0) {
+          const d = destroyEntity(g, targetId, sink, armorSink); // sacrifice = death (fires triggers)
+          g = d.game;
+          msgs.push(`${loc.ent.name} loses its last anchor — sacrificed!`, ...d.msgs);
+        }
         else { g = updateEntity(g, targetId, { anchors: next }); msgs.push(`${loc.ent.name} anchors ${cur} → ${next}`); }
         break;
       }
@@ -1170,7 +1329,10 @@ function armNextArmorChoice(game: GameState, queue: ArmorChoiceData[]): { game: 
 /** End-of-resolution patch arming any deferred Dead-Zone + Armor prompts. */
 function armPrompts(game: GameState, deadSink: PendingDeadPick[], armorSink: ArmorChoiceData[]): GameState {
   const a = armNextArmorChoice(game, armorSink);
-  return { ...a.game, ...armDeadPicks(deadSink), pendingArmor: a.pendingArmor };
+  // Item Transfer windows queued by destroyEntity during this resolution arm LAST —
+  // armNextItemTransfer holds itself back while the dead-pick/armor prompts just armed
+  // are up (their resolvers re-call it when they drain).
+  return armNextItemTransfer({ ...a.game, ...armDeadPicks(deadSink), pendingArmor: a.pendingArmor });
 }
 
 /**
@@ -1199,6 +1361,10 @@ export function reactiveHold(game: GameState, localPlayer: 'p1' | 'p2'): string 
   // The opponent's pre-attack pay-HP choice (Mara) — same clobber risk.
   const pac = game.pendingAttackChoice;
   if (pac && pac.lp !== localPlayer) return `${pac.sourceName} (attack choice)`;
+  // The opponent's Item Transfer window (e.g. the defender rescuing a killed bearer's
+  // items) — the active player waits so broadcasts don't clobber the resolution.
+  const it = game.pendingItemTransfer;
+  if (it && it.lp !== localPlayer) return `${it.sourceName}'s items (Item Transfer)`;
   return null;
 }
 
@@ -1298,7 +1464,14 @@ export function gatherActivated(ent: BoardEntity): ActivatedAbility[] {
   };
   push(ent.name, undefined, ent.name);
   const lo = ent.loadout;
-  if (lo) for (const it of [lo.weapon, ...lo.gear]) if (it) push(it.name, it.id, it.name);
+  // Dedup by item id — a heavy item occupies BOTH gear slots as the same object, and
+  // without this its ability would be listed (and offered) twice.
+  const seen = new Set<string>();
+  if (lo) for (const it of [lo.weapon, ...lo.gear]) {
+    if (!it || seen.has(it.id)) continue;
+    seen.add(it.id);
+    push(it.name, it.id, it.name);
+  }
   return out;
 }
 
@@ -1330,18 +1503,29 @@ function nextPeek(game: GameState, queue: PeekRequest[]): { peek: PendingPeek | 
  * here — they are collected for interactive modals queued after endTurn finishes.
  * Sources are snapshotted since the board may change.
  */
-function resolveStartOfTurn(game: GameState, side: 'p1' | 'p2'): { game: GameState; msgs: string[]; peeks: PeekRequest[]; deadPicks: PendingDeadPick[]; armorChoices: ArmorChoiceData[] } {
+function resolveStartOfTurn(game: GameState, side: 'p1' | 'p2'): { game: GameState; msgs: string[]; peeks: PeekRequest[]; deadPicks: PendingDeadPick[]; armorChoices: ArmorChoiceData[]; modals: PendingModalChoice[] } {
   let g = game;
   const msgs: string[] = [];
   const peeks: PeekRequest[] = [];
   const deadPicks: PendingDeadPick[] = [];
   const armorChoices: ArmorChoiceData[] = [];
+  const modals: PendingModalChoice[] = [];
   const ids = Object.values(g[side].board).filter((e): e is BoardEntity => !!e).map(e => e.id);
   for (const id of ids) {
     const loc = findEntityAnywhere(g, id);
     if (!loc) continue; // removed by an earlier effect this step
     const allEffs = permanentEffects(loc.ent, 'startOfTurn');
     if (allEffs.length === 0) continue;
+    // Defer MODAL clauses (Pyre of the Unbound) as an interactive choice prompt — the
+    // clause is read un-flattened because its optionality and sacrificeSelf cost are
+    // clause-level. The cost is paid at RESOLUTION (declining pays nothing).
+    for (const ce of effectsOfCard(loc.ent.name)) {
+      if (ce.trigger !== 'startOfTurn') continue;
+      const modalEff = ce.effects.find(e => e.op === 'modal');
+      if (!modalEff || modalEff.op !== 'modal') continue;
+      modals.push({ lp: side, sourceName: loc.ent.name, sourceId: id, options: modalEff.options,
+        cost: ce.cost?.kind === 'sacrificeSelf' ? 'sacrificeSelf' : undefined, optional: !!ce.optional });
+    }
     // Defer deck-peeks to the interactive modal (own deck for now; "any deck" choice deferred).
     for (const e of allEffs)
       if (e.op === 'deckPeek') peeks.push({ source: loc.ent.name, lp: side, deckSide: side, look: e.look, dests: e.dests, maxHand: e.maxHand });
@@ -1359,9 +1543,10 @@ function resolveStartOfTurn(game: GameState, side: 'p1' | 'p2'): { game: GameSta
       }
     }
     // Inline-resolve the remaining effects (everything before a deferred returnFromDead,
-    // minus deck-peeks). Library has none here; most start-of-turn sources hit this path.
+    // minus deck-peeks and deferred modal choices). Library has none here; most
+    // start-of-turn sources hit this path.
     const cutoff = rfdIdx >= 0 ? rfdIdx : allEffs.length;
-    const effs = allEffs.slice(0, cutoff).filter(e => e.op !== 'deckPeek');
+    const effs = allEffs.slice(0, cutoff).filter(e => e.op !== 'deckPeek' && e.op !== 'modal');
     if (effs.length === 0) continue;
     let targetId: string | undefined;
     const spec = actionTargetSpec(effs);
@@ -1374,7 +1559,12 @@ function resolveStartOfTurn(game: GameState, side: 'p1' | 'p2'): { game: GameSta
     g = r.game;
     if (r.msgs.length) msgs.push(`${loc.ent.name}: ${r.msgs.join(' | ')}`);
   }
-  return { game: g, msgs, peeks, deadPicks, armorChoices };
+  return { game: g, msgs, peeks, deadPicks, armorChoices, modals };
+}
+
+/** A card's clauses by name (un-flattened — clause-level fields like cost/optional intact). */
+function effectsOfCard(name: string): CardEffect[] {
+  return CATALOG.find(c => c.name === name)?.effects ?? [];
 }
 
 /** Does this Action need an interactive target chosen on the board before resolving? */
@@ -1570,6 +1760,10 @@ export function makeNewGame(
     pendingCoercion: null,
     pendingArmor: null,
     pendingAttackChoice: null,
+    pendingModalChoice: null,
+    pendingModalChoiceQueue: [],
+    pendingItemTransfer: null,
+    pendingItemTransferQueue: [],
     setupQueue: [...SETUP_SEQUENCE],
     p1: dealPlayer(p1Name, p1Cards, 'pc-p1'),
     p2: dealPlayer(p2Name, p2Cards, 'pc-p2'),
@@ -1705,6 +1899,11 @@ interface GameStoreState {
 
   // Activated abilities (on companions / equipped items)
   activateAbility: (entityId: string, idx: number) => void;
+  /** Sandbox affordance: sacrifice a permanent outright — a REAL exit (destroyEntity:
+   *  card + items to Dead Zone, sworn returns, Item Transfer window queues). The old
+   *  ✕-Sacrifice button faked this with adjustHp(-999), which clamps to 0 HP and
+   *  removes NOTHING — a silent no-op behind a success toast. */
+  sacrificeEntity: (entityId: string) => void;
 
   // Deck-peek (scry) resolution
   resolvePeek: (assignments: ('hand' | 'top' | 'bottom')[]) => void;
@@ -1715,6 +1914,20 @@ interface GameStoreState {
   /** Equip-from-hand: equip the chosen item card onto the pending target. */
   resolveEquipPick: (handCardId: string) => void;
   cancelEquipPick: () => void;
+
+  /** Start-of-turn modal choice (Pyre): pick option `idx` — pays the clause cost
+   *  (sacrificeSelf → a real death, ruled 2026-07-08) then resolves the chosen mode
+   *  (chaining into pendingActionTarget when it needs a target). */
+  resolveModalChoice: (idx: number) => void;
+  /** Decline an OPTIONAL modal choice — nothing is paid, nothing happens. */
+  declineModalChoice: () => void;
+
+  /** Item Transfer on Character Exit: exhaust `targetCharId` (a ready character with a
+   *  fitting open slot, once per event) to claim the window's HEAD item out of the
+   *  Dead Zone. */
+  resolveItemTransfer: (targetCharId: string) => void;
+  /** Decline the window's HEAD item — it simply stays in the Dead Zone. */
+  declineItemTransfer: () => void;
 
   // Action bookkeeping
   markAction: (entityId: string, type: 'move' | 'minor' | 'major') => void;
@@ -2095,19 +2308,24 @@ export const useGameStore = create<GameStoreState>()(
       const mv = pa.effects.find(e => e.op === 'moveAnchor');
       const count = mv && mv.op === 'moveAnchor' ? mv.count : 1;
       let g = s.game; const msgs: string[] = [];
+      const deadSink: PendingDeadPick[] = []; const armorSink: ArmorChoiceData[] = [];
       const srcLoc = findEntityAnywhere(g, pa.firstId);
       const dstLoc = findEntityAnywhere(g, targetId);
       if (srcLoc && dstLoc) {
         const moved = Math.min(count, srcLoc.ent.anchors ?? 0);
         g = updateEntity(g, targetId, { anchors: (dstLoc.ent.anchors ?? 0) + moved });
         const srcNext = (srcLoc.ent.anchors ?? 0) - moved;
-        if (srcNext <= 0) { g = destroyEntity(g, pa.firstId); msgs.push(`${srcLoc.ent.name} loses its last anchor — sacrificed!`); }
+        if (srcNext <= 0) {
+          const d = destroyEntity(g, pa.firstId, deadSink, armorSink); // sacrifice = death (fires triggers)
+          g = d.game;
+          msgs.push(`${srcLoc.ent.name} loses its last anchor — sacrificed!`, ...d.msgs);
+        }
         else g = updateEntity(g, pa.firstId, { anchors: srcNext });
         msgs.push(`Moved ${moved} anchor${moved !== 1 ? 's' : ''} ${srcLoc.ent.name} → ${dstLoc.ent.name}`);
       }
       const id = ++toastId;
       setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 4000);
-      return { game: recomputeStatics(g), pendingActionTarget: null, toasts: [...s.toasts, { id, msg: `${pa.sourceName}: ${msgs.join(' | ')}` }] };
+      return { game: recomputeStatics(armPrompts(g, deadSink, armorSink)), pendingActionTarget: null, toasts: [...s.toasts, { id, msg: `${pa.sourceName}: ${msgs.join(' | ')}` }] };
     }
     if (pa.twoStep === 'disarm' && pa.firstId) {
       // Step 2: attacker (firstId) attacks the chosen enemy, then sacrifice an item on it.
@@ -2174,20 +2392,27 @@ export const useGameStore = create<GameStoreState>()(
   }),
 
   activateAbility: (entityId, idx) => set(s => {
-    if (reactiveHold(s.game, s.localPlayer)) return s;
-    if (gameIsOver(s.game) || notActionPhase(s.game)) return s;
-    const loc = findEntityAnywhere(s.game, entityId);
-    if (!loc) return s;
-    const ability = gatherActivated(loc.ent)[idx];
-    if (!ability) return s;
-
+    // CATEGORICAL UX RULE (owner 2026-07-08): no gameplay click may ever silently do
+    // nothing — EVERY refusal in this gate surfaces a toast naming its reason. New
+    // abilities inherit this automatically because all activation flows through here.
     const toast = (msg: string) => {
       const tid = ++toastId;
       setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== tid) })), 4000);
       return { id: tid, msg };
     };
+    const refuse = (msg: string) => ({ toasts: [...s.toasts, toast(msg)] });
+
+    const hold = reactiveHold(s.game, s.localPlayer);
+    if (hold) return refuse(`Waiting for the opponent to resolve ${hold}.`);
+    if (gameIsOver(s.game)) return refuse('The game is over.');
+    if (notActionPhase(s.game)) return refuse('Not in the Action Phase — resolve the Class Zone Exchange (or Skip) first.');
+    const loc = findEntityAnywhere(s.game, entityId);
+    if (!loc) return refuse('That character is no longer on the board.');
+    const ability = gatherActivated(loc.ent)[idx];
+    if (!ability) return refuse('That ability is no longer available.');
+
     if (ability.oncePerTurn && loc.ent.statuses.includes(abilityUsedTag(ability.sourceName))) {
-      return { toasts: [...s.toasts, toast(`${ability.sourceName} already used this turn.`)] };
+      return refuse(`${ability.sourceName} already used this turn.`);
     }
 
     const player = loc.player;
@@ -2201,14 +2426,54 @@ export const useGameStore = create<GameStoreState>()(
         : loc.ent.fresh ? 'No Major Actions on its entry turn'
         : loc.ent.acts.major ? 'Major action already used'
         : isExhausted ? 'Exhausted' : null;
-      if (reason) return { toasts: [...s.toasts, toast(`Can't activate ${ability.sourceName}: ${reason}.`)] };
+      if (reason) return refuse(`Can't activate ${ability.sourceName}: ${reason}.`);
+    }
+
+    // ── Cost PAYABILITY — checked BEFORE paying anything (a kind can pass the
+    //    validator's shape check and still be unpayable; unpayable → refuse loudly,
+    //    never a silent fall-through and never a burnt cost). ────────────────────
+    const cost = ability.cost;
+    // Runtime guard: deck JSON is not type-checked — an unknown/unimplemented cost
+    // kind must refuse loudly, never fall through as a FREE ability. ('sacrifice'
+    // and 'discard' were REMOVED from the Cost schema per owner ruling 2026-07-08 —
+    // re-add together with engine support — so any occurrence is legacy/hand-edited
+    // data reaching runtime past the mint gate.)
+    if (cost && !['exhaustSelf', 'sacrificeSelf', 'payHP', 'removeAnchor'].includes(cost.kind)) {
+      return refuse(`Can't activate ${ability.sourceName}: its cost kind ("${(cost as { kind: string }).kind}") is not supported by the engine.`);
+    }
+    if (cost?.kind === 'exhaustSelf' && (loc.ent.exhausted || loc.ent.tapped === 'major')) {
+      return refuse(`Can't activate ${ability.sourceName}: already exhausted — the exhaust cost can't be paid.`);
+    }
+    if (cost?.kind === 'payHP' && loc.ent.hp <= cost.amount) {
+      // Never a lethal payment — same rule as Mara's optional on-attack cost.
+      return refuse(`Can't activate ${ability.sourceName}: not enough HP to pay ${cost.amount}.`);
+    }
+    if (cost?.kind === 'removeAnchor' && (loc.ent.anchors ?? 0) < cost.count) {
+      return refuse(`Can't activate ${ability.sourceName}: not enough Anchor counters to pay ${cost.count}.`);
+    }
+
+    // ── Target availability — ALSO before paying: an ability that needs a target
+    //    it doesn't have refuses up front (the old order paid first, so e.g. a Quill
+    //    with no construct in play sacrificed itself for nothing). ────────────────
+    const spec = actionTargetSpec(ability.effects);
+    if (spec && eligibleTargets(s.game, player, spec).filter(t => t !== entityId).length === 0) {
+      return refuse(`${ability.sourceName} — no legal target.`);
+    }
+    // RULED 2026-07-08 (universal pre-cost refusal): an ability that would affect
+    // NOTHING cannot be activated — non-interactive effects check their recipients
+    // up front too (e.g. Collapsing Tunnel with an empty enemy back line used to pay
+    // its sacrifice and whiff).
+    if (!spec && !effectsWouldAffectSomething(s.game, player, ability.effects, entityId)) {
+      return refuse(`${ability.sourceName} — it would affect nothing right now.`);
     }
 
     let g = s.game;
     let sacrificedSelf = false;
+    const costMsgs: string[] = [];
+    const deadSink: PendingDeadPick[] = [];
+    const armorSink: ArmorChoiceData[] = [];
 
     // ── Pay the cost ─────────────────────────────────────────────────────────
-    const cost = ability.cost;
     if (cost?.kind === 'sacrificeSelf') {
       if (ability.itemId) {
         const lo = loc.ent.loadout ?? { weapon: null, gear: [] };
@@ -2217,9 +2482,11 @@ export const useGameStore = create<GameStoreState>()(
         const itemCard = CATALOG.find(c => c.name === ability.sourceName);
         if (itemCard) g = { ...g, [player]: { ...g[player], dead: [...g[player].dead, itemCard] } };
       } else {
-        const selfCard = CATALOG.find(c => c.name === loc.ent.name);
-        g = removeEntity(g, entityId);
-        if (selfCard) g = { ...g, [player]: { ...g[player], dead: [...g[player].dead, selfCard] } };
+        // Self-sacrifice is an EXIT like any other — destroyEntity moves the card AND
+        // its items to the Dead Zone, returns a sworn card, queues the Item Transfer
+        // window, and (ruled 2026-07-08: sacrifice IS a death) fires death triggers.
+        const d = destroyEntity(g, entityId, deadSink, armorSink);
+        g = d.game; costMsgs.push(...d.msgs);
         sacrificedSelf = true;
       }
     } else if (cost?.kind === 'exhaustSelf') {
@@ -2227,7 +2494,16 @@ export const useGameStore = create<GameStoreState>()(
     } else if (cost?.kind === 'payHP') {
       g = updateEntity(g, entityId, { hp: Math.max(0, loc.ent.hp - cost.amount) });
     } else if (cost?.kind === 'removeAnchor') {
-      g = updateEntity(g, entityId, { anchors: Math.max(0, (loc.ent.anchors ?? 0) - cost.count) });
+      const left = (loc.ent.anchors ?? 0) - cost.count;
+      // Paying the LAST anchor sacrifices the construct — consistent with the anchor
+      // effect op and the decay rule ("sacrifice when last removed"). Engine default;
+      // no shipped card pays this cost yet (flagged to the owner).
+      if (left <= 0) {
+        const d = destroyEntity(g, entityId, deadSink, armorSink); // sacrifice = death
+        g = d.game; costMsgs.push(...d.msgs);
+      } else {
+        g = updateEntity(g, entityId, { anchors: left });
+      }
     }
 
     // Mark once-per-turn (only if the source is still around).
@@ -2247,23 +2523,48 @@ export const useGameStore = create<GameStoreState>()(
     // (and any other character mid-activation). Constructs are exempt.
     if (isCharacter(loc.ent)) g = { ...g, ...activationPatch(s.game, entityId) };
 
-    const selfId = sacrificedSelf ? undefined : entityId;
+    // The source may have left play paying its cost (sacrificeSelf, last-anchor pay).
+    const selfId = findEntityAnywhere(g, entityId) ? entityId : undefined;
 
     // ── Resolve the effect (target or immediate) ─────────────────────────────
-    const spec = actionTargetSpec(ability.effects);
     if (spec) {
+      // Re-derive against the post-cost board (the pre-cost check above guarantees
+      // this is non-empty except for the vanishing edge where paying the cost itself
+      // removed the last target — then the toast below still names the outcome).
       const eligibleIds = eligibleTargets(g, player, spec).filter(t => t !== entityId);
       if (eligibleIds.length === 0) {
-        return { game: g, toasts: [...s.toasts, toast(`${ability.sourceName} — no legal target.`)] };
+        return { game: armPrompts(g, deadSink, armorSink), toasts: [...s.toasts, toast(`${ability.sourceName} — no legal target left after paying the cost.`)] };
       }
+      // Arm any death-trigger picks / transfer windows the COST produced (the target
+      // pick coexists with them; armNextItemTransfer holds rescues behind dead-picks).
       return {
-        game: g,
+        game: armPrompts(g, deadSink, armorSink),
         pendingActionTarget: { source: 'ability', sourceName: ability.sourceName, lp: player, effects: ability.effects, eligibleIds, sourceId: selfId },
       };
     }
+    const r = resolveActionEffects(g, player, ability.sourceName, ability.effects, undefined, selfId, undefined, deadSink, armorSink);
+    const allMsgs = [...costMsgs, ...r.msgs];
+    // An immediate resolution that produced no messages had nothing to affect —
+    // say so instead of a bare source-name toast (silent-whiff honesty; should be
+    // unreachable for known ops now that would-affect-nothing refuses pre-cost).
+    return { game: armPrompts(r.game, deadSink, armorSink),
+      toasts: [...s.toasts, toast(allMsgs.length ? `${ability.sourceName}: ${allMsgs.join(' | ')}` : `${ability.sourceName}: no effect (nothing valid to affect).`)] };
+  }),
+
+  // ── Sandbox: sacrifice a permanent outright (a real exit — see interface note) ──
+  sacrificeEntity: (entityId) => set(s => {
+    if (gameIsOver(s.game)) return s;
+    const loc = findEntityAnywhere(s.game, entityId);
+    if (!loc || loc.ent.kind === 'pc') return s; // never the PC (losing it ends the game)
+    const name = loc.ent.name;
+    const deadSink: PendingDeadPick[] = [];
     const armorSink: ArmorChoiceData[] = [];
-    const r = resolveActionEffects(g, player, ability.sourceName, ability.effects, undefined, selfId, undefined, undefined, armorSink);
-    return { game: armPrompts(r.game, [], armorSink), toasts: [...s.toasts, toast(r.msgs.length ? `${ability.sourceName}: ${r.msgs.join(' | ')}` : ability.sourceName)] };
+    const d = destroyEntity(s.game, entityId, deadSink, armorSink); // sacrifice = death (ruled 2026-07-08)
+    const g = armPrompts(d.game, deadSink, armorSink);
+    const id = ++toastId;
+    setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 3000);
+    return { game: recomputeStatics({ ...g, selected: s.game.selected === entityId ? null : s.game.selected }),
+      toasts: [...s.toasts, { id, msg: [`${name} sacrificed.`, ...d.msgs].join(' | ') }] };
   }),
 
   // Cancel a pending target. Action cards return to hand; on-enter effects just fizzle.
@@ -2307,7 +2608,7 @@ export const useGameStore = create<GameStoreState>()(
     const newGame = { ...s.game, [side]: { ...ps, deck: newDeck, hand: pk.lp === side ? [...s.game[pk.lp].hand, ...toHand] : ps.hand } };
     const { peek, rest } = nextPeek(newGame, s.game.pendingPeekQueue); // advance any queued start-of-turn peeks
     return {
-      game: { ...newGame, pendingPeek: peek, pendingPeekQueue: rest },
+      game: armNextItemTransfer({ ...newGame, pendingPeek: peek, pendingPeekQueue: rest }),
       toasts: [...s.toasts, { id, msg: `${pk.source}: ${parts.join(', ')}` }],
     };
   }),
@@ -2320,7 +2621,7 @@ export const useGameStore = create<GameStoreState>()(
     // controls both seats, so it may always cancel.)
     if (s.conn.mode !== 'solo' && pk.lp !== s.localPlayer) return s;
     const { peek, rest } = nextPeek(s.game, s.game.pendingPeekQueue);
-    return { game: { ...s.game, pendingPeek: peek, pendingPeekQueue: rest } };
+    return { game: armNextItemTransfer({ ...s.game, pendingPeek: peek, pendingPeekQueue: rest }) };
   }),
 
   // ── Dead-Zone recovery (Library of Memory) ────────────────────────────────
@@ -2337,7 +2638,7 @@ export const useGameStore = create<GameStoreState>()(
     const card = liveIdx >= 0 ? ps.dead[liveIdx] : undefined;
     if (!card) { // the card is no longer in the Dead Zone — skip and advance the queue
       const [next, ...rest] = s.game.pendingDeadPickQueue;
-      return { game: { ...s.game, pendingDeadPick: next ?? null, pendingDeadPickQueue: rest } };
+      return { game: armNextItemTransfer({ ...s.game, pendingDeadPick: next ?? null, pendingDeadPickQueue: rest }) };
     }
     const taken: GameState = { ...s.game, [dp.lp]: { ...ps, dead: ps.dead.filter((_, i) => i !== liveIdx), hand: [...ps.hand, card] } };
     let g = taken;
@@ -2351,7 +2652,7 @@ export const useGameStore = create<GameStoreState>()(
       const { isWeapon, isHeavy } = itemProfileOf(card);
       if (!wearer || !canHoldItem(wearer.ent, isWeapon, isHeavy)) {
         const [next, ...rest] = s.game.pendingDeadPickQueue;
-        return { game: { ...s.game, pendingDeadPick: next ?? null, pendingDeadPickQueue: rest } };
+        return { game: armNextItemTransfer({ ...s.game, pendingDeadPick: next ?? null, pendingDeadPickQueue: rest }) };
       }
       g = equipOnto(taken, dp.lp, dp.attachTo.id, card);
       msgs.push(`Returned ${card.name} from the Dead Zone — attached to ${wearer.ent.name}`);
@@ -2364,7 +2665,7 @@ export const useGameStore = create<GameStoreState>()(
     setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 4000);
     // Advance to the next queued prompt, if any (e.g. a Cleave that killed two bearers).
     const [next, ...rest] = s.game.pendingDeadPickQueue;
-    return { game: { ...g, pendingDeadPick: next ?? null, pendingDeadPickQueue: rest }, toasts: [...s.toasts, { id, msg: `${dp.source}: ${msgs.join(' | ')}` }] };
+    return { game: armNextItemTransfer({ ...g, pendingDeadPick: next ?? null, pendingDeadPickQueue: rest }), toasts: [...s.toasts, { id, msg: `${dp.source}: ${msgs.join(' | ')}` }] };
   }),
 
   cancelDeadPick: () => set(s => {
@@ -2374,7 +2675,7 @@ export const useGameStore = create<GameStoreState>()(
     // opponent's recovery pick. (The owner keeps the escape-hatch cancel.)
     if (s.conn.mode !== 'solo' && dp.lp !== s.localPlayer) return s;
     const [next, ...rest] = s.game.pendingDeadPickQueue;
-    return { game: { ...s.game, pendingDeadPick: next ?? null, pendingDeadPickQueue: rest } };
+    return { game: armNextItemTransfer({ ...s.game, pendingDeadPick: next ?? null, pendingDeadPickQueue: rest }) };
   }),
 
   // ── Equip from hand (Veteran of the Ashgrove on-enter) ────────────────────
@@ -2391,6 +2692,114 @@ export const useGameStore = create<GameStoreState>()(
   }),
 
   cancelEquipPick: () => set({ pendingEquipPick: null }),
+
+  // ── Start-of-turn modal choice (Pyre of the Unbound) ───────────────────────────
+  resolveModalChoice: (idx) => set(s => {
+    if (gameIsOver(s.game)) return s;
+    const pm = s.game.pendingModalChoice;
+    if (!pm) return s;
+    if (s.conn.mode !== 'solo' && pm.lp !== s.localPlayer) return s; // owner-only
+    const option = pm.options[idx];
+    if (!option) return s;
+    const toast = (msg: string) => {
+      const tid = ++toastId;
+      setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== tid) })), 4000);
+      return { id: tid, msg };
+    };
+
+    // RULED 2026-07-08 (universal pre-cost refusal): a mode that would affect nothing
+    // cannot be chosen — the prompt stays up so another mode (or Decline) can be picked.
+    const spec = actionTargetSpec(option.effects);
+    if (spec && eligibleTargets(s.game, pm.lp, spec).filter(t => t !== pm.sourceId).length === 0) {
+      return { toasts: [...s.toasts, toast(`${pm.sourceName}: that mode has no legal target.`)] };
+    }
+    if (!spec && !effectsWouldAffectSomething(s.game, pm.lp, option.effects, pm.sourceId)) {
+      return { toasts: [...s.toasts, toast(`${pm.sourceName}: that mode would affect nothing right now.`)] };
+    }
+
+    let g: GameState = { ...s.game, pendingModalChoice: null };
+    const msgs: string[] = [];
+    const deadSink: PendingDeadPick[] = [];
+    const armorSink: ArmorChoiceData[] = [];
+    // Pay the clause cost now (choosing a mode commits the "you may").
+    if (pm.cost === 'sacrificeSelf') {
+      const d = destroyEntity(g, pm.sourceId, deadSink, armorSink); // sacrifice = death (fires triggers)
+      g = d.game;
+      msgs.push(`${pm.sourceName} is sacrificed`, ...d.msgs);
+    }
+    const [nextModal, ...restModals] = g.pendingModalChoiceQueue;
+    g = { ...g, pendingModalChoice: nextModal ?? null, pendingModalChoiceQueue: restModals };
+
+    if (spec) {
+      const eligibleIds = eligibleTargets(g, pm.lp, spec).filter(t => t !== pm.sourceId);
+      if (eligibleIds.length) {
+        const id2 = ++toastId;
+        setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id2) })), 4000);
+        return {
+          game: armPrompts(g, deadSink, armorSink),
+          pendingActionTarget: { source: 'ability', sourceName: pm.sourceName, lp: pm.lp, effects: option.effects, eligibleIds, sourceId: undefined },
+          toasts: [...s.toasts, { id: id2, msg: msgs.join(' | ') || `${pm.sourceName}: choose a target` }],
+        };
+      }
+      // Vanishing edge: paying the cost removed the last target.
+      return { game: armPrompts(g, deadSink, armorSink), toasts: [...s.toasts, toast(`${pm.sourceName} — no legal target left after paying the cost.`)] };
+    }
+    const r = resolveActionEffects(g, pm.lp, pm.sourceName, option.effects, undefined, undefined, undefined, deadSink, armorSink);
+    msgs.push(...r.msgs);
+    return { game: recomputeStatics(armPrompts(r.game, deadSink, armorSink)),
+      toasts: [...s.toasts, toast(`${pm.sourceName}: ${msgs.join(' | ')}`)] };
+  }),
+
+  declineModalChoice: () => set(s => {
+    if (gameIsOver(s.game)) return s;
+    const pm = s.game.pendingModalChoice;
+    if (!pm || !pm.optional) return s; // only "you may" clauses can be declined
+    if (s.conn.mode !== 'solo' && pm.lp !== s.localPlayer) return s;
+    const [next, ...rest] = s.game.pendingModalChoiceQueue;
+    return { game: armNextItemTransfer({ ...s.game, pendingModalChoice: next ?? null, pendingModalChoiceQueue: rest }) };
+  }),
+
+  // ── Item Transfer on Character Exit (rules §Items; ruled 2026-07-08: all exits) ──
+  resolveItemTransfer: (targetCharId) => set(s => {
+    if (gameIsOver(s.game)) return s;
+    const it = s.game.pendingItemTransfer;
+    if (!it || !it.items.length) return s;
+    // Owner-only (sandbox controls both seats): the departing character's controller chooses.
+    if (s.conn.mode !== 'solo' && it.lp !== s.localPlayer) return s;
+    const head = it.items[0];
+    if (!itemTransferCandidates(s.game, it, head.id).includes(targetCharId)) return s;
+    const target = findEntityAnywhere(s.game, targetCharId);
+    const card = s.game[it.lp].dead.find(c => c.id === head.id);
+    if (!target || !card) return s; // claimed/removed since arming — stale click
+    const deadIdx = s.game[it.lp].dead.indexOf(card);
+    let g: GameState = { ...s.game, pendingItemTransfer: null,
+      [it.lp]: { ...s.game[it.lp], dead: s.game[it.lp].dead.filter((_, i) => i !== deadIdx) } };
+    g = equipOnto(g, it.lp, targetCharId, card);
+    // Exhausting is the COST — the rescuer's actions are untouched, but it cannot
+    // attack or activate until it readies. tapped:'major' so the card renders rotated.
+    g = updateEntity(g, targetCharId, { exhausted: true, tapped: 'major' });
+    // Remaining items continue the SAME event (front of the queue keeps usedIds);
+    // armNextItemTransfer re-filters against the shrunken rescuer pool.
+    const rest: PendingItemTransfer = { ...it, items: it.items.slice(1), usedIds: [...it.usedIds, targetCharId] };
+    if (rest.items.length) g = { ...g, pendingItemTransferQueue: [rest, ...g.pendingItemTransferQueue] };
+    g = armNextItemTransfer(g);
+    const id = ++toastId;
+    setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 4000);
+    return { game: recomputeStatics(g),
+      toasts: [...s.toasts, { id, msg: `Item Transfer: ${target.ent.name} exhausts to take up ${card.name}` }] };
+  }),
+
+  declineItemTransfer: () => set(s => {
+    if (gameIsOver(s.game)) return s;
+    const it = s.game.pendingItemTransfer;
+    if (!it || !it.items.length) return s;
+    if (s.conn.mode !== 'solo' && it.lp !== s.localPlayer) return s;
+    // The declined item is already in the Dead Zone — just advance.
+    const rest: PendingItemTransfer = { ...it, items: it.items.slice(1) };
+    let g: GameState = { ...s.game, pendingItemTransfer: null };
+    if (rest.items.length) g = { ...g, pendingItemTransferQueue: [rest, ...g.pendingItemTransferQueue] };
+    return { game: armNextItemTransfer(g) };
+  }),
 
   // ── Class Zone exchange ─────────────────────────────────────────────────────
   czToHand: (czCardId) => set(s => {
@@ -2451,6 +2860,10 @@ export const useGameStore = create<GameStoreState>()(
       // Old saves stored a winner NAME in gameOver; only the side form is valid now.
       gameOver: sg.gameOver === 'p1' || sg.gameOver === 'p2' ? sg.gameOver : null,
       pendingPeek: null, pendingPeekQueue: [], pendingDeadPick: null, pendingDeadPickQueue: [], pendingPoison: null, pendingCoercion: null, pendingArmor: null, pendingAttackChoice: null,
+      // Transfer windows are safe to drop: the items already sit in the Dead Zone.
+      // Modal choices too: the cost is unpaid until resolved, so nothing is lost.
+      pendingItemTransfer: null, pendingItemTransferQueue: [],
+      pendingModalChoice: null, pendingModalChoiceQueue: [],
     };
     return { game, playPhase: 'game', conn: { ...EMPTY_CONN, mode: 'solo', code: 'RESUMED' }, localPlayer: 'p1' as const, ...LOCAL_PROMPTS_CLEARED };
   }),
@@ -2564,9 +2977,11 @@ export const useGameStore = create<GameStoreState>()(
       return { ...toast('Just entered — cannot attack until next turn (no Zealous).') };
     }
 
-    // Attack eligibility: must be in Front Line unless Ranged
+    // Attack eligibility: must be in Front Line unless Ranged — or covered by a
+    // Watchtower-style aura (back-line COMPANIONS may attack as if Ranged).
     const hasRanged = effectiveKeywords(ent, s.game).includes('Ranged');
-    if (!hasRanged && !isFront(attLoc.slot)) {
+    const towerCovered = ent.kind === 'companion' && hasBackLineAttackAura(s.game, attLoc.player);
+    if (!hasRanged && !towerCovered && !isFront(attLoc.slot)) {
       return { ...toast('Must be in the Front Line to attack (no Ranged).') };
     }
 
@@ -2679,7 +3094,7 @@ export const useGameStore = create<GameStoreState>()(
     if (!pa.ctx) {
       const r = applyArmorCounter(s.game, pa.entityId, pieceId);
       const next = armNextArmorChoice(r.game, pa.queue ?? []);
-      return { game: { ...next.game, pendingArmor: next.pendingArmor }, toasts: [...s.toasts, mkToast(r.msgs.join(' | '))] };
+      return { game: armNextItemTransfer({ ...next.game, pendingArmor: next.pendingArmor }), toasts: [...s.toasts, mkToast(r.msgs.join(' | '))] };
     }
 
     // Combat: resume the paused attack on a cloned ctx (the stored one is synced state).
@@ -2726,6 +3141,8 @@ export const useGameStore = create<GameStoreState>()(
     const cur = loc.ent.anchors ?? 0;
     let game = s.game;
     let msg: string;
+    const deadSink: PendingDeadPick[] = [];
+    const armorSink: ArmorChoiceData[] = [];
     if (pt.kind === 'reinforce') {
       const next = cur + pt.n;
       game = updateEntity(game, targetId, { anchors: next });
@@ -2733,8 +3150,9 @@ export const useGameStore = create<GameStoreState>()(
     } else {
       const next = Math.max(0, cur - pt.n);
       if (next <= 0) {
-        game = destroyEntity(game, targetId);
-        msg = `${pt.sourceName} dismantles ${loc.ent.name} — no anchors left, sacrificed!`;
+        const d = destroyEntity(game, targetId, deadSink, armorSink); // sacrifice = death (fires triggers)
+        game = d.game;
+        msg = [`${pt.sourceName} dismantles ${loc.ent.name} — no anchors left, sacrificed!`, ...d.msgs].join(' | ');
       } else {
         game = updateEntity(game, targetId, { anchors: next });
         msg = `${pt.sourceName} dismantles ${loc.ent.name}: ${cur} → ${next} anchors.`;
@@ -2742,7 +3160,7 @@ export const useGameStore = create<GameStoreState>()(
     }
     const id = ++toastId;
     setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 3000);
-    return { pendingTrigger: null, game: recomputeStatics(game), toasts: [...s.toasts, { id, msg }] };
+    return { pendingTrigger: null, game: recomputeStatics(armPrompts(game, deadSink, armorSink)), toasts: [...s.toasts, { id, msg }] };
   }),
 
   cancelTrigger: () => set({ pendingTrigger: null }),
@@ -3176,7 +3594,9 @@ export const useGameStore = create<GameStoreState>()(
       const pcLoc = pcId ? findEntityAnywhere(g, pcId) : null;
       if (pcLoc) g = setPcHp(g, player, pcLoc.ent.id, Math.max(0, pcLoc.ent.hp - dmg));
     }
-    return { game: { ...g, pendingPoison: null } };
+    // Poison resolved — Item Transfer windows may now arm (Rules Note 2026-07-08:
+    // the Poison check resolves BEFORE any transfer window).
+    return { game: armNextItemTransfer({ ...g, pendingPoison: null }) };
   }),
 
   // ── Coercion resolution (the VICTIM's choice: discard or sacrifice) ────────
@@ -3206,12 +3626,10 @@ export const useGameStore = create<GameStoreState>()(
     if (!loc || loc.player !== co.victim || loc.ent.kind === 'pc') return s;
     const deadSink: PendingDeadPick[] = [];
     const armorSink: ArmorChoiceData[] = [];
-    let g = destroyEntity({ ...s.game, pendingCoercion: null }, entityId);
-    const msgs = [`${loc.ent.name} is sacrificed (Coercion)`];
-    if (hasRemovalTrigger(loc.ent)) {
-      const rt = resolveRemovalTriggers(g, loc.ent, loc.player, deadSink, armorSink);
-      g = rt.game; msgs.push(...rt.msgs);
-    }
+    // Sacrifice IS a death (ruled 2026-07-08) — destroyEntity fires the triggers.
+    const d = destroyEntity({ ...s.game, pendingCoercion: null }, entityId, deadSink, armorSink);
+    const g = d.game;
+    const msgs = [`${loc.ent.name} is sacrificed (Coercion)`, ...d.msgs];
     const id = ++toastId;
     setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 4000);
     return { game: recomputeStatics(armPrompts(g, deadSink, armorSink)),
@@ -3242,6 +3660,7 @@ export const useGameStore = create<GameStoreState>()(
 
     // Cards leaving the board at ready phase used to vanish silently — surface each one.
     const readyNotices: string[] = [];
+    const readyTransfers: PendingItemTransfer[] = [];
     const whose = nextPlayer === s.localPlayer ? 'Your' : "Opponent's";
 
     const readyPlayer = (ps: PlayerState): PlayerState => {
@@ -3259,7 +3678,14 @@ export const useGameStore = create<GameStoreState>()(
       // the Dead Zone with their items; a tucked Oathsworn card returns to hand.
       const buried: Card[] = [];
       const returnedSworn: Card[] = [];
-      const bury = (ent: BoardEntity) => { buried.push(...deadCardsOf(ent)); if (ent.sworn) returnedSworn.push(ent.sworn); };
+      const bury = (ent: BoardEntity) => {
+        buried.push(...deadCardsOf(ent));
+        if (ent.sworn) returnedSworn.push(ent.sworn);
+        // A ready-phase exit (fleeing companion) opens an Item Transfer window for the
+        // readied player. Constructs return null (they carry no items).
+        const t = itemTransferOf(ent, nextPlayer);
+        if (t) readyTransfers.push(t);
+      };
       for (const [slot, ent] of Object.entries(ps.board)) {
         if (!ent) continue;
         // Anchor decay for constructs (also ready them: clear exhaust/tap + once-per-turn
@@ -3381,13 +3807,22 @@ export const useGameStore = create<GameStoreState>()(
     newGame = armorRes.game;
 
     setTimeout(() => get().saveGame(), 0);
+    // Item Transfer windows (fled companions + any queued exits) arm LAST among the
+    // turn-start prompts: armNextItemTransfer holds itself back while the Poison check
+    // or a peek/dead-pick/armor prompt is up (Rules Note 2026-07-08 — Poison first).
+    const [firstModal, ...modalChoiceQueue] = sot.modals;
     return {
       pending: null, pendingPlay: null,
-      game: { ...newGame,
+      game: armNextItemTransfer({ ...newGame,
         pendingPeek: firstPeek, pendingPeekQueue: peekQueue,
         pendingDeadPick: firstDeadPick ?? null, pendingDeadPickQueue: deadPickQueue,
         pendingArmor: armorRes.pendingArmor,
-        pendingPoison },
+        pendingPoison,
+        // Start-of-turn modal choices (Pyre) — the ModalChoiceHost render-gates behind
+        // the Poison/peek/dead-pick prompts so the dialogs never stack.
+        pendingModalChoice: firstModal ?? null,
+        pendingModalChoiceQueue: modalChoiceQueue,
+        pendingItemTransferQueue: [...newGame.pendingItemTransferQueue, ...readyTransfers] }),
       modalQueue: s.modalQueue,
       toasts: [...s.toasts, { id: drawId, msg: drawToast }, ...sotToasts],
     };

@@ -25,6 +25,11 @@ export interface RawCard {
   /** Structured card behavior. Optional — absent on cards not yet wired; the
    *  interpreter no-ops when missing, so unauthored cards keep current behavior. */
   effects?: CardEffect[];
+  /** OWNER-APPROVED exemption from the validator's prose-completeness check: rules
+   *  text that deliberately carries no structured effects. The string states WHY
+   *  (dated) — never set without an explicit owner ruling (check added 2026-07-08:
+   *  a prose-only card must not mint silently). */
+  effectsFlag?: string;
   createdAt?: string;
   updatedAt?: string;
 }

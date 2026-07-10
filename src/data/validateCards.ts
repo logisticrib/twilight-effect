@@ -20,6 +20,7 @@
 import type { Card } from '../types/card';
 import type { Trigger, TargetSpec, Effect, Condition, Cost, Modifier, CardEffect } from '../types/effects';
 import { KEYWORDS } from './keywordRegistry';
+import { KEYWORD_DEFS } from './keywords';
 
 type AssertNever<T extends never> = T;
 
@@ -47,13 +48,16 @@ const OPS = [
   'anchor', 'sacrifice', 'sacrificeItem', 'equipFromHand', 'animate', 'dieCheck',
   'attackDisarm', 'moveAnchor', 'attackBonus', 'magicDamageBonus', 'preventAnchorDecay',
   'lineWard', 'exhaustSelf', 'modal', 'gainControl', 'suppressKeywords', 'counterAction',
+  'grantKeywords', 'backLineAttack',
 ] as const satisfies readonly Effect['op'][];
 export type _ExhaustiveOps = AssertNever<Exclude<Effect['op'], (typeof OPS)[number]>>;
 
 const MODIFIERS = ['hpFloor1', 'cannotBeMoved', 'cannotAttack', 'doesNotReady'] as const satisfies readonly Modifier[];
 export type _ExhaustiveModifiers = AssertNever<Exclude<Modifier, (typeof MODIFIERS)[number]>>;
 
-const COST_KINDS = ['exhaustSelf', 'sacrificeSelf', 'sacrifice', 'payHP', 'discard', 'removeAnchor'] as const satisfies readonly Cost['kind'][];
+// 'sacrifice'/'discard' removed from the schema 2026-07-08 (owner ruling — no engine
+// payment path existed; re-add with engine support). They now fail as unknown kinds.
+const COST_KINDS = ['exhaustSelf', 'sacrificeSelf', 'payHP', 'removeAnchor'] as const satisfies readonly Cost['kind'][];
 export type _ExhaustiveCosts = AssertNever<Exclude<Cost['kind'], (typeof COST_KINDS)[number]>>;
 
 const CONDITION_KINDS = [
@@ -90,13 +94,13 @@ function validCondition(c: unknown): boolean {
   return !!c && typeof c === 'object' && has(CONDITION_KINDS, (c as { kind?: unknown }).kind);
 }
 
+/* validCost: 'sacrifice'/'discard' shapes were removed from the schema (2026-07-08). */
 function validCost(c: unknown): boolean {
   if (!c || typeof c !== 'object') return false;
   const cost = c as Record<string, unknown>;
   if (!has(COST_KINDS, cost.kind)) return false;
   if (cost.kind === 'payHP' && !isInt(cost.amount)) return false;
-  if ((cost.kind === 'discard' || cost.kind === 'removeAnchor') && !isInt(cost.count)) return false;
-  if (cost.kind === 'sacrifice' && !has(TARGET_SPECS, cost.target)) return false;
+  if (cost.kind === 'removeAnchor' && !isInt(cost.count)) return false;
   return true;
 }
 
@@ -188,6 +192,69 @@ function validateEffect(e: Effect, path: string, p: (msg: string) => void, keywo
       target('scope');
       if (e.where?.line !== undefined && e.where.line !== 'front' && e.where.line !== 'back') p(`${path}(suppressKeywords): bad where.line`);
       break;
+    case 'grantKeywords':
+      target('scope');
+      if (!Array.isArray(e.keywords) || e.keywords.length === 0) p(`${path}(grantKeywords): needs at least one keyword`);
+      for (const g of e.keywords ?? []) if (!(keywordBase(g) in keywords)) p(`${path}(grantKeywords): grants unknown keyword "${g}"`);
+      if (e.where?.line !== undefined && e.where.line !== 'front' && e.where.line !== 'back') p(`${path}(grantKeywords): bad where.line`);
+      break;
+    case 'backLineAttack':
+      break; // no parameters
+  }
+}
+
+// ── Prose completeness (2026-07-08) ────────────────────────────────────────────
+/** Comparison tokens: lowercase words of ≥3 letters (digits/punctuation dropped, so
+ *  keyword parameters like "Armor 2" / "Reinforce 3" never affect matching). */
+const proseTokens = (s: string): string[] =>
+  s.toLowerCase().replace(/[^a-z\s]/g, ' ').split(/\s+/).filter(w => w.length > 2);
+
+/** Remove every keyword NAME (registry-wide) plus the text-parsed item properties
+ *  (Heavy / Two-Handed / One-Handed) from a sentence — what survives is candidate
+ *  rules prose. Case-insensitive literal removal (no regex-escaping pitfalls). */
+function stripKeywordNames(sentence: string): string {
+  let t = ` ${sentence} `;
+  for (const n of [...Object.keys(KEYWORD_DEFS), 'Heavy', 'Two-Handed', 'One-Handed']) {
+    const low = n.toLowerCase();
+    for (;;) {
+      const i = t.toLowerCase().indexOf(low);
+      if (i < 0) break;
+      t = t.slice(0, i) + ' ' + t.slice(i + n.length);
+    }
+  }
+  return t.replace(/\b\w+'s bane\b/gi, ' ');
+}
+
+/**
+ * A card whose rules text implies behavior beyond its keywords MUST carry effects, or
+ * an explicit owner-approved `effectsFlag` — added 2026-07-08 after Pyre of the
+ * Unbound shipped with rich rules text and NO effects field, invisible to every
+ * effects-driven audit (a prose-only card must never mint silently again).
+ *
+ * Reminder text is exempt: parentheticals always; otherwise a sentence counts as
+ * reminder iff ≥75% of its vocabulary is contained in one of the card's DECLARED
+ * keywords' CANONICAL definitions (KEYWORD_DEFS quotes Master_Keyword_List.md
+ * verbatim — that being canon is load-bearing here, not cosmetic). Clause-level
+ * completeness of cards that DO carry effects is not mechanically decidable — that
+ * remains human triage (see the 2026-07-08 authoring-gap sweep).
+ */
+function proseCompletenessProblems(card: Card, p: (msg: string) => void): void {
+  if ((card.effects?.length ?? 0) > 0) return;
+  if (card.effectsFlag) return;
+  const text = (card.text ?? '').replace(/\([^)]*\)/g, ' ');
+  const defs = (card.keywords ?? [])
+    .map(k => KEYWORD_DEFS[keywordBase(k)])
+    .filter((d): d is string => !!d)
+    .map(d => new Set(proseTokens(d)));
+  const offending = text.split(/(?<=[.!?])\s+/)
+    .map(s => s.trim())
+    .filter(sen => {
+      const toks = proseTokens(stripKeywordNames(sen));
+      if (toks.length === 0) return false; // keyword names / parameters only
+      return !defs.some(def => toks.filter(w => def.has(w)).length / toks.length >= 0.75);
+    });
+  if (offending.length) {
+    p(`prose-only: rules text implies behavior beyond its keywords but the card has NO effects — author them or add an owner-approved effectsFlag. Offending: "${offending[0]}"${offending.length > 1 ? ` (+${offending.length - 1} more)` : ''}`);
   }
 }
 
@@ -197,8 +264,9 @@ function validateClause(clause: CardEffect, idx: number, p: (msg: string) => voi
   if (clause.trigger === 'activated' && !clause.cost && !clause.oncePerTurn) {
     p(`${path}: activated ability needs a cost or oncePerTurn (§11 guard)`);
   }
+  // (2026-07-08 owner ruling: 'sacrifice'/'discard' were removed from the Cost schema
+  //  entirely — they now fail this shape check as unknown kinds.)
   if (clause.cost !== undefined && !validCost(clause.cost)) p(`${path}: bad cost ${JSON.stringify(clause.cost)}`);
-  if (clause.if !== undefined && !validCondition(clause.if)) p(`${path}: bad condition ${JSON.stringify(clause.if)}`);
   (clause.effects ?? []).forEach((e, i) => validateEffect(e, `${path}.effects[${i}]`, p, keywords));
 }
 
@@ -254,6 +322,7 @@ export function validateCards(
     for (const kw of card.keywords ?? []) {
       if (!(keywordBase(kw) in keywords)) p(`unknown keyword "${kw}"`);
     }
+    proseCompletenessProblems(card, p);
     (card.effects ?? []).forEach((clause, i) => validateClause(clause, i, p, keywords));
   }
   return problems;

@@ -436,7 +436,43 @@
     "text": "At the start of your turn, you may sacrifice this construct: deal 4 damage to target character or 2 damage to each opposing character.",
     "flavor": "",
     "createdAt": "2026-05-16T19:05:55.110927Z",
-    "updatedAt": "2026-05-16T19:05:55.110928Z"
+    "updatedAt": "2026-05-16T19:05:55.110928Z",
+    "effects": [
+      {
+        "trigger": "startOfTurn",
+        "optional": true,
+        "cost": {
+          "kind": "sacrificeSelf"
+        },
+        "effects": [
+          {
+            "op": "modal",
+            "options": [
+              {
+                "label": "Deal 4 damage to target character",
+                "effects": [
+                  {
+                    "op": "damage",
+                    "amount": 4,
+                    "target": "anyCharacter"
+                  }
+                ]
+              },
+              {
+                "label": "Deal 2 damage to each opposing character",
+                "effects": [
+                  {
+                    "op": "damage",
+                    "amount": 2,
+                    "target": "allEnemies"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
   },
   {
     "id": "8bdc5976",

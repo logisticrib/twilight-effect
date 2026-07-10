@@ -2,130 +2,60 @@
 
 Self-contained context for continuing the card-effect engine work in a fresh session.
 
-## Latest session (2026-07-08, later) — replay: accidental action→paste demotion audit
-The first real 4-turn recording exported + replayed clean, but its entry mix showed **25 of 30
-pastes were accidental**. A store action wired straight as a DOM handler (`onClick={endTurn}`) is
-invoked by React with the click event as `args[0]`; `isReplayable` correctly demotes it to a
-state-paste. That keeps the log CORRECT — but a paste replays by `setState`, **not** by
-re-executing the reducer. So the fixture proved nothing about `endTurn`/`switchSides`/
-`advancePhase`/`cancelPlay` (break `endTurn`'s draw / start-of-turn / poison logic and the fixture
-still passes), and stored a full canonical snapshot per entry (4.2 MB).
-- **Categorical detection, not a per-call-site check** (owner directive: "the NEXT bare-wired
-  component fails a test the day it's written"). `accidentalArg(args, arity)` in format.ts: a paste
-  is **legitimate iff every non-replayable arg is a FUNCTION in a DECLARED parameter slot**
-  (`i < arity`) — i.e. exactly `setGame(fn)`. Anything else is an arg the action never asked for.
-  **Arity alone is NOT the test:** a leaked event landing on a declared slot (`selectEntity(event)`)
-  is still junk and is flagged. `recordMiddleware` passes `orig.length` (declared arity).
-- **Surfaced, not silent.** `recorder` records `Demotion{step,action,argIndex,argType,arity}` →
-  `RecorderStatus.demotions` (RecorderButton chip turns amber: `⏺ REC · N actions · T turns ·
-  ⚠ 2 demoted`, tooltip names the fix) and `ReplayLog.demotions`, so **every fixture carries its own
-  fidelity audit**. A demotion is a WARNING, not a correctness failure — export still succeeds.
-  `LOG_FORMAT_VERSION` bumped **2 → 3** (logs gained `demotions`; a v2 fixture is refused).
-- **Tidied every bare-wired recordable action — a sweep found 7 sites / 11 actions, not the 4
-  first spotted:** PhaseRail (`switchSides`; `btnCfg.action` = endTurnToEndPhase/endTurn/
-  advancePhase), LoadoutPanel ×2 (`cancelPlay`), **Play.tsx `PromptBanner`** (one bare
-  `onClick={onCancel}` leaked cancelTrigger/cancelKit/cancelActionTarget), Play.tsx (`cancelPeek`),
-  **CardPickModal** (`cancel.onClick` leaked cancelKit/cancelDeadPick/cancelEquipPick), plus
-  defensive wraps on the unused `ModalShell.onScrimClick` and Lobby's `clearSavedGame`.
-  CONVENTION: never write `onClick={someStoreAction}` — use `onClick={() => someStoreAction()}`.
-- **Tests (+5 → 16 files / 203 green; tsc ZERO):** the `accidentalArg` classifier (updater vs leaked
-  arg, incl. the declared-slot event case); the recorder flags `advanceSetup(event)` as one demotion
-  and does NOT flag `setGame(fn)`; **THE GUARD** (`setupReplay.test.tsx`) drives the REAL PhaseRail
-  buttons and asserts zero demotions AND that endTurnToEndPhase/switchSides recorded as
-  re-executable actions with no pastes at all; and every committed fixture must have
-  `demotions: []`. Non-vacuous: restoring `onClick={btnCfg.action}` fails the guard with
-  `{"action":"endTurnToEndPhase","argIndex":0,"argType":"SyntheticBaseEvent","arity":0}`.
-- **FIRST FIXTURE COMMITTED (2026-07-08, `ae4da36`):** the owner deleted the stale v2 fixture and
-  re-recorded. **`src/replay/fixtures/twilight-solo-b9c3607-t4.replay.json`** is now committed and
-  runs on every `npm test` — the seed plan's payoff (a real playtest is now a permanent regression).
-  `format 3`, 4 turns, 155 entries (151 actions, 4 pastes — all genuine `setGame(fn)`),
-  **`demotions: []`**, 0.99 MB (vs 4.2 MB / 30 pastes / 25 demotions for the pre-fix recording of
-  the same game). The turn-cycle reducers the old recording pasted over now re-execute on replay
-  (`endTurn` 6, `switchSides` 8, `advancePhase` 5, `endTurnToEndPhase` 6, `cancelPlay` 9).
-  Tamper-verified: flipping one char of an entry hash fails `npm test` naming the fixture + step;
-  an `endTurn` turn-counter bug → step 33, an anchor-decay off-by-one → step 98, `switchSides` not
-  flipping `localPlayer` → step 34.
-- **FLAG:** runtime demotion detection only fires for components a test drives — a brand-new
-  bare-wired component still needs to be exercised (by the guard test or a real recording) to be
-  caught. Also queued in `tasks/todo.md` (ride with the next batch): RecorderButton should show the
-  commit stamp it's recording under (a stale dev server bakes an old commit into the fixture name —
-  the vite `define` freezes at server boot); and the action-divergence field line is misleading
-  for stripped action entries (it reports cumulative drift from the last checkpoint, not this
-  entry's change) — label it honestly + enrich `ReplayDivergence` with the live failing state.
+## Latest session (2026-07-08) — playtest bug batch, Item Transfer, sacrifice audit, completeness gate
+**Suite: 20 files / 254 tests green; tsc ZERO; validate:decks clean (100 cards).** Two commits:
+`fd0ef36` (bug batch) and the combined follow-up (Item Transfer + audit + gate + rulings batch 2).
+The committed replay fixture was DELETED (it pinned superseded behavior) — the owner re-records on
+the fixed engine from a RESTARTED server; the REC chip now shows its build stamp (`⏺ REC @<hash>`).
+- **Bug batch (`fd0ef36`)**: Cleave splash hits CHARACTERS only (constructs can't be attacked);
+  PC attack exhaust was store-correct but PcCard never RENDERED rotation (fixed + Rules Note);
+  Hit & Run pinned per canon (optional extra move; exception to movement-first; Rules Note);
+  GAME-OVER GATE on every gameplay reducer (also fixes endTurn WIPING gameOver to null);
+  ACTION-PHASE GATE at reducer level (mutators refuse outside 'action'; czToHand/handToCz now
+  enforce cz-phase + once-per-turn — czExchangeUsed was write-only; CZ panel says "Skip
+  exchange →"); modal scrim lightened + CardFace default hover → preview pane works from modals;
+  replay divergence report labels checkpoint diffs as CUMULATIVE + carries live state.
+- **Item Transfer on Character Exit** (rules §Items; RULED: ALL exits incl. death): synced
+  `pendingItemTransfer` + queue. Items go to the Dead Zone IMMEDIATELY (zone behavior unchanged —
+  zero old tests broke); the window CLAIMS them back (`resolveItemTransfer(charId)` → equipOnto +
+  exhaust the rescuer, once per event via usedIds; `declineItemTransfer`). Collection: destroyEntity
+  (all destructions), bounce (incl. FIXED Manifest leave-sacrifice item loss), ready-phase flee.
+  Arming defers to resolution boundaries (`armNextItemTransfer` via armPrompts + every prompt
+  resolver); RULED: Poison resolves BEFORE transfer windows (Rules Note §Ready Phase); PC is an
+  eligible rescuer; mid-combat windows defer. reactiveHold + banner cover the non-owner.
+- **Sacrifice/ability audit** ("silent no-op" bug class): `sacrifice`/`discard` Cost kinds had NO
+  payment branch (abilities resolved COST-FREE) → RULED: REMOVED from the schema (re-add with
+  engine support); runtime guard still refuses legacy data. sacrificeSelf now routes through
+  destroyEntity. Costs + targets validated BEFORE paying (a Quill with no construct keeps its
+  quill). The "✕ Sacrifice" button was adjustHp(-999) — clamps to 0, removes NOTHING, toasts
+  success — now a real `sacrificeEntity` reducer. Payability gates: payHP never lethal,
+  exhaustSelf refuses when exhausted, removeAnchor refuses when short + sacrifices at 0 (pinned
+  engine default). CATEGORICAL UX RULE: every refusal in activateAbility toasts its reason.
+  PERMANENT `ability_sweep.test.ts`: dynamic catalog sweep — zero silent outcomes, auto-covers
+  minted cards; per-cost-kind contract via synthetic CATALOG cards.
+- **RULED (2026-07-08): sacrifice IS a death** — death/destroy triggers (Memory Stone) fire on
+  EVERY sacrifice, centralized in destroyEntity (Rules Note §Dead Zone). Ready-phase decay is
+  worded as sacrifice too but runs in readyPlayer — no shipped construct carries a death trigger,
+  so wiring is deferred + FLAGGED. RULED: an ability that would affect NOTHING cannot be
+  activated (universal pre-cost refusal, incl. non-interactive recipients).
+- **Prose-completeness mint gate**: a card whose rules text implies behavior beyond its DECLARED
+  keywords must carry effects or a dated owner-approved `effectsFlag` (new Card field). Reminder
+  text exempt via ≥75% vocabulary containment in the keyword's CANONICAL definition —
+  KEYWORD_DEFS (src/data/keywords.ts) was rewritten to QUOTE Master_Keyword_List VERBATIM (old
+  entries were paraphrases; Untamed had drifted "Items"→canon "Gear"). The sweep found 11 gaps;
+  owner triaged: **AUTHORED Bastion Wall (new `grantKeywords` static aura op), Watchtower (new
+  `backLineAttack` op — attack eligibility only, deliberately NOT a Ranged grant), Pyre of the
+  Unbound (new startOfTurn MODAL flow: `pendingModalChoice` + queue, resolveModalChoice/
+  declineModalChoice, ModalChoiceHost; cost paid at resolution)**; the other 8 carry
+  `effectsFlag: "awaiting engine capability: <system> (owner 2026-07-08)"` (Patient Conjurer,
+  Reflecting Pool, Crystalline Sentinel, Tripwire Snare, Pit Trap, Iron Spikes, Reinforced Gate,
+  Siegeworks) — the engine-capability program is scheduled post-refactor. PARTIAL gaps (authored
+  cards whose text exceeds their clauses, human triage): Embercast Wand, Ashforged Pendant,
+  Captain's Belt, Engineer's Toolbelt, Runic Convergence Staff.
+- **NEXT**: owner re-records replay fixtures on this engine (restart the server first; expect
+  `demotions: []`); the engine-capability program (8 flagged systems) post-refactor.
 
-## Session (2026-07-08, earlier) — replay: paste-path divergence fixed (hash not JSON-round-trip-stable)
-After the setup fix (below), a longer recording failed export at step 39 — a **paste** entry
-(`paste:endTurnToEndPhase`), with `first diverging field: (unavailable)`. **Root cause: the hash
-was not invariant across a JSON round-trip.** A paste stores `state: clone(slice)` (a
-`JSON.parse(JSON.stringify(...))` clone) but `hash: hashState(slice)` (the pre-clone live slice).
-`stableStringify` walked `Object.keys`, so an `undefined`-valued field — `game.p1._pc` /
-`game.p2._pc`, set by `placePc` (`gameStore.ts:1801` `_pc: undefined`) — was emitted as
-`"_pc":null`, but `JSON.stringify` **drops** undefined keys. So `entry.hash` (with `_pc:null`) ≠
-`hashState(entry.state)` (clone dropped `_pc`). On replay the paste installs the stripped snapshot,
-its live hash equals `hashState(entry.state)`, and mismatches the stored `entry.hash` → divergence.
-- **Why paste-only / why step 39:** actions RE-EXECUTE on replay and the reducer recreates the
-  `undefined` key (`_pc:null` again) → they match. Only pastes INSTALL the JSON-stripped snapshot
-  and lose the key. `_pc` goes undefined at placement (~step 6-8); steps 9-38 were all actions;
-  step 39 `endTurnToEndPhase` is the first paste after placement (it's wired `onClick={action}` in
-  PhaseRail:124, so the event arg routes it to a paste via the 2026-07-07 isReplayable rule).
-- **Why the diff was "(unavailable)":** for a paste, `recorded = entry.state` equals `liveSlice()`
-  after install (both the stripped snapshot) → `firstDiff` is null. The real disagreement is
-  `entry.hash` vs `hashState(entry.state)` (the entry is self-inconsistent), which firstDiff never
-  inspects. NOT a partial install and NOT re-execution — a serialization mismatch in the hash.
-- **Fix (root cause, one place):** `stableStringify` (format.ts) now **omits undefined-valued
-  object keys** — matching JSON — so the hash sees only what survives serialization and is
-  round-trip-stable. Fixtures ARE JSON and paste snapshots ARE JSON clones, so this is the correct
-  invariant (hashing the clone for pastes only would leave the landmine for any future undefined
-  field). `LOG_FORMAT_VERSION` bumped **1 → 2** (hash algorithm changed; no fixtures committed yet).
-- **Reporter hardening (replay.ts):** on a divergence where recorded ≡ replayed by stringify but
-  hashes differ, it now reports `entry self-inconsistent — stored hash X != snapshot content hash Y
-  (…the stored hash predates JSON serialization)` instead of "(unavailable)" — points at a
-  recorder/format bug, not a replay one.
-- **Tests (+2 → 16 files / 198 green; tsc ZERO; validate:decks clean):** in `replay.test.ts` — an
-  event-wired paste after PC placement (`_pc` undefined) exports clean (reproduces step 39); and a
-  general round-trip-stability invariant: `stableStringify(x) === stableStringify(rt(x))` AND
-  `hashState(x) === hashState(rt(x))` over `undefined` top-level / nested / inside-an-array.
-  Proven non-vacuous: reverting only the stableStringify filter fails both (the regression shows
-  `divergence at step 2, paste:endTurnToEndPhase` with the new self-inconsistency message).
-
-## Session (2026-07-07) — replay: setup-divergence root cause fixed (event-arg → silent drop)
-A recorded sandbox game failed export validation: `ReplayDivergence at step "placePc" —
-game.setupQueue.0 expected "place-pc:p2", got "classbonus:p1"`. **Root cause (proved with a
-headless-React repro that crashed at the exact line): a store action wired DIRECTLY as a DOM
-handler.** `ClassBonusModal`'s footer was `<button onClick={onClose}>` where `onClose` = the
-`advanceSetup` action, so React invoked it as `advanceSetup(clickEvent)` — the click event landed
-as `args[0]`. The recorder's `clone(args)` (`JSON.stringify`) then threw on the event's circular
-DOM refs **after** the queue advanced but **before** the entry was pushed → the advance hit live
-state but was **silently dropped** from the log. Both class-bonus footers dropped, so headless
-`replay()` under-walked `setupQueue`; `placePc`'s guard (`setupQueue[0] !== 'place-pc:pN'`) then
-no-op'd and the states diverged. (NOT a `placePc` non-determinism bug, and NOT the `PCPlacementModal`
-render effect — `placePc` self-advances the queue so that effect never commits in the normal path.)
-- **Fix is categorical, at the recorder chokepoint** (`recorder.ts` `onAction` + new `isReplayable`
-  in `format.ts`): route action-vs-paste by an **allowlist** — an entry stays `kind:"action"` only
-  if every arg is a pure JSON value (primitive / plain array / plain object, no cycles). Anything
-  else — a leaked DOM/React event, `setGame(fn)`, a Map/Set/class instance, a non-finite number —
-  falls back to the existing `kind:"paste"` (setState the post-action result). Defined by "is this
-  replayable", NOT a blocklist of banned types, so the next non-serializable arg class can't
-  reintroduce the bug. `onAction` is now wrapped so a capture failure **invalidates loudly**
-  (`invalidReason`) instead of ever silently dropping an entry — a missing action corrupts the log.
-- **Call-site tidy (defense-in-depth):** `ClassBonusModal:287` `onClick={onClose}` →
-  `onClick={() => onClose()}` so no event reaches the action even before the recorder sanitizes.
-- **PoisonModal: CONFIRMED clean, left unchanged.** Its die roll happens in component-local state
-  (`rollFor`); only `commit()` writes via `resolvePoison(player, outcomes)` — a serializable
-  `{id,cleansed}[]` action that replays deterministically from its arg. The empty-case
-  `useEffect → setGame(fn)` records as a paste. No fix needed (verified by test, not just reasoning).
-- **Tests (+5 → 16 files / 196 green; tsc ZERO; validate:decks clean):** NEW
-  `src/__tests__/setupReplay.test.tsx` (jsdom) drives the REAL `ModalHost` through mulligan → class
-  bonus → PC placement and `PoisonModal` through a roll, asserting `tryExport()` validates clean —
-  the end-to-end regression. Plus `replay.test.ts`: an `isReplayable` allowlist unit test
-  (function/undefined/symbol/bigint/NaN/Infinity/Map/Set/class/cycle rejected) and a recorder test
-  that feeds `advanceSetup` a cyclic "event" arg and asserts it records as a **paste**, is never
-  dropped or invalidated, and exports clean (proves the categorical fix independent of call sites).
-- Blast-radius grep: the only other bare `onClick={action}` sites are `backToLobby`
-  (GameOverScreen/PhaseRail) — DENY-listed, never recorded, so harmless; `OathswornModal` calls
-  `onClose()` explicitly (no event). App reloads clean (no console errors).
-
-## Session (2026-07-06) — Phase 2 replay recorder + runner DONE (solo v1)
+## Previous session (2026-07-06) — Phase 2 replay recorder + runner DONE (solo v1)
 test_seed_plan.md Phase 2: record a solo game's action/state sequence to JSON, replay it against
 current code, fail loudly on any divergence. Every real sandbox playtest can now become a
 permanent regression fixture. **Suite: 15 files / 187 tests green; tsc ZERO; validate:decks clean.**
@@ -173,8 +103,7 @@ permanent regression fixture. **Suite: 15 files / 187 tests green; tsc ZERO; val
   (validate + download); a **failed validation shows a COPYABLE error panel** (readonly textarea +
   Copy button, and `console.error`) because the hashes/field-diff are impossible to transcribe by
   hand. Same copyable panel on GameOverScreen (its z-index sits above the chip at game-over). Fixtures
-  dir `src/replay/fixtures/*.replay.json` (a Vitest test globs + replays them; none committed *then*
-  — ⚠️ UPDATE 2026-07-08: first fixture committed, see the latest session at the top).
+  dir `src/replay/fixtures/*.replay.json` (a Vitest test globs + replays them; none committed yet).
 - **Tests** (`src/__tests__/replay.test.ts`): rng capture→inject reproduces a shuffle; record a real
   die-rolling solo game (Flame-Spinner on-enter, via a seeded position + a `_beginForTest` seam) →
   **replay through actual `JSON.parse(JSON.stringify)`** clean (reference-identity guard); tamper /
@@ -190,10 +119,8 @@ permanent regression fixture. **Suite: 15 files / 187 tests green; tsc ZERO; val
   invalidated under the old drift check); clicking it validates via replay + downloads with no error,
   and the live game is intact afterwards (non-destructive validation confirmed).
 - **FLAG / next**: v1 is **solo two-handed only** — MP host recording (own actions + guest turns as
-  `paste` remote-syncs) is the documented follow-up that reuses the paste primitive. The owner
-  records real sandbox games and drops the JSON into `src/replay/fixtures/`. ⚠️ UPDATE 2026-07-08:
-  the first such fixture is now committed (`twilight-solo-b9c3607-t4.replay.json`) — see the latest
-  session at the top; the "none committed yet" status here is historical.
+  `paste` remote-syncs) is the documented follow-up that reuses the paste primitive. No fixtures are
+  committed yet — the owner records real games and drops the JSON into `src/replay/fixtures/`.
 
 ## Session (2026-07-04, later) — audit batch 4: guest deck in READY (audit #11) DONE
 *(Landed alongside the same-day keyword/Paranoia session below, on its combined tree — suite

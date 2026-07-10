@@ -151,6 +151,7 @@ The supertype determines whether a Two-Handed weapon prevents the action from be
 - Cards in Dead Zone are face-up and public
 - Can be targeted by certain effects
 - When a companion flees (its Level exceeds your Willpower at the start of your turn) or a Construct's last Anchor counter is removed at the start of your turn, that card is placed in its owner's Dead Zone along with any items attached to it — exactly as if it had been destroyed. Fled and decayed cards are therefore recoverable by Dead Zone recursion effects (e.g., Memory Stone, Library of Memory) like any other card there
+- **Rules Note (ruled 2026-07-08):** Sacrificing a permanent IS a death: it is destroyed, and abilities that trigger on death/destruction (Memory Stone included) fire on a sacrifice exactly as they do when a permanent dies to damage. This applies to every sacrifice — ability costs, Coercion, Dismantle and anchor loss, Manifest leave-sacrifice.
 
 **Encounter:**
 - The active play area where characters and constructs exist
@@ -266,6 +267,7 @@ Movement does not exhaust the character and does not produce a visible state cha
    - Ready all exhausted permanents you control
    - Flip all face-down Class Zone cards face-up
    - Remove one Anchor counter from each Construct (a Construct whose last Anchor counter is removed is sacrificed and placed in its owner's Dead Zone)
+   - **Rules Note (ruled 2026-07-08):** When multiple start-of-turn prompts arise, they resolve in canonical Ready Phase step order. In particular, the Poison keyword check resolves BEFORE any Item Transfer on Character Exit windows opened by ready-phase exits (a fleeing companion's items; decayed Constructs carry no items, so no window opens for them).
 
 **2. Draw Phase**
    - Draw one card (exception: the player going first skips their Turn-1 draw as the first-player handicap)

@@ -11,8 +11,21 @@ const base = CATALOG[0];
 const clone = (over: Record<string, unknown>): Card => ({ ...base, id: 'clone-1', name: 'Clone Under Test', ...over } as unknown as Card);
 
 describe('data contract: the shipped decks validate clean', () => {
-  it('validateCards(CATALOG) reports zero problems', () => {
+  // The prose-completeness sweep (2026-07-08) exposed 11 authoring gaps; the owner
+  // triaged all of them same-day: Bastion Wall / Watchtower / Pyre of the Unbound were
+  // AUTHORED (grantKeywords aura, backLineAttack, startOfTurn modal), the other eight
+  // carry dated owner-approved effectsFlags ("awaiting engine capability: …"). The
+  // decks are therefore fully clean again — a NEW gap of either kind fails here.
+  it('validateCards(CATALOG) reports zero problems (all former gaps authored or owner-flagged)', () => {
     expect(validateCards(CATALOG)).toEqual([]);
+  });
+  it('the eight deferred gaps carry dated owner-approved flags (not silently forgotten)', () => {
+    const flagged = CATALOG.filter(c => c.effectsFlag).map(c => c.name).sort();
+    expect(flagged).toEqual(['Crystalline Sentinel', 'Iron Spikes', 'Patient Conjurer', 'Pit Trap',
+      'Reflecting Pool', 'Reinforced Gate', 'Siegeworks', 'Tripwire Snare']);
+    for (const c of CATALOG.filter(c => c.effectsFlag)) {
+      expect(c.effectsFlag, `${c.name} flag names the missing system + owner date`).toMatch(/awaiting engine capability: .+\(owner 2026-07-08\)/);
+    }
   });
 });
 
@@ -60,8 +73,10 @@ describe('the validator catches each class of authoring mistake (mint-gate behav
   });
 
   it("parameterized Bane — \"Goblin's Bane\" resolves to the Bane contract entry", () => {
-    expect(validateCards([clone({ keywords: ["Goblin's Bane"] })]), 'named Bane accepted').toEqual([]);
-    expectCaught(clone({ keywords: ["Goblin's Banes"] }), 'malformed Bane suffix stays unknown');
+    // text: '' — base (Ember Adept) carries a ZEALOUS reminder; swapping the declared
+    // keyword away would (correctly) trip the prose-completeness check instead.
+    expect(validateCards([clone({ keywords: ["Goblin's Bane"], text: '' })]), 'named Bane accepted').toEqual([]);
+    expectCaught(clone({ keywords: ["Goblin's Banes"], text: '' }), 'malformed Bane suffix stays unknown');
   });
 
   it('bad per-type fields: Action cost domain, Item classification, Construct anchor, Companion hp, level range', () => {
@@ -111,8 +126,49 @@ describe('mint-gate semantics: existing card names are a parameter', () => {
   });
 
   it('the keyword contract is injectable', () => {
-    const candidate = clone({ keywords: ['Skyborne'] });
+    const candidate = clone({ keywords: ['Skyborne'], text: '' }); // see the Bane test note
     expect(validateCards([candidate]).join(' '), 'unknown vs the canonical registry').toContain('Skyborne');
     expect(validateCards([candidate], [], { Skyborne: true }), 'known under an extended contract').toEqual([]);
+  });
+});
+
+// ─── Prose completeness (2026-07-08): text beyond keywords needs effects or a flag ──
+describe('prose completeness: a prose-only card can never mint silently', () => {
+  const noFx = (over: Record<string, unknown>): Card => {
+    const c = { ...base, id: 'clone-1', name: 'Clone Under Test', ...over } as unknown as Card;
+    delete (c as { effects?: unknown }).effects;
+    return c;
+  };
+  const expectCaught = (card: Card, why: string) => {
+    const problems = validateCards([card]);
+    expect(problems.some(p => p.includes('prose-only:')), `${why} — must be caught`).toBe(true);
+  };
+
+  it('novel rules text with NO effects is rejected (the Pyre of the Unbound class)', () => {
+    expectCaught(noFx({ keywords: [], text: 'At the start of your turn, you may sacrifice this construct: deal 4 damage to target character.' }),
+      'unauthored prose');
+  });
+
+  it('an explicit owner-approved effectsFlag exempts the card', () => {
+    expect(validateCards([noFx({ keywords: [],
+      text: 'At the start of your turn, deal 4 damage to target character.',
+      effectsFlag: 'owner-approved test exemption (representative of a dated ruling)' })])).toEqual([]);
+  });
+
+  it('un-parenthesized keyword REMINDER text is exempt (canon-containment against KEYWORD_DEFS)', () => {
+    expect(validateCards([noFx({ keywords: ['Zealous'],
+      text: 'ZEALOUS. This character may attack without needing to first pass a willpower check.' })])).toEqual([]);
+    expect(validateCards([noFx({ keywords: ['Armor 2'], type: 'Item', itemKind: 'Armor',
+      text: 'ARMOR 2. If the equipped character would be dealt damage, prevent all of that damage and put an armor counter on this item. When this item has 2 armor counters, sacrifice it.' })])).toEqual([]);
+  });
+
+  it('a declared keyword does NOT excuse a novel rider (the Patient Conjurer class)', () => {
+    expectCaught(noFx({ keywords: ['Ranged'], text: 'RANGED. When you play a Magical Construct, this character heals 1.' }),
+      'novel rider beyond the declared keyword');
+  });
+
+  it('cards WITH effects are outside this check (clause-completeness is human triage)', () => {
+    expect(validateCards([{ ...noFx({ keywords: [], text: 'Deal 1 damage to target character. Draw a card.' }),
+      effects: [{ trigger: 'onPlay', effects: [{ op: 'damage', amount: 1, target: 'anyCharacter' }] }] } as unknown as Card])).toEqual([]);
   });
 });

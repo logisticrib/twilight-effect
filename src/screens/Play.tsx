@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useGameStore } from '../store/gameStore';
+import { useGameStore, itemTransferCandidates } from '../store/gameStore';
+import type { BoardEntity } from '../types/card';
 import { useMultiplayer } from '../lib/useMultiplayer';
 import { CardFace } from '../components/CardFace';
 import { TBL, Z } from '../tokens';
@@ -38,7 +39,7 @@ function GameView() {
       const modalUp = game.setupQueue.length > 0 || s.modalQueue.length > 0
         || !!game.pendingPeek || !!game.pendingDeadPick || !!game.pendingArmor
         || !!game.pendingAttackChoice || !!game.pendingPoison || !!game.pendingCoercion
-        || !!game.gameOver
+        || !!game.pendingItemTransfer || !!game.pendingModalChoice || !!game.gameOver
         || !!s.pendingEquipPick || s.pendingKit?.step === 'item' || !!s.pileView;
 
       if (e.key === 'Tab') {
@@ -75,6 +76,8 @@ function GameView() {
       <ActionPrompt />
       <PeekModal />
       <DeadPickModal />
+      <ModalChoiceHost />
+      <ItemTransferModal />
       <ArmorModal />
       <AttackChoiceModal />
       <PoisonHost />
@@ -237,14 +240,16 @@ function PoisonHost() {
 function ReactiveHoldBanner() {
   const dp = useGameStore(s => s.game.pendingDeadPick);
   const pa = useGameStore(s => s.game.pendingArmor);
+  const it = useGameStore(s => s.game.pendingItemTransfer);
   const localPlayer = useGameStore(s => s.localPlayer);
   const isSolo = useGameStore(s => s.conn.mode === 'solo');
   if (isSolo) return null;
-  // Hold for an opponent-owned reactive prompt: Dead-Zone recovery, or an Armor choice.
-  // Only shown to the held (non-owning) peer, so the owner is always "the opponent"
-  // (the synced player names are perspective-relative — don't show them here).
+  // Hold for an opponent-owned reactive prompt: Dead-Zone recovery, an Armor choice,
+  // or an Item Transfer window. Only shown to the held (non-owning) peer, so the owner
+  // is always "the opponent" (synced player names are perspective-relative).
   const source = (dp && dp.lp !== localPlayer) ? dp.source
                : (pa && pa.defender !== localPlayer) ? `${pa.entityName}'s armor`
+               : (it && it.lp !== localPlayer) ? `${it.sourceName}'s Item Transfer`
                : null;
   if (!source) return null;
   return (
@@ -285,6 +290,79 @@ function DeadPickModal() {
       onPick={idx => resolveDeadPick(idx as number)}
       pickTitle={n => dp.attachTo ? `Attach ${n}` : `Return ${n}`}
       cancel={dp.optional ? { label: 'Skip', onClick: cancelDeadPick } : undefined}
+    />
+  );
+}
+
+/** Deferred start-of-turn modal choice (Pyre of the Unbound): pick a mode — paying
+ *  the clause cost (e.g. sacrifice this construct) — or decline a "you may" clause.
+ *  Render-gated behind the earlier turn-start prompts so dialogs never stack. */
+function ModalChoiceHost() {
+  const pm = useGameStore(s => s.game.pendingModalChoice);
+  const blocked = useGameStore(s => !!(s.game.pendingPoison || s.game.pendingPeek || s.game.pendingDeadPick));
+  const localPlayer = useGameStore(s => s.localPlayer);
+  const isSolo = useGameStore(s => s.conn.mode === 'solo');
+  const resolveModalChoice = useGameStore(s => s.resolveModalChoice);
+  const declineModalChoice = useGameStore(s => s.declineModalChoice);
+  if (!pm || blocked || (!isSolo && pm.lp !== localPlayer)) return null;
+
+  return (
+    <ModalShell glyph="⌥" eyebrow={pm.sourceName}
+      title={pm.cost === 'sacrificeSelf' ? `Sacrifice ${pm.sourceName}?` : 'Choose a mode'}
+      sub={pm.cost === 'sacrificeSelf'
+        ? 'Choosing a mode sacrifices it as the cost — or decline and keep it.'
+        : 'Choose one of the modes below.'}
+      width="min(560px, 92vw)"
+      footer={pm.optional
+        ? (<><div style={md.spacer} /><button style={md.btn('ghost')} onClick={() => declineModalChoice()}>Decline — keep it</button></>)
+        : undefined}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {pm.options.map((o, i) => (
+          <button key={i} style={md.btn('primary')} onClick={() => resolveModalChoice(i)}>
+            {o.label}
+          </button>
+        ))}
+      </div>
+    </ModalShell>
+  );
+}
+
+/** Item Transfer on Character Exit (rules §Items; ruled 2026-07-08: ALL exits — death,
+ *  fleeing, bounce, sacrifice): the departed character's controller may exhaust a
+ *  ready character with a fitting open slot to claim each item out of the Dead Zone;
+ *  declined items simply stay there. Items resolve one at a time (head-first); each
+ *  character can be exhausted only once per departing character. */
+function ItemTransferModal() {
+  const it = useGameStore(s => s.game.pendingItemTransfer);
+  const game = useGameStore(s => s.game);
+  const localPlayer = useGameStore(s => s.localPlayer);
+  const isSolo = useGameStore(s => s.conn.mode === 'solo');
+  const resolveItemTransfer = useGameStore(s => s.resolveItemTransfer);
+  const declineItemTransfer = useGameStore(s => s.declineItemTransfer);
+  // Only the departed character's controller chooses; sandbox shows all.
+  if (!it || !it.items.length || (!isSolo && it.lp !== localPlayer)) return null;
+
+  const head = it.items[0];
+  const eligible = itemTransferCandidates(game, it, head.id);
+  const rescuers = (Object.values(game[it.lp].board) as (BoardEntity | undefined)[])
+    .filter((e): e is BoardEntity => !!e && eligible.includes(e.id));
+
+  return (
+    <CardPickModal glyph="⇄" eyebrow={`Item Transfer · ${it.sourceName} left the encounter`}
+      title={`Take up ${head.name}?`}
+      sub={`Exhaust a ready character with an open slot to equip it — or decline and it stays in the Dead Zone.`
+        + (it.items.length > 1 ? ` (${it.items.length} items to resolve.)` : '')}
+      picks={rescuers.map(e => ({
+        key: e.id, name: e.name,
+        caption: (
+          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: TBL.ink2 }}>
+            exhausts to equip
+          </span>
+        ),
+      }))}
+      onPick={id => resolveItemTransfer(id as string)}
+      pickTitle={n => `Exhaust ${n} to equip ${head.name}`}
+      cancel={{ label: 'Decline — leave in Dead Zone', onClick: declineItemTransfer }}
     />
   );
 }
