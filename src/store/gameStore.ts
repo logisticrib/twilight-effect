@@ -14,13 +14,12 @@ import { recomputeStatics, isImmuneToSplash, grantHitRun, HIT_RUN_STATUS,
 // Everything relocated to the headless engine stays importable from this module —
 // external import sites don't churn during the extraction (see src/engine/index.ts).
 export * from '../engine';
+import { ADJ, FRONT_SLOTS, BACK_SLOTS, isFront, findSlot, type SlotId, type Board } from '../engine';
 
 export type Phase = 'ready' | 'draw' | 'cz' | 'action' | 'end';
 export type PlayPhase = 'lobby' | 'setup' | 'game';
 /** 'placing-pc' = waiting for the local player to choose a Back Line slot */
 export type SetupStep = 'mulligan' | 'classbonus' | 'placing-pc' | 'done';
-export type SlotId = 'f1' | 'f2' | 'f3' | 'b1' | 'b2' | 'b3';
-export type Board = Partial<Record<SlotId, BoardEntity>>;
 
 export interface ClassZoneCard {
   id: string;
@@ -328,20 +327,6 @@ export interface PendingAttackChoice {
   bonus: number;
 }
 
-// ─── Adjacency map ────────────────────────────────────────────────────────────
-export const ADJ: Record<SlotId, SlotId[]> = {
-  f1: ['f2', 'b1'],
-  f2: ['f1', 'f3', 'b2'],
-  f3: ['f2', 'b3'],
-  b1: ['b2', 'f1'],
-  b2: ['b1', 'b3', 'f2'],
-  b3: ['b2', 'f3'],
-};
-
-export const FRONT_SLOTS: SlotId[] = ['f1', 'f2', 'f3'];
-export const BACK_SLOTS:  SlotId[] = ['b1', 'b2', 'b3'];
-export function isFront(slot: SlotId): boolean { return FRONT_SLOTS.includes(slot); }
-
 /** Display label for a player seat from the local viewer's perspective. Stored
  *  player names are perspective placeholders ('You'/'Opponent'), and the whole
  *  GameState is broadcast wholesale in multiplayer, so each peer must derive the
@@ -375,13 +360,6 @@ function activationPatch(game: GameState, id: string): { currentActor: string; f
     return { currentActor: id, finishedActors: [...game.finishedActors, cur] };
   }
   return { currentActor: id, finishedActors: game.finishedActors };
-}
-
-function findSlot(board: Board, entityId: string): SlotId | null {
-  for (const [slot, ent] of Object.entries(board)) {
-    if (ent?.id === entityId) return slot as SlotId;
-  }
-  return null;
 }
 
 function findEntityAnywhere(game: GameState, entityId: string): { player: 'p1' | 'p2'; slot: SlotId; ent: BoardEntity } | null {
