@@ -11,6 +11,10 @@ import { recomputeStatics, isImmuneToSplash, grantHitRun, HIT_RUN_STATUS,
          canPlayActionCard, actionTypeOf, currentWillpower, parseBanes, isBaneTarget,
          poisonHitPatch, POISONED_STATUS, parseAnimateMagic, hasBackLineAttackAura } from './keywords';
 
+// Everything relocated to the headless engine stays importable from this module —
+// external import sites don't churn during the extraction (see src/engine/index.ts).
+export * from '../engine';
+
 export type Phase = 'ready' | 'draw' | 'cz' | 'action' | 'end';
 export type PlayPhase = 'lobby' | 'setup' | 'game';
 /** 'placing-pc' = waiting for the local player to choose a Back Line slot */
