@@ -7,8 +7,12 @@
 import type { BoardEntity, Card } from '../types/card';
 import { CATALOG } from '../data/catalog';
 import { isFront, type SlotId } from './geometry';
-import type { GameState, PendingItemTransfer } from './state';
+import type { GameState, PendingItemTransfer, PendingDeadPick, ArmorChoiceData } from './state';
 import { isCharacter, canHoldItem, isPhysicalConstruct } from './stats';
+// Function-level cycle with combat.ts (destroyEntity fires removal triggers; the
+// trigger machinery damages/destroys entities). Safe: hoisted functions, called
+// only at runtime — no module-eval-time cross-references.
+import { hasRemovalTrigger, resolveRemovalTriggers } from './combat';
 
 export function findEntityAnywhere(game: GameState, entityId: string): { player: 'p1' | 'p2'; slot: SlotId; ent: BoardEntity } | null {
   for (const player of ['p1', 'p2'] as const) {
@@ -87,6 +91,44 @@ export function itemProfileOf(card: Card): { isWeapon: boolean; isHeavy: boolean
   const isWeapon = card.itemKind?.toLowerCase().includes('weapon') ||
                    (card.type === 'Item' && (card.subtype?.toLowerCase().includes('weapon') || card.subtype?.toLowerCase().includes('sword') || card.subtype?.toLowerCase().includes('bow') || card.subtype?.toLowerCase().includes('staff') || card.subtype?.toLowerCase().includes('dagger') || card.subtype?.toLowerCase().includes('axe') || card.subtype?.toLowerCase().includes('mace') || card.subtype?.toLowerCase().includes('wand')));
   return { isWeapon: !!isWeapon, isHeavy: !!card.text?.toLowerCase().includes('heavy') };
+}
+
+/** Remove a destroyed/sacrificed entity from the board AND move its card (plus its
+ *  equipped items') to its owner's Dead Zone; a tucked Oathsworn card returns to its
+ *  owner's hand. Every destruction path must use this — bare `removeEntity` loses the
+ *  cards from the game. (Bounce and cost-sacrifice paths do their own zone moves.)
+ *  A departing character with items also QUEUES an Item Transfer window (rules §Items,
+ *  ruled 2026-07-08: all exits) — queued here, ARMED later at a resolution boundary
+ *  (`armNextItemTransfer` via armPrompts / prompt resolvers), so mid-combat kills
+ *  defer the window until the attack completes (owner ruling 2026-07-08). */
+export function destroyEntity(game: GameState, entityId: string, sink?: PendingDeadPick[], armorSink?: ArmorChoiceData[]): { game: GameState; msgs: string[] } {
+  const loc = findEntityAnywhere(game, entityId);
+  if (!loc) return { game, msgs: [] };
+  const dead = deadCardsOf(loc.ent);
+  const sworn = loc.ent.sworn;
+  const transfer = itemTransferOf(loc.ent, loc.player);
+  const removed = removeEntity(game, entityId);
+  let g: GameState = { ...removed,
+    pendingItemTransferQueue: transfer ? [...removed.pendingItemTransferQueue, transfer] : removed.pendingItemTransferQueue,
+    [loc.player]: {
+      ...removed[loc.player],
+      dead: dead.length ? [...removed[loc.player].dead, ...dead] : removed[loc.player].dead,
+      hand: sworn ? [...removed[loc.player].hand, sworn] : removed[loc.player].hand,
+    } };
+  const msgs: string[] = [];
+  // Death triggers fire HERE, for every removal path uniformly. RULED 2026-07-08:
+  // a SACRIFICE is a death — it fires death/destroy triggers (Memory Stone included)
+  // exactly like dying to damage. Centralizing in the shared exit path covers ability
+  // costs, Coercion, Dismantle/anchor-loss, Manifest leave-sacrifice and the sandbox
+  // sacrifice without per-caller wiring. (Ready-phase decay is ALSO worded as a
+  // sacrifice but runs inside readyPlayer — no shipped construct carries a death
+  // trigger, so wiring it there is deferred and FLAGGED, not silently skipped.)
+  if (hasRemovalTrigger(loc.ent)) {
+    const rt = resolveRemovalTriggers(g, loc.ent, loc.player, sink, armorSink);
+    g = rt.game;
+    msgs.push(...rt.msgs);
+  }
+  return { game: g, msgs };
 }
 
 /** Eligible rescuers for one item of a transfer window, re-derived LIVE: ready

@@ -7,9 +7,15 @@
 import type { BoardEntity, Card } from '../types/card';
 import type { Effect, Amount, Condition, TargetSpec, Trigger, Cost, CardEffect } from '../types/effects';
 import { CATALOG } from '../data/catalog';
-import type { GameState } from './state';
-import { charsOf, companionIds, constructIds } from './entities';
-import { isPhysicalConstruct, currentWillpower } from './stats';
+import { isFront, type SlotId } from './geometry';
+import type { GameState, PendingDeadPick, ArmorChoiceData } from './state';
+import { charsOf, companionIds, constructIds, findEntityAnywhere, updateEntity,
+         removeEntity, destroyEntity, setPcHp, pcIdOf, itemCardsOf, itemTransferOf } from './entities';
+import { isPhysicalConstruct, currentWillpower, effectiveAttack, effectiveMaxHp } from './stats';
+// Function-level cycle with combat.ts (resolveActionEffects deals damage; combat
+// triggers resolve effects). Safe: hoisted functions, called only at runtime.
+import { applyDamage } from './combat';
+import { rollD6, shuffle } from './lifecycle';
 
 export function amountValue(a: Amount, die: number, controlled: number): number {
   if (typeof a === 'number') return a;
@@ -215,4 +221,270 @@ export function twoStepKind(effects: Effect[]): 'reposition' | 'disarm' | 'moveA
     if (e.op === 'moveAnchor') return 'moveAnchor';
   }
   return null;
+}
+
+/**
+ * Resolve a list of onPlay effects. `targetId` (if present) binds the single
+ * interactive target. A single d6 is rolled per card and shared across die/halfDie
+ * effects (e.g. Wrath of the Untamed Sky). Returns the new game + log lines.
+ */
+export function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceName: string, effects: Effect[], targetId?: string, sourceId?: string, ctx?: EffectCtx, sink?: PendingDeadPick[], armorSink?: ArmorChoiceData[]): { game: GameState; msgs: string[] } {
+  const opp: 'p1' | 'p2' = lp === 'p1' ? 'p2' : 'p1';
+  const die = rollD6();
+  const usesDie = effects.some(e => (e.op === 'damage' || e.op === 'damageSelfPC') && typeof e.amount === 'object' && ('die' in e.amount || 'halfDie' in e.amount));
+  const controlledCompanions = Object.values(game[lp].board).filter(e => e?.kind === 'companion').length;
+  const msgs: string[] = [];
+  if (usesDie) msgs.push(`Rolled ${die}`);
+  let g = game;
+
+  for (const e of effects) {
+    switch (e.op) {
+      case 'buff': {
+        if (e.duration !== 'endOfTurn') break;
+        const board = { ...g[lp].board };
+        let touched = 0;
+        for (const [slot, ent] of Object.entries(board) as [SlotId, BoardEntity | undefined][]) {
+          if (!ent) continue;
+          const inScope = e.scope === 'ownParty' ? (ent.kind === 'companion' || ent.kind === 'pc')
+            : e.scope === 'ownCompanions' ? ent.kind === 'companion' : false;
+          if (!inScope) continue;
+          board[slot] = { ...ent, buffs: [...(ent.buffs ?? []), {
+            ...(e.stat === 'atk' && e.amount != null ? { atk: e.amount } : {}),
+            ...(e.grant ? { grant: e.grant } : {}),
+            ...(e.modifiers ? { modifiers: e.modifiers } : {}),
+            until: 'endOfTurn' as const, source: sourceName,
+          }] };
+          touched++;
+        }
+        g = { ...g, [lp]: { ...g[lp], board } };
+        if (touched) {
+          const parts = [e.stat === 'atk' && e.amount != null ? `+${e.amount} attack` : null, ...(e.grant ?? []), ...(e.modifiers ?? [])].filter(Boolean);
+          msgs.push(`${parts.join(', ')} to ${touched} ${e.scope === 'ownParty' ? 'characters' : 'companions'} (until end of turn)`);
+        }
+        break;
+      }
+      case 'damage': {
+        let amt = amountValue(e.amount, die, controlledCompanions);
+        // Magic-Action damage modifiers (Burning Eye/Wildfire Sigil/Heart of the
+        // Convergence): +N to each enemy character this action would damage.
+        if (amt > 0 && e.target !== 'self') amt += ctx?.damageBonus ?? 0;
+        let targets: string[] = [];
+        if (e.splash === 'board' || e.target === 'allEnemies') targets = charsOf(g, opp);
+        else if (e.target === 'frontLineEnemy') targets = charsOf(g, opp, 'front');
+        else if (e.target === 'backLineEnemy') targets = charsOf(g, opp, 'back');
+        else if (e.target === 'self') { if (sourceId) targets = [sourceId]; }
+        else if (e.target === 'damagedController') { if (ctx?.damagedOwner) { const pid = pcIdOf(g, ctx.damagedOwner); if (pid) targets = [pid]; } }
+        else if (e.splash === 'line' && targetId) {
+          const slot = findEntityAnywhere(g, targetId)?.slot;
+          if (slot) targets = charsOf(g, opp, isFront(slot) ? 'front' : 'back');
+        } else if (targetId) targets = [targetId];
+        for (const tid of targets) {
+          const r = applyDamage(g, tid, amt, sourceName, lp, sink, undefined, armorSink);
+          g = r.game; msgs.push(...r.msgs);
+        }
+        break;
+      }
+      case 'damageSelfPC': {
+        const amt = amountValue(e.amount, die, controlledCompanions);
+        const pcId = pcIdOf(g, lp);
+        if (pcId && amt > 0) { const r = applyDamage(g, pcId, amt, sourceName, opp, sink, undefined, armorSink); g = r.game; msgs.push(...r.msgs); }
+        break;
+      }
+      case 'heal': {
+        const amt = amountValue(e.amount, die, controlledCompanions);
+        let ids: string[] = [];
+        if (e.target === 'self') { if (sourceId) ids = [sourceId]; }
+        else if (e.target === 'ownParty') ids = charsOf(g, lp);
+        else if (isInteractiveSpec(e.target) && targetId) ids = [targetId];
+        for (const id of ids) {
+          const loc = findEntityAnywhere(g, id);
+          if (!loc) continue;
+          const healed = Math.min(effectiveMaxHp(loc.ent, g), loc.ent.hp + amt);
+          if (healed !== loc.ent.hp) {
+            // A healed PC mirrors to the headline HP (PC entity = source of truth).
+            g = loc.ent.kind === 'pc' ? setPcHp(g, loc.player, id, healed) : updateEntity(g, id, { hp: healed });
+            msgs.push(`${loc.ent.name} heals to ${healed} HP`);
+          }
+        }
+        break;
+      }
+      case 'draw': {
+        if (e.if && !conditionMet(g, lp, e.if)) break;
+        let drawn = 0;
+        for (let i = 0; i < e.count; i++) {
+          const ps = g[lp];
+          if (ps.deck.length === 0) break;
+          const [d, ...rest] = ps.deck;
+          g = { ...g, [lp]: { ...ps, deck: rest, hand: [...ps.hand, d] } };
+          drawn++;
+        }
+        if (drawn) msgs.push(`Draw ${drawn}`);
+        break;
+      }
+      case 'shuffleHandRedraw': {
+        // "Target opponent shuffles their hand into their deck and draws that many
+        //  cards minus one." (Convergence Sigil — offset -1.)
+        const ops = g[opp];
+        const n = ops.hand.length;
+        const drawN = Math.max(0, n + (e.offset ?? 0));
+        const reshuffled = shuffle([...ops.deck, ...ops.hand]);
+        g = { ...g, [opp]: { ...ops, hand: reshuffled.slice(0, drawN), deck: reshuffled.slice(drawN) } };
+        msgs.push(`Opponent shuffles ${n} card${n !== 1 ? 's' : ''} away, draws ${drawN}`);
+        break;
+      }
+      case 'bounce': {
+        // Return permanents (companions or constructs) to their owner's hand: a
+        // single clicked target, or a group scope.
+        let ids: string[] = [];
+        if (isInteractiveSpec(e.target)) { if (targetId) ids = [targetId]; }
+        else if (e.target === 'ownCompanions') ids = companionIds(g, lp);
+        else if (e.target === 'allEnemyCompanions') ids = companionIds(g, opp);
+        for (const id of ids) {
+          const loc = findEntityAnywhere(g, id);
+          if (!loc || loc.ent.kind === 'pc') continue; // can't bounce the Player Character
+          const owner = loc.player;
+          // Manifest (animated construct): sacrificed instead of returning to hand.
+          // Via destroyEntity so its card AND any equipped items reach the Dead Zone
+          // (the old inline removal LOST the items) and an Item Transfer window queues.
+          if (loc.ent.statuses.includes('manifest')) {
+            const d = destroyEntity(g, id, sink, armorSink); // sacrifice = death (fires triggers)
+            g = d.game;
+            msgs.push(`${loc.ent.name} is sacrificed (Manifest)`, ...d.msgs);
+            continue;
+          }
+          const cardObj = CATALOG.find(c => c.name === loc.ent.name);
+          // Companions drop their items to the Dead Zone; constructs have none. A bounce
+          // is an exit, so it opens an Item Transfer window too (ruled 2026-07-08).
+          const items = itemCardsOf(loc.ent);
+          const transfer = itemTransferOf(loc.ent, owner);
+          g = removeEntity(g, id);
+          g = { ...g,
+            pendingItemTransferQueue: transfer ? [...g.pendingItemTransferQueue, transfer] : g.pendingItemTransferQueue,
+            [owner]: { ...g[owner],
+              hand: cardObj ? [...g[owner].hand, cardObj] : g[owner].hand,
+              dead: items.length ? [...g[owner].dead, ...items] : g[owner].dead,
+            } };
+          msgs.push(`${loc.ent.name} returns to ${owner === lp ? 'your' : "owner's"} hand`);
+        }
+        break;
+      }
+      case 'extraAttack': {
+        if (!targetId) break;
+        const loc = findEntityAnywhere(g, targetId);
+        if (!loc) break;
+        g = updateEntity(g, targetId, { acts: { ...loc.ent.acts, major: false }, exhausted: false, tapped: 'none' });
+        msgs.push(`${loc.ent.name} may attack an additional time`);
+        break;
+      }
+      case 'forceAttack': {
+        if (!targetId) break;
+        const attackers = charsOf(g, lp, 'front').filter(id => findEntityAnywhere(g, id)?.ent.kind === 'companion');
+        for (const aid of attackers) {
+          if (!findEntityAnywhere(g, targetId)) break; // target already removed
+          const aloc = findEntityAnywhere(g, aid);
+          if (!aloc) continue;
+          const dmg = effectiveAttack(aloc.ent, g);
+          const r = applyDamage(g, targetId, dmg, aloc.ent.name, lp, sink, undefined, armorSink);
+          g = r.game; msgs.push(...r.msgs);
+          g = updateEntity(g, aid, { acts: { ...aloc.ent.acts, major: true }, exhausted: true, tapped: 'major' });
+        }
+        break;
+      }
+      case 'anchor': {
+        // Group: add/remove anchors on every OTHER Physical Construct you control (Grudrik,
+        // Stone Rampart). The source excludes itself — owner ruling 2026-07-03: a construct
+        // buffing its own group on enter would just be hidden printed-anchor inflation.
+        if (e.target === 'ownPhysicalConstructs') {
+          const ids = (Object.values(g[lp].board) as (BoardEntity | undefined)[])
+            .filter((x): x is BoardEntity => !!x && isPhysicalConstruct(x) && x.id !== sourceId).map(x => x.id);
+          let touched = 0;
+          for (const id of ids) {
+            const loc = findEntityAnywhere(g, id);
+            if (!loc) continue;
+            const next = Math.max(0, (loc.ent.anchors ?? 0) + e.delta);
+            if (e.delta < 0 && next <= 0) g = removeEntity(g, id);
+            else g = updateEntity(g, id, { anchors: next });
+            touched++;
+          }
+          if (touched) msgs.push(`${e.delta > 0 ? '+' : ''}${e.delta} anchor to ${touched} Physical Construct${touched > 1 ? 's' : ''}`);
+          break;
+        }
+        if (!targetId) break;
+        const loc = findEntityAnywhere(g, targetId);
+        if (!loc) break;
+        const cur = loc.ent.anchors ?? 0;
+        const next = Math.max(0, cur + e.delta);
+        if (e.delta < 0 && next <= 0) {
+          const d = destroyEntity(g, targetId, sink, armorSink); // sacrifice = death (fires triggers)
+          g = d.game;
+          msgs.push(`${loc.ent.name} loses its last anchor — sacrificed!`, ...d.msgs);
+        }
+        else { g = updateEntity(g, targetId, { anchors: next }); msgs.push(`${loc.ent.name} anchors ${cur} → ${next}`); }
+        break;
+      }
+      case 'animate': {
+        // Animate Magic X: a Magical (Incantation) Construct you control becomes an X/X
+        // Manifest companion, retaining its text and Anchor counters. (Leave-sacrifice
+        // handled via the 'manifest' status in bounce.) Target is either a single clicked
+        // construct, or the group 'ownMagicalConstructs' (up to `max`, excluding the
+        // source — e.g. The Verdant Still animates up to two; interim auto-picks).
+        let ids: string[] = [];
+        if (e.target === 'ownMagicalConstructs') {
+          ids = (Object.values(g[lp].board) as (BoardEntity | undefined)[])
+            .filter((x): x is BoardEntity => !!x && x.kind === 'construct' && x.subtype === 'Incantation' && x.id !== sourceId)
+            .map(x => x.id);
+          if (e.max != null) ids = ids.slice(0, e.max);
+        } else if (targetId) {
+          ids = [targetId];
+        }
+        for (const id of ids) {
+          const loc = findEntityAnywhere(g, id);
+          if (!loc || loc.ent.kind !== 'construct' || loc.ent.subtype !== 'Incantation') continue;
+          g = updateEntity(g, id, {
+            kind: 'companion', atk: e.atk, hp: e.hp, maxHp: e.hp, subtype: 'Manifest',
+            fresh: true, statuses: [...loc.ent.statuses, 'manifest'],
+          });
+          msgs.push(`${loc.ent.name} animates as a ${e.atk}/${e.hp} Manifest`);
+        }
+        break;
+      }
+      case 'dieCheck': {
+        const roll = rollD6();
+        const pass = roll >= e.threshold;
+        msgs.push(`Rolled ${roll} — ${pass ? 'success' : 'fail'}`);
+        const r = resolveActionEffects(g, lp, sourceName, pass ? e.onPass : e.onFail, targetId, sourceId, ctx, sink, armorSink);
+        g = r.game; msgs.push(...r.msgs);
+        break;
+      }
+      case 'returnFromDead': {
+        // Recover a card from the controller's Dead Zone (Memory Stone onDestroy). If a
+        // `sink` was supplied, defer to a player-facing picker (the calling reducer arms
+        // `pendingDeadPick`); otherwise auto-pick the most-recent eligible card.
+        if (e.to !== 'hand') break;
+        const dead = g[lp].dead;
+        const options = dead.map((card, idx) => ({ card, idx })).filter(o => !e.cardType || o.card.type === e.cardType);
+        if (options.length === 0) { msgs.push('Dead Zone has no eligible card'); break; }
+        if (sink) {
+          sink.push({ source: sourceName, lp, sourceId, options, postEffects: [], optional: false });
+          msgs.push('Choose a card to return from the Dead Zone');
+          break;
+        }
+        const pick = options[options.length - 1].idx;
+        const card = dead[pick];
+        g = { ...g, [lp]: { ...g[lp], dead: dead.filter((_, i) => i !== pick), hand: [...g[lp].hand, card] } };
+        msgs.push(`Returned ${card.name} from the Dead Zone to hand`);
+        break;
+      }
+      case 'exhaustSelf': {
+        if (!sourceId) break;
+        const loc = findEntityAnywhere(g, sourceId);
+        if (!loc) break;
+        g = updateEntity(g, sourceId, { exhausted: true, tapped: 'major' });
+        msgs.push(`${loc.ent.name} is exhausted`);
+        break;
+      }
+      // Remaining ops (move slot-pick, two-target attacks, sacrificeItem, deckPeek…) — later slices.
+    }
+  }
+  return { game: g, msgs };
 }
