@@ -2,7 +2,52 @@
 
 Self-contained context for continuing the card-effect engine work in a fresh session.
 
-## Latest session (2026-07-08) — playtest bug batch, Item Transfer, sacrifice audit, completeness gate
+## Latest session (2026-07-10) — gameStore extraction: headless src/engine/ DONE
+**Suite: 21 files / 263 tests green (incl. all three replay fixtures); tsc ZERO; validate:decks
+clean.** Executed `tasks/refactor_extraction_plan.md` as 8 slices / 8 commits, move-only (zero
+behavior edits, zero test edits beyond the new guard test). `gameStore.ts` 3,843 → ~2,300 lines.
+
+**New module map — `src/engine/` (headless; no store/screens/React/Zustand imports, enforced
+transitively by the PERMANENT `src/__tests__/engine_deps.test.ts`):**
+- `engine/geometry.ts` — SlotId/Board types, ADJ, FRONT_SLOTS/BACK_SLOTS, isFront, findSlot.
+- `engine/state.ts` — GameState/PlayerState/ClassZoneCard/Phase + every game-level (synced)
+  prompt type: PendingPeek/PeekRequest, PendingDeadPick, PendingCoercion, AttackCtx/DamageEvent/
+  ArmorChoiceData/PendingArmor, PendingAttackChoice, PendingModalChoice, PendingItemTransfer.
+- `engine/stats.ts` — the whole former `store/keywords.ts` (effectiveAttack/MaxHp/Keywords,
+  recomputeStatics, auras, suppression, wardedLines, currentWillpower, canPlayActionCard…).
+- `engine/entities.ts` — findEntityAnywhere/updateEntity/removeEntity, destroyEntity (the shared
+  exit path), deadCardsOf/itemCardsOf/itemTransferOf/itemProfileOf, itemTransferCandidates,
+  armNextItemTransfer, setPcHp/payPcHp, pcIdOf/companionIds/constructIds/charsOf/
+  ownPhysicalConstructIds.
+- `engine/interpreter.ts` — resolveActionEffects (the big op switch), eligibleTargets,
+  isInteractiveSpec, conditionMet, amountValue, effectsWouldAffectSomething, effectTargetSpec/
+  actionTargetSpec, twoStepKind, permanentEffects, effectsOfCard, gatherActivated/
+  ActivatedAbility, abilityUsedTag, magicCtx/staticMagicBonusOf/magicActionDamageBonus, EffectCtx.
+- `engine/combat.ts` — applyDamage, applyCombatHit, driveAttack, optionalAttackAbility,
+  attackDamageBonus, armor helpers (armorPiecesOf/pickDefaultArmor/applyArmorCounter), trigger
+  machinery (CombatClause, combatTriggerEffects, eventMatches, resolveCombatTriggers,
+  resolveRemovalTriggers, hasRemovalTrigger), prompt arming (armDeadPicks, armNextArmorChoice,
+  armPrompts).
+- `engine/lifecycle.ts` — resolveStartOfTurn, buildPeek/nextPeek, controlsPreventAnchorDecay,
+  makeNewGame/dealPlayer/makePc/SETUP_SEQUENCE, computeWillpower, freshActs, seatName, shuffle,
+  rollD6, uid, equipOnto, kitDests.
+- `engine/rng.ts` — the randomness boundary (moved from store/rng.ts).
+- `engine/index.ts` — barrel; gameStore does `export * from '../engine'` so EVERY old import
+  site still works. `store/keywords.ts` and `store/rng.ts` are one-line re-export shims.
+
+**The store shell (`gameStore.ts`) retains:** the create chain (persist/record/
+subscribeWithSelector), all reducers (gates → engine calls → prompt arming → broadcast),
+store-local prompt types + LOCAL_PROMPTS_CLEARED, reactiveHold, gameIsOver/notActionPhase,
+isSealed/activationPatch (activation-lock, per plan), and — documented deviations from the
+plan's slice lists — `commitAttack`/`finalizeAttack` (they seal activation via activationPatch,
+which the plan rules store-level) and `readyPlayer` (an inline closure in endTurn writing into
+closure-captured sinks; extracting it needs a NEW signature = a design decision, not a move —
+flagged for the owner). Engine-internal module cycle entities↔combat↔interpreter is
+function-level only (hoisted, runtime-safe) and mirrors the plan's own module map. The plan's
+"~700–900 line" shell estimate was written against a 4,100-line file; the reducers + store-local
+types are simply bigger than estimated — nothing pure remains that could move without redesign.
+
+## Previous session (2026-07-08) — playtest bug batch, Item Transfer, sacrifice audit, completeness gate
 **Suite: 20 files / 262 tests green; tsc ZERO; validate:decks clean (100 cards).** Two commits:
 `fd0ef36` (bug batch) and the combined follow-up (Item Transfer + audit + gate + rulings batch 2).
 The committed replay fixture was DELETED (it pinned superseded behavior) — the owner re-records on
@@ -494,18 +539,21 @@ text parser would be brittle/non-deterministic. **Strip `Initiative` and `Exile`
   `Cost`, `Modifier`, the `Effect` union (~30 ops), `CardEffect` (trigger + effects +
   optional/oncePerTurn/if/cost/uncounterable/where).
 - `src/types/card.ts` — `Card.effects?`, `BoardEntity.buffs?: ActiveBuff[]`.
-- `src/store/keywords.ts` — pure helpers: `effectiveAttack(ent,game)`,
-  `effectiveMaxHp(ent,game)`, `effectiveKeywords(ent,game)` (printed + buff grants + item
-  keyword grants, MINUS opposing keyword-suppression auras), `hasModifier`, `isPhysicalConstruct`,
-  `parseEnterTrigger`, `firstItemOf`, `gatherActivated`, plus the static-aura/item-bonus
-  internals (`staticAuraStat`, `selfItemStat`, `isKeywordSuppressed`).
-- `src/store/gameStore.ts` — the interpreter + all reducers. Module-level (above the store):
-  `applyDamage` (Armor→hpFloor1→PC-defeat; used by combat AND actions),
-  `resolveActionEffects(game,lp,sourceName,effects,targetId?,sourceId?)` (the big switch:
-  damage/heal/buff/draw/discard/mill/bounce/extraAttack/forceAttack/anchor/animate/dieCheck),
-  `resolveStartOfTurn`, `eligibleTargets`, `actionTargetSpec`/`effectTargetSpec`,
-  `twoStepKind`, `permanentEffects`, helpers (`charsOf`, `companionIds`, `constructIds`,
-  `pcIdOf`, `amountValue`, `rollD6`).
+- `src/engine/` — the headless engine (2026-07-10 extraction; module map in the latest-session
+  note above): `stats.ts` (the former store/keywords.ts: `effectiveAttack(ent,game)`,
+  `effectiveMaxHp`, `effectiveKeywords` — printed + buff grants + item keyword grants MINUS
+  opposing suppression auras — `hasModifier`, `isPhysicalConstruct`, `parseEnterTrigger`,
+  `firstItemOf`, aura/item-bonus internals), `interpreter.ts` (`resolveActionEffects` — the big
+  op switch — `eligibleTargets`, `actionTargetSpec`/`effectTargetSpec`, `twoStepKind`,
+  `permanentEffects`, `gatherActivated`, `amountValue`), `combat.ts` (`applyDamage`:
+  Armor→hpFloor1→PC-defeat, used by combat AND actions; `driveAttack`; trigger machinery),
+  `entities.ts` (`destroyEntity`, `charsOf`, `companionIds`, `constructIds`, `pcIdOf`),
+  `lifecycle.ts` (`resolveStartOfTurn`, `makeNewGame`, `rollD6`), `state.ts` (GameState + all
+  synced prompt types), `geometry.ts`, `rng.ts`. `store/keywords.ts` + `store/rng.ts` are
+  re-export shims; gameStore re-exports the whole engine barrel.
+- `src/store/gameStore.ts` — the store SHELL: the Zustand create chain and all reducers
+  (gates → engine calls → prompt arming → broadcast), store-local prompt state,
+  isSealed/activationPatch, reactiveHold, commitAttack/finalizeAttack, readyPlayer (in endTurn).
 
 ### Resolution flows (all reuse one targeting layer)
 - **`playAction`** (Action cards): counter-check → two-step? → deck-peek? → needs a single
