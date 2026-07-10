@@ -42,7 +42,9 @@ isSealed/activationPatch (activation-lock, per plan), and — documented deviati
 plan's slice lists — `commitAttack`/`finalizeAttack` (they seal activation via activationPatch,
 which the plan rules store-level) and `readyPlayer` (an inline closure in endTurn writing into
 closure-captured sinks; extracting it needs a NEW signature = a design decision, not a move —
-flagged for the owner). Engine-internal module cycle entities↔combat↔interpreter is
+RULED by the owner 2026-07-10: stays as-is, folded into the decay-trigger wiring item of the
+engine-capability program — decay will route through the engine's shared exit path there, and
+the readyPlayer split gets designed with it). Engine-internal module cycle entities↔combat↔interpreter is
 function-level only (hoisted, runtime-safe) and mirrors the plan's own module map. The plan's
 "~700–900 line" shell estimate was written against a 4,100-line file; the reducers + store-local
 types are simply bigger than estimated — nothing pure remains that could move without redesign.
