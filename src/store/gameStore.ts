@@ -3,7 +3,7 @@ import { persist, subscribeWithSelector } from 'zustand/middleware';
 import { rng } from './rng';
 import { recordActions } from './recordMiddleware';
 import type { BoardEntity, Card, TapState, Acts, EquippedItem } from '../types/card';
-import type { Effect, Amount, Condition, TargetSpec, Trigger, Cost, CardEffect } from '../types/effects';
+import type { Effect, Condition, Trigger, Cost } from '../types/effects';
 import { CATALOG, SORCERER_WARRIOR_CARDS, WIZARD_BUILDER_CARDS } from '../data/catalog';
 import { recomputeStatics, isImmuneToSplash, grantHitRun, HIT_RUN_STATUS,
          isPhysicalConstruct, parseEnterTrigger, type EnterTriggerKind,
@@ -21,8 +21,12 @@ import { ADJ, FRONT_SLOTS, BACK_SLOTS, isFront, findSlot, type SlotId, type Boar
          type PendingItemTransfer, type PendingModalChoice,
          findEntityAnywhere, updateEntity, removeEntity, deadCardsOf, itemCardsOf,
          itemTransferOf, itemProfileOf, itemTransferCandidates, armNextItemTransfer,
-         setPcHp, payPcHp, pcIdOf, companionIds, constructIds, charsOf,
-         ownPhysicalConstructIds } from '../engine';
+         setPcHp, payPcHp, pcIdOf, companionIds, charsOf,
+         ownPhysicalConstructIds,
+         amountValue, isInteractiveSpec, eligibleTargets, conditionMet,
+         effectsWouldAffectSomething, actionTargetSpec, twoStepKind, permanentEffects,
+         effectsOfCard, gatherActivated, abilityUsedTag, magicCtx,
+         type EffectCtx } from '../engine';
 
 export type PlayPhase = 'lobby' | 'setup' | 'game';
 /** 'placing-pc' = waiting for the local player to choose a Back Line slot */
@@ -431,94 +435,6 @@ function rollD6(): number { return 1 + Math.floor(rng.next() * 6); }
  *  by the replay recorder and reproduced on replay; still effectively unique in normal play. */
 function uid(prefix: string): string { return `${prefix}-${Math.floor(rng.next() * 0xffffffff).toString(16)}`; }
 
-function amountValue(a: Amount, die: number, controlled: number): number {
-  if (typeof a === 'number') return a;
-  if ('die' in a) return die;
-  if ('halfDie' in a) return Math.floor(die / 2);
-  if ('halfDieUp' in a) return Math.ceil(die / 2);
-  if ('perControlled' in a) return controlled;
-  return 0;
-}
-
-/** Would ANY of these NON-INTERACTIVE effects affect something right now? Ruled
- *  2026-07-08: an ability that would affect nothing cannot be activated — this is the
- *  pre-cost recipient check for auto-scoped group targets (interactive targets are
- *  checked via eligibleTargets). Deliberately conservative: ops/scopes this doesn't
- *  model count as "yes" so a new op can never be falsely refused. */
-function effectsWouldAffectSomething(game: GameState, lp: 'p1' | 'p2', effects: Effect[], selfId?: string): boolean {
-  const opp: 'p1' | 'p2' = lp === 'p1' ? 'p2' : 'p1';
-  for (const e of effects) {
-    switch (e.op) {
-      case 'damage':
-      case 'heal': {
-        const t = e.target;
-        if (t === 'allEnemies') { if (charsOf(game, opp).length) return true; break; }
-        if (t === 'frontLineEnemy') { if (charsOf(game, opp, 'front').length) return true; break; }
-        if (t === 'backLineEnemy') { if (charsOf(game, opp, 'back').length) return true; break; }
-        if (t === 'ownParty') { if (charsOf(game, lp).length) return true; break; }
-        if (t === 'ownCompanions') { if (companionIds(game, lp).length) return true; break; }
-        if (t === 'self') { if (selfId) return true; break; }
-        return true; // interactive / unmodeled scope — handled by the eligibleTargets path
-      }
-      case 'anchor': {
-        if (e.target === 'ownPhysicalConstructs') {
-          // The group op excludes the source itself (owner ruling 2026-07-03).
-          if ((Object.values(game[lp].board) as (BoardEntity | undefined)[])
-            .some(x => !!x && isPhysicalConstruct(x) && x.id !== selfId)) return true;
-          break;
-        }
-        return true;
-      }
-      default:
-        return true; // draw, buffs, dice, peeks… always meaningful (or unmodeled)
-    }
-  }
-  return false;
-}
-
-/** Target specs that require clicking a single board entity. */
-const INTERACTIVE_SPECS: TargetSpec[] = [
-  'anyCharacter', 'enemyCharacter', 'ownCharacter', 'otherCharacter',
-  'anyCompanion', 'enemyCompanion', 'ownCompanion',
-  'anyConstruct', 'physicalConstruct', 'magicalConstruct',
-];
-function isInteractiveSpec(spec: TargetSpec): boolean { return INTERACTIVE_SPECS.includes(spec); }
-
-/** Eligible target ids for an interactive TargetSpec (used to highlight the board). */
-function eligibleTargets(game: GameState, lp: 'p1' | 'p2', spec: TargetSpec): string[] {
-  const opp: 'p1' | 'p2' = lp === 'p1' ? 'p2' : 'p1';
-  switch (spec) {
-    case 'anyCharacter':   return [...charsOf(game, lp), ...charsOf(game, opp)];
-    case 'enemyCharacter': return charsOf(game, opp);
-    case 'ownCharacter':   return charsOf(game, lp);
-    case 'anyCompanion':   return [...companionIds(game, lp), ...companionIds(game, opp)];
-    case 'enemyCompanion': return companionIds(game, opp);
-    case 'ownCompanion':   return companionIds(game, lp);
-    case 'physicalConstruct': return constructIds(game, isPhysicalConstruct);
-    case 'magicalConstruct':  return constructIds(game, e => e.subtype === 'Incantation');
-    case 'anyConstruct':      return constructIds(game, () => true);
-    default: return [];
-  }
-}
-
-function conditionMet(game: GameState, lp: 'p1' | 'p2', cond: Condition): boolean {
-  switch (cond.kind) {
-    case 'controlsType': {
-      return Object.values(game[lp].board).some(e => {
-        if (!e) return false;
-        const typeOk = cond.cardType === 'Construct' ? e.kind === 'construct' : e.kind === 'companion';
-        return typeOk && (!cond.subtype || e.subtype === cond.subtype);
-      });
-    }
-    case 'controlsCount': {
-      const n = Object.values(game[lp].board).filter(e => e && (cond.of === 'companions' ? e.kind === 'companion' : e.kind === 'construct')).length;
-      return n >= cond.min;
-    }
-    case 'willpowerAtLeast': return currentWillpower(game[lp]) >= cond.value;
-    default: return true;
-  }
-}
-
 /**
  * Resolve a list of onPlay effects. `targetId` (if present) binds the single
  * interactive target. A single d6 is rolled per card and shared across die/halfDie
@@ -785,33 +701,7 @@ function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceName: stri
   return { game: g, msgs };
 }
 
-/** The interactive target an effect needs (the single board pick), or null. */
-function effectTargetSpec(e: Effect): TargetSpec | null {
-  switch (e.op) {
-    case 'damage': return e.splash === 'board' ? null : (isInteractiveSpec(e.target) ? e.target : null);
-    case 'heal':
-    case 'bounce':
-    case 'extraAttack':
-    case 'anchor':
-    case 'sacrificeItem':
-    case 'animate':
-    case 'forceAttack': return isInteractiveSpec(e.target) ? e.target : null;
-    case 'dieCheck': {
-      // The branch effects choose the target up-front (declared before the roll).
-      for (const sub of [...e.onPass, ...e.onFail]) { const t = effectTargetSpec(sub); if (t) return t; }
-      return null;
-    }
-    default: return null;
-  }
-}
-
 // ─── Attacker-side combat triggers (onAttack / onDealDamage / onKill) ──────────
-/** Extra context threaded into the interpreter (combat triggers, Magic-Action mods). */
-interface EffectCtx {
-  damagedOwner?: 'p1' | 'p2';   // for target:'damagedController'
-  damageBonus?: number;         // +dmg per enemy character a Magic Action damages
-}
-
 /** A clause (effects + gate + label) drawn from an entity's combat triggers. */
 interface CombatClause { effects: Effect[]; if?: Condition; sourceName: string; optional?: boolean; cost?: Cost }
 
@@ -992,26 +882,6 @@ function notActionPhase(game: GameState): boolean {
   return game.currentPhase !== 'action';
 }
 
-// ─── Damage modifiers (passive, consulted by the damage pipeline) ──────────────
-/** Sum of static `magicDamageBonus` from an entity's own card + its equipped items. */
-function staticMagicBonusOf(ent: BoardEntity): number {
-  let sum = 0;
-  const names = [ent.name];
-  const lo = ent.loadout;
-  if (lo) for (const it of [lo.weapon, ...lo.gear]) if (it) names.push(it.name);
-  for (const name of names)
-    for (const ce of CATALOG.find(c => c.name === name)?.effects ?? [])
-      if (ce.trigger === 'static') for (const e of ce.effects) if (e.op === 'magicDamageBonus') sum += e.amount;
-  return sum;
-}
-
-/** Total Magic-Action damage bonus a player's board projects (Burning Eye etc.). */
-function magicActionDamageBonus(game: GameState, lp: 'p1' | 'p2'): number {
-  let sum = 0;
-  for (const ent of Object.values(game[lp].board)) if (ent) sum += staticMagicBonusOf(ent);
-  return sum;
-}
-
 /** Does any permanent (card or item) this player controls project `preventAnchorDecay`
  *  (Master of Foundations)? Their Physical Constructs then skip start-of-turn decay. */
 function controlsPreventAnchorDecay(ps: PlayerState): boolean {
@@ -1027,13 +897,6 @@ function controlsPreventAnchorDecay(ps: PlayerState): boolean {
   return false;
 }
 
-/** EffectCtx carrying a Magic-Action damage bonus, when the source is a Magic Action. */
-function magicCtx(game: GameState, lp: 'p1' | 'p2', card?: Card): EffectCtx | undefined {
-  if (!card || card.subtype !== 'Magic') return undefined;
-  const b = magicActionDamageBonus(game, lp);
-  return b > 0 ? { damageBonus: b } : undefined;
-}
-
 /** +damage on this attacker's attacks from `attackBonus` onAttack clauses (Scorching Brand). */
 function attackDamageBonus(attacker: BoardEntity, game: GameState, side: 'p1' | 'p2'): number {
   let sum = 0;
@@ -1044,47 +907,6 @@ function attackDamageBonus(attacker: BoardEntity, game: GameState, side: 'p1' | 
   }
   return sum;
 }
-
-/** A permanent's structured effects for a given trigger (looked up from CATALOG by name). */
-function permanentEffects(ent: BoardEntity, trigger: Trigger): Effect[] {
-  const card = CATALOG.find(c => c.name === ent.name);
-  return (card?.effects ?? []).filter(c => c.trigger === trigger).flatMap(c => c.effects);
-}
-
-export interface ActivatedAbility {
-  sourceName: string;      // the card the ability comes from (entity or equipped item)
-  itemId?: string;         // set when the ability is on an equipped item
-  cost?: Cost;
-  effects: Effect[];
-  oncePerTurn?: boolean;
-  label: string;           // short button label
-}
-
-/** Gather an entity's activated abilities: its own card's + its equipped items'. */
-export function gatherActivated(ent: BoardEntity): ActivatedAbility[] {
-  const out: ActivatedAbility[] = [];
-  const push = (name: string, itemId: string | undefined, fromName: string) => {
-    const card = CATALOG.find(c => c.name === name);
-    for (const ce of card?.effects ?? []) {
-      if (ce.trigger !== 'activated') continue;
-      out.push({ sourceName: fromName, itemId, cost: ce.cost, effects: ce.effects, oncePerTurn: ce.oncePerTurn, label: fromName });
-    }
-  };
-  push(ent.name, undefined, ent.name);
-  const lo = ent.loadout;
-  // Dedup by item id — a heavy item occupies BOTH gear slots as the same object, and
-  // without this its ability would be listed (and offered) twice.
-  const seen = new Set<string>();
-  if (lo) for (const it of [lo.weapon, ...lo.gear]) {
-    if (!it || seen.has(it.id)) continue;
-    seen.add(it.id);
-    push(it.name, it.id, it.name);
-  }
-  return out;
-}
-
-/** Status marker (in ent.statuses) recording a once-per-turn ability has fired. */
-export function abilityUsedTag(sourceName: string): string { return `ability-used:${sourceName}`; }
 
 /** Slice a peek request against the current deck into a live PendingPeek (or null
  *  if that deck is now empty). Re-sliced at arm time so a prior reorder can't stale it. */
@@ -1168,30 +990,6 @@ function resolveStartOfTurn(game: GameState, side: 'p1' | 'p2'): { game: GameSta
     if (r.msgs.length) msgs.push(`${loc.ent.name}: ${r.msgs.join(' | ')}`);
   }
   return { game: g, msgs, peeks, deadPicks, armorChoices, modals };
-}
-
-/** A card's clauses by name (un-flattened — clause-level fields like cost/optional intact). */
-function effectsOfCard(name: string): CardEffect[] {
-  return CATALOG.find(c => c.name === name)?.effects ?? [];
-}
-
-/** Does this Action need an interactive target chosen on the board before resolving? */
-function actionTargetSpec(effects: Effect[]): TargetSpec | null {
-  for (const e of effects) {
-    const t = effectTargetSpec(e);
-    if (t) return t;
-  }
-  return null;
-}
-
-/** A two-step action (pick own char, then a slot or an enemy), or null. */
-function twoStepKind(effects: Effect[]): 'reposition' | 'disarm' | 'moveAnchor' | null {
-  for (const e of effects) {
-    if (e.op === 'move' && e.to === 'anySlot' && e.target === 'ownCharacter') return 'reposition';
-    if (e.op === 'attackDisarm') return 'disarm';
-    if (e.op === 'moveAnchor') return 'moveAnchor';
-  }
-  return null;
 }
 
 /**
