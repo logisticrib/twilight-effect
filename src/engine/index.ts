@@ -6,3 +6,4 @@
 export * from './geometry';
 export * from './state';
 export * from './stats';
+export * from './entities';

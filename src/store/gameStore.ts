@@ -18,7 +18,11 @@ import { ADJ, FRONT_SLOTS, BACK_SLOTS, isFront, findSlot, type SlotId, type Boar
          type Phase, type ClassZoneCard, type PlayerState, type GameState,
          type PendingPeek, type PeekRequest, type PendingCoercion, type PendingDeadPick,
          type DamageEvent, type AttackCtx, type ArmorChoiceData, type PendingArmor,
-         type PendingItemTransfer, type PendingModalChoice } from '../engine';
+         type PendingItemTransfer, type PendingModalChoice,
+         findEntityAnywhere, updateEntity, removeEntity, deadCardsOf, itemCardsOf,
+         itemTransferOf, itemProfileOf, itemTransferCandidates, armNextItemTransfer,
+         setPcHp, payPcHp, pcIdOf, companionIds, constructIds, charsOf,
+         ownPhysicalConstructIds } from '../engine';
 
 export type PlayPhase = 'lobby' | 'setup' | 'game';
 /** 'placing-pc' = waiting for the local player to choose a Back Line slot */
@@ -143,76 +147,6 @@ function activationPatch(game: GameState, id: string): { currentActor: string; f
   return { currentActor: id, finishedActors: game.finishedActors };
 }
 
-function findEntityAnywhere(game: GameState, entityId: string): { player: 'p1' | 'p2'; slot: SlotId; ent: BoardEntity } | null {
-  for (const player of ['p1', 'p2'] as const) {
-    for (const [slot, ent] of Object.entries(game[player].board)) {
-      if (ent?.id === entityId) return { player, slot: slot as SlotId, ent };
-    }
-  }
-  return null;
-}
-
-function updateEntity(game: GameState, entityId: string, patch: Partial<BoardEntity>): GameState {
-  const loc = findEntityAnywhere(game, entityId);
-  if (!loc) return game;
-  return {
-    ...game,
-    [loc.player]: {
-      ...game[loc.player],
-      board: {
-        ...game[loc.player].board,
-        [loc.slot]: { ...loc.ent, ...patch },
-      },
-    },
-  };
-}
-
-function removeEntity(game: GameState, entityId: string): GameState {
-  const loc = findEntityAnywhere(game, entityId);
-  if (!loc) return game;
-  const board = { ...game[loc.player].board };
-  delete board[loc.slot];
-  return {
-    ...game,
-    [loc.player]: { ...game[loc.player], board },
-  };
-}
-
-/** The catalog cards a destroyed/sacrificed entity carries to its owner's Dead Zone:
- *  its own card plus any equipped items' (deduped by item id — a heavy item occupies
- *  both gear slots but is one card). */
-function deadCardsOf(ent: BoardEntity): Card[] {
-  const names: string[] = [ent.name];
-  const seen = new Set<string>();
-  for (const it of [ent.loadout?.weapon, ...(ent.loadout?.gear ?? [])]) {
-    if (!it || seen.has(it.id)) continue;
-    seen.add(it.id);
-    names.push(it.name);
-  }
-  return names.map(n => CATALOG.find(c => c.name === n)).filter((c): c is Card => !!c);
-}
-
-/** The catalog cards of an entity's equipped items (deduped — a heavy item is one card). */
-function itemCardsOf(ent: BoardEntity): Card[] {
-  const seen = new Set<string>();
-  const out: Card[] = [];
-  for (const it of [ent.loadout?.weapon, ...(ent.loadout?.gear ?? [])]) {
-    if (!it || seen.has(it.id)) continue;
-    seen.add(it.id);
-    const c = CATALOG.find(x => x.name === it.name);
-    if (c) out.push(c);
-  }
-  return out;
-}
-
-/** The Item Transfer window a departing character opens for its controller, or null
- *  (no items, or not a character — constructs can't carry items, PC exits end the game). */
-function itemTransferOf(ent: BoardEntity, controller: 'p1' | 'p2'): PendingItemTransfer | null {
-  if (!isCharacter(ent)) return null;
-  const items = itemCardsOf(ent).map(c => ({ id: c.id, name: c.name }));
-  return items.length ? { lp: controller, sourceName: ent.name, items, usedIds: [] } : null;
-}
-
 /** Remove a destroyed/sacrificed entity from the board AND move its card (plus its
  *  equipped items') to its owner's Dead Zone; a tucked Oathsworn card returns to its
  *  owner's hand. Every destruction path must use this — bare `removeEntity` loses the
@@ -249,53 +183,6 @@ function destroyEntity(game: GameState, entityId: string, sink?: PendingDeadPick
     msgs.push(...rt.msgs);
   }
   return { game: g, msgs };
-}
-
-/** Eligible rescuers for one item of a transfer window, re-derived LIVE: ready
- *  characters (not exhausted / major-tapped) in the controller's party, not already
- *  exhausted this event, with an open slot of the appropriate type. Exported for the
- *  ItemTransferModal. */
-export function itemTransferCandidates(game: GameState, it: PendingItemTransfer, itemId: string): string[] {
-  const card = CATALOG.find(c => c.id === itemId);
-  if (!card) return [];
-  const { isWeapon, isHeavy } = itemProfileOf(card);
-  return (Object.values(game[it.lp].board) as (BoardEntity | undefined)[])
-    .filter((e): e is BoardEntity => !!e && isCharacter(e)
-      && !(e.tapped === 'major' || e.exhausted)
-      && !it.usedIds.includes(e.id)
-      && canHoldItem(e, isWeapon, isHeavy))
-    .map(e => e.id);
-}
-
-/** Arm the next Item Transfer window from the queue. Held back while the Poison check
- *  or an earlier forced prompt (peek / dead-pick / armor) is up — start-of-turn prompts
- *  resolve in canonical Ready Phase step order, Poison BEFORE transfer windows (Rules
- *  Note 2026-07-08) — every such resolver calls this again when it drains. Items whose
- *  eligible-rescuer pool is empty simply stay in the Dead Zone (canon's default), so a
- *  window with nothing claimable evaporates without a prompt. */
-function armNextItemTransfer(game: GameState): GameState {
-  if (game.pendingItemTransfer) return game;
-  if (game.pendingPoison || game.pendingPeek || game.pendingDeadPick || game.pendingArmor || game.pendingModalChoice) return game;
-  const queue = [...game.pendingItemTransferQueue];
-  while (queue.length) {
-    const req = queue.shift()!;
-    const items = req.items.filter(x => itemTransferCandidates(game, req, x.id).length > 0);
-    if (!items.length) continue; // nothing claimable — items rest in the Dead Zone
-    return { ...game, pendingItemTransfer: { ...req, items }, pendingItemTransferQueue: queue };
-  }
-  // Fell through the whole queue — every window evaporated (or it was empty).
-  return game.pendingItemTransferQueue.length ? { ...game, pendingItemTransferQueue: [] } : game;
-}
-
-/** Set a Player Character's HP. The PC board entity is the single source of truth,
- *  mirrored to the PlayerState headline; at 0 HP the game ends — `gameOver` gets the
- *  winning SIDE (`winnerIfDead` when the caller knows who takes credit, else the PC
- *  owner's opponent). */
-function setPcHp(game: GameState, side: 'p1' | 'p2', pcEntityId: string, newHp: number, winnerIfDead?: 'p1' | 'p2'): GameState {
-  let g = updateEntity(game, pcEntityId, { hp: newHp });
-  g = { ...g, [side]: { ...g[side], hp: newHp } };
-  if (newHp <= 0 && !g.gameOver) g = { ...g, gameOver: winnerIfDead ?? (side === 'p1' ? 'p2' : 'p1') };
-  return g;
 }
 
 // ─── Damage + effect interpreter (shared by combat and Action cards) ───────────
@@ -496,14 +383,6 @@ function optionalAttackAbility(attacker: BoardEntity, game: GameState, side: 'p1
   return null;
 }
 
-/** Pay HP directly from a player's PC (a cost, not damage — armor/replacement don't apply). */
-function payPcHp(game: GameState, side: 'p1' | 'p2', amount: number): GameState {
-  const pcId = pcIdOf(game, side);
-  const loc = pcId ? findEntityAnywhere(game, pcId) : null;
-  if (!loc) return game;
-  return setPcHp(game, side, loc.ent.id, Math.max(0, loc.ent.hp - amount));
-}
-
 /** Commit an attack: tap the attacker, build the hit queue (primary + Cleave), and drive
  *  it. `bonusDmg` is the optional on-attack bonus the player opted into (else 0). Returns
  *  the finished game (+log) or a mid-combat pause (PendingArmor already set on `game`). */
@@ -561,14 +440,6 @@ function amountValue(a: Amount, die: number, controlled: number): number {
   return 0;
 }
 
-/** Characters (companion or PC) on a player's board, optionally filtered to a row. */
-function charsOf(game: GameState, side: 'p1' | 'p2', row?: 'front' | 'back'): string[] {
-  return (Object.entries(game[side].board) as [SlotId, BoardEntity | undefined][])
-    .filter(([slot, e]) => e && (e.kind === 'companion' || e.kind === 'pc')
-      && (row === undefined || (row === 'front') === isFront(slot)))
-    .map(([, e]) => e!.id);
-}
-
 /** Would ANY of these NON-INTERACTIVE effects affect something right now? Ruled
  *  2026-07-08: an ability that would affect nothing cannot be activated — this is the
  *  pre-cost recipient check for auto-scoped group targets (interactive targets are
@@ -603,23 +474,6 @@ function effectsWouldAffectSomething(game: GameState, lp: 'p1' | 'p2', effects: 
     }
   }
   return false;
-}
-
-function pcIdOf(game: GameState, side: 'p1' | 'p2'): string | null {
-  const pc = Object.values(game[side].board).find(e => e?.kind === 'pc');
-  return pc ? pc.id : null;
-}
-
-function companionIds(game: GameState, side: 'p1' | 'p2'): string[] {
-  return Object.values(game[side].board).filter((e): e is BoardEntity => !!e && e.kind === 'companion').map(e => e.id);
-}
-
-function constructIds(game: GameState, pred: (e: BoardEntity) => boolean): string[] {
-  const out: string[] = [];
-  for (const side of ['p1', 'p2'] as const)
-    for (const e of Object.values(game[side].board))
-      if (e && e.kind === 'construct' && pred(e)) out.push(e.id);
-  return out;
 }
 
 /** Target specs that require clicking a single board entity. */
@@ -1340,27 +1194,12 @@ function twoStepKind(effects: Effect[]): 'reposition' | 'disarm' | 'moveAnchor' 
   return null;
 }
 
-/** Ids of the Physical Constructs a player controls (Field Engineer's endpoints). */
-function ownPhysicalConstructIds(game: GameState, lp: 'p1' | 'p2'): string[] {
-  return (Object.values(game[lp].board) as (BoardEntity | undefined)[])
-    .filter((e): e is BoardEntity => !!e && isPhysicalConstruct(e)).map(e => e.id);
-}
-
 /**
  * Equip a hand item `card` onto `entityId`: weapon → weapon slot (old weapon back to
  * hand), gear → first empty gear slot (heavy fills both). Removes the item from `lp`'s
  * hand. Does NOT spend an action — callers add the action cost when appropriate (the
  * normal Minor-action equip does; on-enter "equip from hand" does not).
  */
-/** Weapon/heavy classification for a hand item (drives slot placement + the capacity
- *  gate in equipItem). Sniffed from itemKind/subtype/text — the deck data has no
- *  structured field for it yet. */
-function itemProfileOf(card: Card): { isWeapon: boolean; isHeavy: boolean } {
-  const isWeapon = card.itemKind?.toLowerCase().includes('weapon') ||
-                   (card.type === 'Item' && (card.subtype?.toLowerCase().includes('weapon') || card.subtype?.toLowerCase().includes('sword') || card.subtype?.toLowerCase().includes('bow') || card.subtype?.toLowerCase().includes('staff') || card.subtype?.toLowerCase().includes('dagger') || card.subtype?.toLowerCase().includes('axe') || card.subtype?.toLowerCase().includes('mace') || card.subtype?.toLowerCase().includes('wand')));
-  return { isWeapon: !!isWeapon, isHeavy: !!card.text?.toLowerCase().includes('heavy') };
-}
-
 function equipOnto(game: GameState, lp: 'p1' | 'p2', entityId: string, card: Card): GameState {
   const loc = findEntityAnywhere(game, entityId);
   if (!loc) return game;
