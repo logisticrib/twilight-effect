@@ -12,7 +12,10 @@ export function downloadReplay(): { ok: true } | { ok: false; error: string } {
   const res = tryExport();
   if (!res.ok) return res;
   const log = res.log;
-  const name = `twilight-${log.mode}-${log.commit}-t${turnsOf(log)}.replay.json`;
+  // recordedAt (base36) uniquifies the name: two same-turn-count games on the same
+  // commit used to collide, and the browser's "(1)" suffix fell OUTSIDE the fixture
+  // test glob — a fixture that sat in the folder while silently never running.
+  const name = `twilight-${log.mode}-${log.commit}-t${turnsOf(log)}-${log.recordedAt.toString(36)}.replay.json`;
   // Strip the in-memory diagnostic `state` from action entries — fixtures replay by
   // re-execution, so this only bloats the file.
   const lean = { ...log, entries: log.entries.map(e => e.kind === 'action' ? { ...e, state: undefined } : e) };

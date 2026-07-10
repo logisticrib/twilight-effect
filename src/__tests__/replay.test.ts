@@ -342,6 +342,36 @@ describe('export validation (replay is the oracle)', () => {
   });
 });
 
+// ─── Fixtures-folder hygiene (owner directive 2026-07-08) ───────────────────────
+// Every file in src/replay/fixtures/ must match the fixture naming pattern AND be
+// covered by the test glob below — a non-conforming or unglobbed file FAILS the suite
+// BY NAME. Why: two same-turn-count recordings on the same commit once collided, the
+// browser saved one as "….replay(1).json", and that fixture sat in the folder while
+// silently never running (the glob only matches *.replay.json). download.ts now
+// appends a base36 recordedAt uniquifier so names can't collide.
+const FIXTURE_NAME = /^twilight-[a-z]+-[0-9a-f]{7}-t\d+[a-z0-9-]*\.replay\.json$/;
+describe('fixtures folder hygiene: no silent, untested files', () => {
+  // Wide glob = everything in the folder; narrow glob = what the fixture test runs.
+  const onDisk = Object.keys(import.meta.glob('../replay/fixtures/*')).map(k => k.split('/').pop()!);
+  const globbed = new Set(Object.keys(
+    import.meta.glob('../replay/fixtures/*.replay.json')).map(k => k.split('/').pop()!));
+
+  it('every file matches the fixture naming pattern', () => {
+    const bad = onDisk.filter(f => !FIXTURE_NAME.test(f));
+    expect(bad, `non-conforming fixture file(s): ${bad.join(', ')} — rename to twilight-<mode>-<commit>-t<N>[-suffix].replay.json`).toEqual([]);
+  });
+
+  it('every file is covered by the test glob (nothing sits untested)', () => {
+    const unglobbed = onDisk.filter(f => !globbed.has(f));
+    expect(unglobbed, `fixture file(s) NOT picked up by the test glob: ${unglobbed.join(', ')}`).toEqual([]);
+  });
+
+  it("download.ts's generated name format conforms to the pattern (uniquifier included)", () => {
+    expect(FIXTURE_NAME.test(`twilight-solo-abc1234-t5-${Date.now().toString(36)}.replay.json`)).toBe(true);
+    expect(FIXTURE_NAME.test('twilight-solo-abc1234-t5.replay(1).json'), 'browser duplicate suffix must FAIL').toBe(false);
+  });
+});
+
 // Committed fixtures (dropped in by real playtests) replay clean. Empty until the first is added.
 const fixtures = import.meta.glob('../replay/fixtures/*.replay.json', { eager: true }) as Record<string, { default: ReplayLog }>;
 describe('committed replay fixtures', () => {

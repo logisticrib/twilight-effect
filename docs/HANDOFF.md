@@ -3,7 +3,7 @@
 Self-contained context for continuing the card-effect engine work in a fresh session.
 
 ## Latest session (2026-07-08) — playtest bug batch, Item Transfer, sacrifice audit, completeness gate
-**Suite: 20 files / 254 tests green; tsc ZERO; validate:decks clean (100 cards).** Two commits:
+**Suite: 20 files / 262 tests green; tsc ZERO; validate:decks clean (100 cards).** Two commits:
 `fd0ef36` (bug batch) and the combined follow-up (Item Transfer + audit + gate + rulings batch 2).
 The committed replay fixture was DELETED (it pinned superseded behavior) — the owner re-records on
 the fixed engine from a RESTARTED server; the REC chip now shows its build stamp (`⏺ REC @<hash>`).
@@ -52,8 +52,13 @@ the fixed engine from a RESTARTED server; the REC chip now shows its build stamp
   Siegeworks) — the engine-capability program is scheduled post-refactor. PARTIAL gaps (authored
   cards whose text exceeds their clauses, human triage): Embercast Wand, Ashforged Pendant,
   Captain's Belt, Engineer's Toolbelt, Runic Convergence Staff.
-- **NEXT**: owner re-records replay fixtures on this engine (restart the server first; expect
-  `demotions: []`); the engine-capability program (8 flagged systems) post-refactor.
+- **FIXTURES RE-RECORDED (owner, same day, committed)**: three solo fixtures on `d4d3311`
+  (t5 / t5b / t8), all replay clean with `demotions: []`. GOTCHA FIXED: two same-turn-count
+  games on one commit produced the SAME filename — the browser's "(1)" copy fell outside the
+  test glob and sat silently untested. `download.ts` now appends a base36 `recordedAt`
+  uniquifier, and a fixtures-folder HYGIENE test (replay.test.ts) fails the suite BY NAME on
+  any non-conforming or unglobbed file in `src/replay/fixtures/`.
+- **NEXT**: the engine-capability program (8 flagged systems) post-refactor.
 
 ## Previous session (2026-07-06) — Phase 2 replay recorder + runner DONE (solo v1)
 test_seed_plan.md Phase 2: record a solo game's action/state sequence to JSON, replay it against
