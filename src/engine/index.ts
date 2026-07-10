@@ -4,3 +4,5 @@
 // gameStore re-exports this barrel so external import sites don't churn while the
 // extraction (tasks/refactor_extraction_plan.md) is in progress.
 export * from './geometry';
+export * from './state';
+export * from './stats';
