@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useGameStore, itemTransferCandidates } from '../store/gameStore';
+import { useGameStore, itemTransferCandidates, reactiveLabel } from '../store/gameStore';
 import type { BoardEntity } from '../types/card';
 import { useMultiplayer } from '../lib/useMultiplayer';
 import { CardFace } from '../components/CardFace';
@@ -40,6 +40,7 @@ function GameView() {
         || !!game.pendingPeek || !!game.pendingDeadPick || !!game.pendingArmor
         || !!game.pendingAttackChoice || !!game.pendingPoison || !!game.pendingCoercion
         || !!game.pendingItemTransfer || !!game.pendingModalChoice || !!game.gameOver
+        || !!game.pendingTriggerOrder
         || !!s.pendingEquipPick || s.pendingKit?.step === 'item' || !!s.pileView;
 
       if (e.key === 'Tab') {
@@ -82,6 +83,8 @@ function GameView() {
       <AttackChoiceModal />
       <PoisonHost />
       <CoercionModal />
+      <TriggerOrderModal />
+      <StackResumeDriver />
       <ReactiveHoldBanner />
       <EquipPickModal />
       <ModalHost />
@@ -221,6 +224,55 @@ function PeekModal() {
       </div>
     </ModalShell>
   );
+}
+
+/** Simultaneous-trigger ordering (trigger stack, owner-ratified 2026-07-12): >1
+ *  reactive trigger queued at once — the ACTIVE player decides the order they go on
+ *  the stack. Picks are BLIND (nothing resolves between picks); the last unpicked
+ *  trigger is implied. Forced choice: no cancel — mandatory triggers must resolve. */
+function TriggerOrderModal() {
+  const po = useGameStore(s => s.game.pendingTriggerOrder);
+  const localPlayer = useGameStore(s => s.localPlayer);
+  const isSolo = useGameStore(s => s.conn.mode === 'solo');
+  const resolveTriggerOrder = useGameStore(s => s.resolveTriggerOrder);
+  if (!po) return null;
+  if (!isSolo && po.lp !== localPlayer) return null; // the active player orders; others hold
+  const remaining = po.items.map((it, i) => ({ it, i })).filter(x => !po.picked.includes(x.i));
+  const nth = po.picked.length + 1;
+  return (
+    <ModalShell glyph="⧉" eyebrow="Simultaneous triggers"
+      title={nth === 1 ? 'Choose which trigger resolves first' : `Choose the trigger to resolve #${nth}`}
+      sub="These triggers fired at the same time — as the active player, you decide the order they go on the stack.">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {remaining.map(({ it, i }) => (
+          <button key={i} onClick={() => resolveTriggerOrder(i)} style={md.btn('primary')}>
+            {reactiveLabel(it)}
+          </button>
+        ))}
+      </div>
+    </ModalShell>
+  );
+}
+
+/** Multiplayer hand-off driver: a trigger stack resting on an 'ownEnter' owned by
+ *  this client (its resolution arms store-LOCAL prompts, so only the controller's
+ *  client may run it) is resumed here. Solo stacks drain synchronously inside the
+ *  arming reducer, so this effectively fires only after a remote snapshot lands;
+ *  resumeStack is idempotent-gated, so a StrictMode double-invoke is harmless. */
+function StackResumeDriver() {
+  const head = useGameStore(s => {
+    const ts = s.game.triggerStack;
+    return ts?.length ? ts[ts.length - 1] : null;
+  });
+  useEffect(() => {
+    if (head?.kind !== 'ownEnter') return;
+    const s = useGameStore.getState();
+    if ((s.conn.mode === 'solo' || head.controller === s.localPlayer)
+      && !s.game.pendingPeek && !s.game.pendingTriggerOrder && !s.game.pendingArmor) {
+      s.resumeStack();
+    }
+  }, [head]);
+  return null;
 }
 
 /** Start-of-turn Poison check, routed via game.pendingPoison to the affected player's

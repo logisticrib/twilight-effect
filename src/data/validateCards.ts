@@ -28,6 +28,8 @@ const TRIGGERS = [
   'onPlay', 'onEnter', 'equipped', 'static', 'onAttack', 'onDealDamage', 'onDamaged',
   'onKill', 'onDeath', 'onDestroy', 'onLeave', 'startOfTurn', 'endOfTurn',
   'onOpponentAction', 'activated',
+  // Reactive trap windows (trigger-stack arc, owner-ratified 2026-07-12).
+  'oppCompanionEnters', 'oppCompanionMovesToFront', 'oppCompanionAttacksCompanion',
 ] as const satisfies readonly Trigger[];
 export type _ExhaustiveTriggers = AssertNever<Exclude<Trigger, (typeof TRIGGERS)[number]>>;
 
@@ -38,7 +40,7 @@ const TARGET_SPECS = [
   'anyItem', 'targetPlayer',
   'self', 'allEnemies', 'allEnemyCompanions', 'ownCompanions', 'ownPhysicalConstructs', 'ownMagicalConstructs',
   'frontLineOwn', 'frontLineEnemy', 'backLineEnemy', 'sameLineAsTarget', 'ownParty',
-  'damagedController',
+  'damagedController', 'eventSubject',
 ] as const satisfies readonly TargetSpec[];
 export type _ExhaustiveTargets = AssertNever<Exclude<TargetSpec, (typeof TARGET_SPECS)[number]>>;
 
@@ -47,7 +49,7 @@ const OPS = [
   'deckPeek', 'returnFromDead', 'search', 'move', 'bounce', 'extraAttack', 'forceAttack',
   'anchor', 'sacrifice', 'sacrificeItem', 'equipFromHand', 'animate', 'dieCheck',
   'attackDisarm', 'moveAnchor', 'attackBonus', 'magicDamageBonus', 'preventAnchorDecay',
-  'lineWard', 'exhaustSelf', 'modal', 'gainControl', 'suppressKeywords', 'counterAction',
+  'lineWard', 'exhaustSelf', 'exhaust', 'modal', 'gainControl', 'suppressKeywords', 'counterAction',
   'grantKeywords', 'backLineAttack',
 ] as const satisfies readonly Effect['op'][];
 export type _ExhaustiveOps = AssertNever<Exclude<Effect['op'], (typeof OPS)[number]>>;
@@ -159,6 +161,7 @@ function validateEffect(e: Effect, path: string, p: (msg: string) => void, keywo
       if (e.to !== 'anySlot' && e.to !== 'adjacent') p(`${path}(move): bad to "${String(e.to)}"`);
       break;
     case 'bounce': case 'extraAttack': case 'sacrifice': case 'sacrificeItem': case 'equipFromHand':
+    case 'exhaust':
       target('target'); break;
     case 'forceAttack': target('attackers'); target('target'); break;
     case 'anchor':

@@ -4,8 +4,8 @@
 // src/store/gameStore.ts (extraction plan, slice 2). Store-local prompt types
 // (PendingAction/PendingPlay/PendingTrigger/PendingKit/…) stay in the store.
 import type { BoardEntity, Card } from '../types/card';
-import type { Effect } from '../types/effects';
-import type { Board } from './geometry';
+import type { Effect, Trigger } from '../types/effects';
+import type { Board, SlotId } from './geometry';
 
 export type Phase = 'ready' | 'draw' | 'cz' | 'action' | 'end';
 
@@ -106,6 +106,68 @@ export interface GameState {
    *  state-sync stays correct even for cross-half class bonuses); the other peer waits.
    *  Empty once setup is complete. */
   setupQueue: string[];
+  // ── The trigger stack (reactive-trigger arc, owner-ratified 2026-07-12). Canon
+  //    (Card_Design_Parameters §13/§21, quoted verbatim): "Use a stack - multiple
+  //    triggers resolve in order (most recent first)"; "Resolve most recent first
+  //    (last in, first out)". Playing a card puts it on the stack; it does not enter
+  //    the encounter until the stack empties down to it (R1). Both fields are
+  //    OPTIONAL and set back to `undefined` whenever the stack drains: games that
+  //    never queue a trigger keep their exact pre-arc canonical replay hash
+  //    (stableStringify omits undefined-valued keys). ────────────────────────────
+  /** The LIFO trigger stack — LAST element is the top (next to resolve). Present
+   *  only while non-empty. */
+  triggerStack?: StackEntry[];
+  /** Simultaneous-trigger ordering prompt: >1 reactive trigger queued at once — the
+   *  ACTIVE player decides the order they go on the stack (Rules_Taxonomy Tier 5 #9 /
+   *  Tier 3 #18, reconfirmed by the owner 2026-07-12: it is the ACTIVE player, not
+   *  the trap controller). Present only while a choice is pending. */
+  pendingTriggerOrder?: PendingTriggerOrder | null;
+}
+
+// ─── Trigger-stack entries (R1–R4, owner-ratified 2026-07-12) ──────────────────
+/** Reactive trigger windows resolvable purely from synced game state (no store-local
+ *  prompt machinery). Queued above the event's subject; resolve LIFO. Once queued,
+ *  a trigger resolves even if its source or subject has since died (R1). */
+export type ReactiveStackEntry =
+  /** A card-authored reactive clause (the trap triggers). Resolution runs the source
+   *  CARD's clauses for `trigger` with the event subject bound to 'eventSubject'. */
+  | { kind: 'reactive'; sourceId: string; sourceName: string; controller: 'p1' | 'p2';
+      trigger: Trigger; subjectId: string; subjectName: string }
+  /** A Paranoia play-window trigger: the controller peeks the placer's deck BEFORE
+   *  the companion enters (R3, re-ruled 2026-07-12 — "Peek first 100%"). Resolution
+   *  arms a PendingPeek owned by the controller and PAUSES the stack. */
+  | { kind: 'paranoia'; sourceName: string; controller: 'p1' | 'p2'; deckSide: 'p1' | 'p2' };
+
+export type StackEntry =
+  /** The played card itself, waiting on the stack (R1): resolving it ENTERS the
+   *  entity, then queues the enter-event triggers (own on-enter first, reactive
+   *  triggers above — ruled sequence for Tripwire, 2026-07-12). Carries the played
+   *  CARD: the on-enter machinery reads the hand card, not a CATALOG lookup. */
+  | { kind: 'enter'; ent: BoardEntity; card: Card; slot: SlotId; controller: 'p1' | 'p2' }
+  /** The entered permanent's own on-enter ability. Resolves via the store's on-enter
+   *  machinery (may arm store-local prompts, so in multiplayer only the controller's
+   *  client may resolve it — others hold). Still resolves if the entity died to a
+   *  trap that resolved above it (R1: queued triggers survive death). */
+  | { kind: 'ownEnter'; entId: string; card: Card; slot: SlotId; controller: 'p1' | 'p2' }
+  /** The attacker's own declaration-window ("when this attacks") triggers — resolve
+   *  during the attack step BEFORE damage is queued (R2). Carries a snapshot so the
+   *  clauses still resolve if the attacker dies to a trap queued above. */
+  | { kind: 'ownAttack'; attacker: BoardEntity; side: 'p1' | 'p2' }
+  /** The attack's damage step (R2: declaration and damage are separate steps).
+   *  Resolving it drives the hit queue — unless the attacker is dead by then, in
+   *  which case damage is never queued and the attack fizzles. */
+  | { kind: 'attackDamage'; ctx: AttackCtx }
+  | ReactiveStackEntry;
+
+/** Simultaneous-trigger ordering prompt. `items` are the reactive triggers that
+ *  queued at once; the ACTIVE player picks resolution order BLIND (nothing resolves
+ *  between picks — the order is decided at queue time, then they go on the stack).
+ *  `picked` accumulates item indices in RESOLUTION order; when one unpicked item
+ *  remains the order is complete and the stack runs. */
+export interface PendingTriggerOrder {
+  lp: 'p1' | 'p2';
+  items: ReactiveStackEntry[];
+  picked: number[];
 }
 
 /** A deck-peek (scry) awaiting the player to assign each looked-at card a

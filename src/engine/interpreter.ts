@@ -125,10 +125,12 @@ export function effectTargetSpec(e: Effect): TargetSpec | null {
   }
 }
 
-/** Extra context threaded into the interpreter (combat triggers, Magic-Action mods). */
+/** Extra context threaded into the interpreter (combat triggers, Magic-Action mods,
+ *  reactive-trigger events). */
 export interface EffectCtx {
   damagedOwner?: 'p1' | 'p2';   // for target:'damagedController'
   damageBonus?: number;         // +dmg per enemy character a Magic Action damages
+  subjectId?: string;           // for target:'eventSubject' — the reactive event's companion
 }
 
 // ─── Damage modifiers (passive, consulted by the damage pipeline) ──────────────
@@ -273,6 +275,7 @@ export function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceNam
         else if (e.target === 'frontLineEnemy') targets = charsOf(g, opp, 'front');
         else if (e.target === 'backLineEnemy') targets = charsOf(g, opp, 'back');
         else if (e.target === 'self') { if (sourceId) targets = [sourceId]; }
+        else if (e.target === 'eventSubject') { if (ctx?.subjectId && findEntityAnywhere(g, ctx.subjectId)) targets = [ctx.subjectId]; }
         else if (e.target === 'damagedController') { if (ctx?.damagedOwner) { const pid = pcIdOf(g, ctx.damagedOwner); if (pid) targets = [pid]; } }
         else if (e.splash === 'line' && targetId) {
           const slot = findEntityAnywhere(g, targetId)?.slot;
@@ -481,6 +484,37 @@ export function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceNam
         if (!loc) break;
         g = updateEntity(g, sourceId, { exhausted: true, tapped: 'major' });
         msgs.push(`${loc.ent.name} is exhausted`);
+        break;
+      }
+      case 'exhaust': {
+        // Exhaust the target (Pit Trap: 'eventSubject'). A mandatory trigger's exhaust
+        // on an already-exhausted target is a NO-OP but the clause still ran (R4,
+        // 2026-07-12) — the message keeps the outcome non-silent either way.
+        let ids: string[] = [];
+        if (e.target === 'eventSubject') { if (ctx?.subjectId) ids = [ctx.subjectId]; }
+        else if (e.target === 'self') { if (sourceId) ids = [sourceId]; }
+        else if (isInteractiveSpec(e.target) && targetId) ids = [targetId];
+        for (const id of ids) {
+          const loc = findEntityAnywhere(g, id);
+          if (!loc) continue; // subject already left the encounter — nothing to exhaust
+          if (loc.ent.exhausted || loc.ent.tapped === 'major') { msgs.push(`${loc.ent.name} is already exhausted`); continue; }
+          g = updateEntity(g, id, { exhausted: true, tapped: 'major' });
+          msgs.push(`${loc.ent.name} is exhausted`);
+        }
+        break;
+      }
+      case 'sacrifice': {
+        // Implemented for target:'self' only (trap self-sacrifice, e.g. "Sacrifice
+        // this construct"). A self-sacrifice IS a death (locked ruling 2026-07-08):
+        // it routes through destroyEntity, fires death triggers, and opens no
+        // exceptions. Other targets remain documented safe no-ops until a card
+        // needs them (see tier4_ops "declared-but-uninterpreted ops").
+        if (e.target !== 'self' || !sourceId) break;
+        const loc = findEntityAnywhere(g, sourceId);
+        if (!loc) break; // source already gone (e.g. destroyed while its trigger was queued)
+        const d = destroyEntity(g, sourceId, sink, armorSink); // sacrifice = death (fires triggers)
+        g = d.game;
+        msgs.push(`${loc.ent.name} is sacrificed`, ...d.msgs);
         break;
       }
       // Remaining ops (move slot-pick, two-target attacks, sacrificeItem, deckPeek…) — later slices.

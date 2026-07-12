@@ -4,6 +4,14 @@
 // The choice belongs to Paranoia's CONTROLLER; the placing player makes no decision and
 // (by default) never sees the card — the PendingPeek is owned by the controller (lp) and
 // the placing player is reactive-held until it resolves.
+//
+// RE-RULED 2026-07-12 (R3, trigger-stack arc — supersedes the 2026-07-04 batch-2 order
+// ruling): Paranoia triggers on the PLAY. Playing a card puts it on the stack; it does
+// not enter the encounter until the stack empties down to it (R1), so the peek resolves
+// BEFORE the companion enters and before its on-enter effects. Owner: "Peek first 100%."
+// The old pins below that asserted the companion was already placed while the peek was
+// up, and that the placer's own on-enter scry resolved first, were REWRITTEN in this
+// change — not silently edited; each carries a dated re-rule note.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { gs, freshGame, mkComp, mkConstruct, mkPc, mkCz } from './helpers';
 import { reactiveHold } from '../store/gameStore';
@@ -36,16 +44,22 @@ const watcher = (id: string) => mkComp(id, `Watcher-${id}`, { keywords: ['Parano
 describe('Paranoia (canonical: triggers when an OPPONENT plays a Companion)', () => {
   beforeEach(() => seed(emberAdept, { f1: watcher('par-1') }));
 
-  it('opponent-owned peek over the placing player\'s deck, top/bottom only', () => {
+  it('opponent-owned peek over the placing player\'s deck, top/bottom only — BEFORE the companion enters (re-ruled 2026-07-12)', () => {
     play(emberAdept);
     const g = gs.getState().game;
-    expect(g.p1.board.b1?.name, 'companion placed').toBe('Ember Adept');
+    // R1/R3 (2026-07-12): the played companion sits ON THE STACK while the peek is
+    // up — it has NOT entered yet. (The pre-re-rule pin asserted it was already
+    // placed here; that order is superseded.)
+    expect(g.p1.board.b1, 'companion has NOT entered while the peek is unresolved').toBeUndefined();
+    expect(g.triggerStack?.some(e => e.kind === 'enter'), 'it is waiting on the trigger stack').toBe(true);
     const pk = g.pendingPeek!;
     expect(pk, 'peek armed').toBeTruthy();
     expect(pk.lp, 'choice belongs to the Paranoia CONTROLLER (p2)').toBe('p2');
     expect(pk.deckSide, 'looks at the PLACING player\'s deck (p1)').toBe('p1');
     expect(pk.cards.map(c => c.id), 'sees exactly the top card').toEqual([d1.id]);
     expect(pk.dests, 'top/bottom only — never to hand').toEqual(['top', 'bottom']);
+    gs.getState().resolvePeek(['top']);
+    expect(gs.getState().game.p1.board.b1?.name, 'the companion enters once the stack empties down to it').toBe('Ember Adept');
   });
 
   it('controller may bottom the card (opponent deck reordered, no card gained)', () => {
@@ -116,22 +130,26 @@ describe('Paranoia — non-triggers', () => {
   });
 });
 
-describe('Paranoia — trigger order & "plays a Companion" scope (owner rulings 2026-07-04)', () => {
-  // Ruling (a): when the placed companion has its own on-enter scry, the PLACER's
-  // effect resolves first and the opponent's Paranoia peek arms after it.
-  it("placer's own on-enter scry resolves first; the Paranoia peek follows", () => {
+describe('Paranoia — trigger order (RE-RULED 2026-07-12) & "plays a Companion" scope (2026-07-04)', () => {
+  // RE-RULE (R3, owner 2026-07-12: "Peek first 100%"): Paranoia triggers on the PLAY,
+  // so its peek resolves BEFORE the companion enters — and therefore before the
+  // companion's own on-enter scry. This test previously pinned the SUPERSEDED
+  // 2026-07-04 batch-2 order ("placer's own on-enter scry first, Paranoia peek
+  // after"); it was rewritten in the 2026-07-12 change, not silently edited.
+  it("the Paranoia peek resolves FIRST — before the companion enters; its on-enter scry follows (re-ruled 2026-07-12)", () => {
     const apprentice = CATALOG.find(c => c.name === 'Tower Apprentice')!;
     seed(apprentice, { f1: watcher('par-1') });
     play(apprentice);
     let g = gs.getState().game;
     expect([g.pendingPeek?.source, g.pendingPeek?.lp, g.pendingPeek?.deckSide],
-      'own scry is the active prompt').toEqual(['Tower Apprentice', 'p1', 'p1']);
-    expect(g.pendingPeekQueue, 'Paranoia queued behind it').toHaveLength(1);
+      "Paranoia is the active prompt, over the PLACER's deck").toEqual(['Watcher-par-1', 'p2', 'p1']);
+    expect(g.p1.board.b1, 'the companion has not entered yet').toBeUndefined();
 
     gs.getState().resolvePeek(['top']);
     g = gs.getState().game;
+    expect(g.p1.board.b1?.name, 'the companion enters after the peek').toBe('Tower Apprentice');
     expect([g.pendingPeek?.source, g.pendingPeek?.lp, g.pendingPeek?.deckSide],
-      "Paranoia resolves last, over the PLACER's deck").toEqual(['Watcher-par-1', 'p2', 'p1']);
+      'its own on-enter scry resolves after entering').toEqual(['Tower Apprentice', 'p1', 'p1']);
     gs.getState().resolvePeek(['top']);
     expect(gs.getState().game.pendingPeek, 'all resolved').toBeNull();
   });
@@ -174,13 +192,25 @@ describe('Paranoia — trigger order & "plays a Companion" scope (owner rulings 
   });
 });
 
-describe('Paranoia — multiple permanents each trigger (queued, re-sliced)', () => {
-  it('two Paranoia permanents → one peek armed + one queued; the second sees the post-decision top', () => {
+describe('Paranoia — multiple permanents each trigger (stacked, re-sliced)', () => {
+  // REWRITTEN 2026-07-12 (trigger-stack arc): two Paranoia triggers on the same play
+  // are >1 simultaneous trigger, so the ACTIVE player (the placer) now orders them
+  // before anything resolves; the peeks then resolve one after another off the
+  // stack, each re-slicing the live deck. (Pre-arc they auto-queued in board order
+  // via pendingPeekQueue with no ordering prompt.)
+  it('two Paranoia permanents → the placer orders them, then sequential peeks; the second sees the post-decision top', () => {
     seed(emberAdept, { f1: watcher('par-1'), f2: watcher('par-2') });
     play(emberAdept);
     let g = gs.getState().game;
+    expect(g.pendingTriggerOrder?.items.length, 'ordering prompt over the two simultaneous triggers').toBe(2);
+    expect(g.pendingTriggerOrder?.lp, 'the ACTIVE (placing) player orders — not the trap controller').toBe('p1');
+    expect(g.pendingPeek, 'nothing resolves before the order is decided').toBeNull();
+
+    gs.getState().resolveTriggerOrder(0);           // one pick fully orders two items
+    g = gs.getState().game;
+    expect(g.pendingTriggerOrder ?? null, 'order decided').toBeFalsy();
     expect(g.pendingPeek, 'first peek armed').toBeTruthy();
-    expect(g.pendingPeekQueue.length, 'second queued').toBe(1);
+    expect(g.p1.board.b1, 'companion still on the stack under both peeks').toBeUndefined();
 
     gs.getState().resolvePeek(['bottom']);          // first: d1 → bottom
     g = gs.getState().game;
@@ -190,5 +220,6 @@ describe('Paranoia — multiple permanents each trigger (queued, re-sliced)', ()
     g = gs.getState().game;
     expect(g.pendingPeek, 'all resolved').toBeNull();
     expect(g.p1.deck.map(c => c.id)).toEqual([d2.id, d3.id, d1.id]);
+    expect(g.p1.board.b1?.name, 'the companion finally enters').toBe('Ember Adept');
   });
 });

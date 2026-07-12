@@ -373,6 +373,7 @@ Three distinct trigger conditions:
 - **Use a stack** - multiple triggers resolve in order (most recent first)
 - **"May" indicates optional** - choice made when trigger resolves
 - **Template:** "When/Whenever/At [event], [effect]"
+- Rules Note (ruled 2026-07-12): the stack model above is now engine-implemented and owner-ratified as the operational timing model — playing a card puts it on the stack ("plays" and "enters" are distinct sequential events), queued triggers resolve even if their source or subject has since died, and the ACTIVE player orders simultaneous triggers. Full dated notes: Game_Rules_Updated.md §Core Mechanics, "Triggered Abilities & The Trigger Stack".
 
 ### Activated Abilities
 - **Player choice** to use during appropriate timing

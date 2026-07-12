@@ -2,7 +2,75 @@
 
 Self-contained context for continuing the card-effect engine work in a fresh session.
 
-## Latest session (2026-07-10) — gameStore extraction: headless src/engine/ DONE
+## Latest session (2026-07-12) — Capability arc 1: trigger stack + the three trap cards DONE
+**Suite: 22 files / 276 tests green (t5 + t8 fixtures replay clean); tsc ZERO; validate:decks
+clean (100 cards).** Built the reactive-trigger foundation (owner-ratified rulings R1–R4,
+2026-07-12) and authored **Tripwire Snare / Pit Trap / Iron Spikes** (effectsFlags removed —
+8 deferred gaps → 5). Dated Rules Notes: Game_Rules_Updated.md §Core Mechanics "Triggered
+Abilities & The Trigger Stack", Master_Keyword_List §PARANOIA (R3 supersession),
+Card_Design_Parameters §13 (pointer). **docs/ snapshots only — the parent-dir canonical docs
+are NOT in this repo; owner must mirror the new Rules Notes there.**
+- **`src/engine/stack.ts` (new, headless)** — the LIFO trigger stack primitives: `StackEntry`/
+  `ReactiveStackEntry`/`PendingTriggerOrder` types live in engine/state.ts as OPTIONAL
+  GameState fields (`triggerStack?`, `pendingTriggerOrder?` — set back to `undefined` when
+  drained, so stack-free games keep their exact pre-arc canonical replay hash);
+  `gatherReactive`/`gatherParanoia` (slot-order scans), `resolveReactiveEntry` (runs the
+  source CARD's clauses with the subject bound to the new `eventSubject` TargetSpec),
+  `orderedForStack`, `setStack`/`pushStack`, `reactiveLabel`. The DRIVER (`runStack`) is
+  store-level (gameStore): 'attackDamage' finalizes via finalizeAttack (activation seal) and
+  'ownEnter' arms store-LOCAL prompts. Pauses: Paranoia peek, `pendingTriggerOrder` (synced,
+  TriggerOrderModal in Play.tsx, blind picks, resolveTriggerOrder), mid-combat armor, and the
+  MP 'ownEnter' hand-off (`resumeStack` + StackResumeDriver effect in Play.tsx; reactiveHold
+  covers the non-owner for both new pause kinds). endTurn refuses while the stack/ordering is
+  unresolved. NOT LIVE-TWO-PEER TESTED yet (the hand-off + ordering holds ride the existing
+  reactiveHold wire machinery).
+- **R1 (placeCard restructured):** playing a card puts it ON the stack (costs paid up front;
+  the entity + hand Card ride the 'enter' entry); it enters only when the stack empties down
+  to it. The old placeCard back-half is extracted VERBATIM as `runOnEnter` (an 'ownEnter'
+  stack item — Oathsworn arming included); enter-event queue order is the ruled sequence:
+  own on-enter first, reactive traps above (traps resolve first; a queued on-enter still
+  resolves if the enterer died to a trap — pinned with a 1-HP + draw test AND an
+  order-observable heal test).
+- **R2 (commitAttack restructured):** declaration and damage are separate steps. onAttack is
+  now a DECLARATION-window trigger: `resolveCombatTriggers` gained a `which` filter,
+  driveAttack's after-phase fires only onDealDamage/onKill, and commitAttack queues
+  [attackDamage, ownAttack?, reactive traps…] — dead attacker → damage never queued, the
+  attack FIZZLES (toast). Attacks with no declaration triggers take the legacy inline path
+  byte-identically. NOTE: optional onAttack clauses (Mara) still resolve as no-ops so the
+  per-clause interpreter die keeps the recorded RNG cadence of committed fixtures.
+- **R3 (Paranoia RE-RULED — supersedes the 2026-07-04 order):** the peek resolves BEFORE the
+  companion enters ("Peek first 100%"). armParanoia + the PeekRequest path are GONE — each
+  Paranoia is a stack entry arming pendingPeek at resolution (multi-Paranoia re-slices
+  naturally); resolvePeek/cancelPeek re-enter the stack, then fall back to the start-of-turn
+  peek queue. The old pins were REWRITTEN with dated re-rule comments (keyword_paranoia).
+  CONSEQUENCE: two Paranoias on one play now hit the >1-simultaneous ordering prompt (the
+  placer orders two identical peeks — flag if the owner wants identical triggers auto-ordered).
+- **R4 (traps authored, wizard_builder_50.json):** new Triggers `oppCompanionEnters` /
+  `oppCompanionMovesToFront` / `oppCompanionAttacksCompanion`, new `exhaust` op, `sacrifice`
+  implemented for target:'self' ONLY (routes destroyEntity — sacrifice IS a death; other
+  targets stay documented no-ops). Pit Trap is wired at resolveMove + the reposition
+  resolveActionSlot (movement only; **"moves into the front line" encoded as arriving from
+  OUTSIDE it — a lateral front→front step does not trip it; pinned as ENGINE reading, flag
+  for owner confirm**). Mandatory-trigger rule: an exhausted mover still trips Pit Trap.
+  Iron Spikes persists (no self-sac). Validator mirrors updated (AssertNever forced it).
+- **Fixture RETIRED by name: `twilight-solo-d4d3311-t5b.replay.json`** — replay hit an RNG
+  underrun at step 67 (`resolveMove`): a companion moved into the front line with an opposing
+  Pit Trap on the board, which was a flagged no-op when recorded and now FIRES (intentional
+  rule change). Owner re-records on the new engine from a RESTARTED server. t5 + t8 replay
+  clean — the R2 onAttack reorder did NOT diverge them.
+- **Non-vacuity (all mutation-proven, then restored):** fizzle disabled → 2 R2 pins fail;
+  enter-queue inverted → heal-order pin fails; Pit Trap gathered on enter → movement-only pin
+  fails; orderer flipped to trap controller → active-player pin fails; enter-before-peek →
+  both R3 pins fail.
+- **Open flags for owner:** (1) mirror the 2026-07-12 Rules Notes into the parent canonical
+  docs (repo holds only snapshots); (2) Rules_Taxonomy is cited by reference but NOT
+  snapshotted in docs/ — consider adding it; (3) re-record t5b; (4) the interpreter 'move'
+  op (forced movement) is still unimplemented — when it lands, Pit Trap wiring must cover it;
+  (5) live two-peer MP pass over the new holds/hand-off; (6) identical-simultaneous-trigger
+  auto-order UX question above. Decay-death-trigger wiring (named debt #2) stays OUT of this
+  arc per instructions.
+
+## Previous session (2026-07-10) — gameStore extraction: headless src/engine/ DONE
 **Suite: 21 files / 263 tests green (incl. all three replay fixtures); tsc ZERO; validate:decks
 clean.** Executed `tasks/refactor_extraction_plan.md` as 8 slices / 8 commits, move-only (zero
 behavior edits, zero test edits beyond the new guard test). `gameStore.ts` 3,843 → ~2,300 lines.

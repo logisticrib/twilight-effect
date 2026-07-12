@@ -152,12 +152,15 @@ export function driveAttack(game: GameState, ctx: AttackCtx):
     ctx.phase = 'after';
   }
 
-  // After-phase (runs once, never pauses): combat triggers, Reckless, Hit & Run.
+  // After-phase (runs once, never pauses): post-damage combat triggers, Reckless,
+  // Hit & Run. onAttack is NOT fired here — R2 (owner 2026-07-12): "when/whenever X
+  // attacks" is a DECLARATION-window trigger and resolves during the attack step
+  // BEFORE damage is ever queued (the store's commitAttack fires it pre-damage).
   const attLoc = findEntityAnywhere(g, ctx.charId);
   if (attLoc) {
     const attacker = attLoc.ent;
-    if (combatTriggerEffects(attacker, 'onAttack').length || combatTriggerEffects(attacker, 'onDealDamage').length || combatTriggerEffects(attacker, 'onKill').length) {
-      const ct = resolveCombatTriggers(g, attacker, ctx.attackerPlayer, ctx.events, ctx.armorSink);
+    if (combatTriggerEffects(attacker, 'onDealDamage').length || combatTriggerEffects(attacker, 'onKill').length) {
+      const ct = resolveCombatTriggers(g, attacker, ctx.attackerPlayer, ctx.events, ctx.armorSink, ['onDealDamage', 'onKill']);
       g = ct.game; ctx.msgs.push(...ct.msgs);
     }
   }
@@ -228,11 +231,15 @@ export function eventMatches(cond: Condition | undefined, ev: DamageEvent, attac
 }
 
 /**
- * Fire an attacker's onAttack/onDealDamage/onKill triggers after combat damage.
- * onAttack fires once; the per-target triggers fire once per matching damage event.
- * Interactive targets are auto-picked to the attacker's own side (no mid-combat prompt).
+ * Fire an attacker's onAttack/onDealDamage/onKill triggers. `which` selects the
+ * window: onAttack is a DECLARATION-window trigger — R2 (owner 2026-07-12) has it
+ * resolve during the attack step before damage is queued — while the per-event
+ * triggers fire after damage, once per matching damage event. Interactive targets
+ * are auto-picked to the attacker's
+ * own side (no mid-combat prompt). `attacker` is a snapshot, so a queued onAttack
+ * still resolves if the attacker died to a trap above it on the stack (R1).
  */
-export function resolveCombatTriggers(game: GameState, attacker: BoardEntity, attackerOwner: 'p1' | 'p2', events: DamageEvent[], armorSink?: ArmorChoiceData[]): { game: GameState; msgs: string[] } {
+export function resolveCombatTriggers(game: GameState, attacker: BoardEntity, attackerOwner: 'p1' | 'p2', events: DamageEvent[], armorSink?: ArmorChoiceData[], which: ('onAttack' | 'onDealDamage' | 'onKill')[] = ['onAttack', 'onDealDamage', 'onKill']): { game: GameState; msgs: string[] } {
   let g = game;
   const msgs: string[] = [];
   const run = (clause: CombatClause, ctx?: EffectCtx) => {
@@ -248,12 +255,20 @@ export function resolveCombatTriggers(game: GameState, attacker: BoardEntity, at
     if (r.msgs.length) msgs.push(`${clause.sourceName}: ${r.msgs.join(' | ')}`);
   };
 
-  for (const clause of combatTriggerEffects(attacker, 'onAttack'))
-    if (!clause.if || conditionMet(g, attackerOwner, clause.if)) run(clause);
-  for (const clause of combatTriggerEffects(attacker, 'onDealDamage'))
-    for (const ev of events) if (eventMatches(clause.if, ev, attackerOwner)) run(clause, { damagedOwner: ev.owner });
-  for (const clause of combatTriggerEffects(attacker, 'onKill'))
-    for (const ev of events) if (ev.destroyed && eventMatches(clause.if, ev, attackerOwner)) run(clause);
+  if (which.includes('onAttack'))
+    // Optional clauses (Mara's pay-HP) resolve here as no-ops — their attackBonus
+    // effects do nothing in the interpreter (the real choice happened via
+    // pendingAttackChoice pre-commit). Kept deliberately: each clause invocation
+    // draws the interpreter's per-resolution die, and dropping them would shift the
+    // recorded RNG cadence of every committed replay fixture containing such attacks.
+    for (const clause of combatTriggerEffects(attacker, 'onAttack'))
+      if (!clause.if || conditionMet(g, attackerOwner, clause.if)) run(clause);
+  if (which.includes('onDealDamage'))
+    for (const clause of combatTriggerEffects(attacker, 'onDealDamage'))
+      for (const ev of events) if (eventMatches(clause.if, ev, attackerOwner)) run(clause, { damagedOwner: ev.owner });
+  if (which.includes('onKill'))
+    for (const clause of combatTriggerEffects(attacker, 'onKill'))
+      for (const ev of events) if (ev.destroyed && eventMatches(clause.if, ev, attackerOwner)) run(clause);
 
   return { game: g, msgs };
 }

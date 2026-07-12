@@ -9,5 +9,6 @@ export * from './stats';
 export * from './entities';
 export * from './interpreter';
 export * from './combat';
+export * from './stack';
 export * from './lifecycle';
 export * from './rng';

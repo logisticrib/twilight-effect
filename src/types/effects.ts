@@ -29,7 +29,16 @@ export type Trigger =
   | 'startOfTurn'
   | 'endOfTurn'
   | 'onOpponentAction' // reactive: the opponent plays an Action card (counter wards)
-  | 'activated';    // player-initiated; see `cost`
+  | 'activated'     // player-initiated; see `cost`
+  // Reactive trap windows (trigger-stack arc, owner-ratified 2026-07-12). These queue
+  // onto the trigger stack (src/engine/stack.ts) and resolve LIFO — see the dated
+  // Rules Notes in docs/Game_Rules_Updated.md §Timing. Their effects may target
+  // 'eventSubject' (the entering / moving / attacking companion).
+  | 'oppCompanionEnters'            // an opposing companion enters the encounter (Tripwire Snare)
+  | 'oppCompanionMovesToFront'      // an opposing companion MOVES into the front line — movement only,
+                                    // NOT direct entry onto the front line (R4, owner 2026-07-12) (Pit Trap)
+  | 'oppCompanionAttacksCompanion'; // an opposing companion declares an attack on one of YOUR companions
+                                    // ("attacks" = declaration; resolves before damage — R2) (Iron Spikes)
 
 // ─── WHO/WHAT an effect targets ────────────────────────────────────────────────
 // Interactive specs require a board selection step (reuses the pendingTrigger layer).
@@ -44,7 +53,9 @@ export type TargetSpec =
   | 'self' | 'allEnemies' | 'allEnemyCompanions' | 'ownCompanions' | 'ownPhysicalConstructs' | 'ownMagicalConstructs'
   | 'frontLineOwn' | 'frontLineEnemy' | 'backLineEnemy' | 'sameLineAsTarget' | 'ownParty'
   // combat-trigger context (resolved from the event, not the board)
-  | 'damagedController';   // the Player Character of the just-damaged entity's owner
+  | 'damagedController'    // the Player Character of the just-damaged entity's owner
+  // reactive-trigger context (resolved from the queued trigger's event, not the board)
+  | 'eventSubject';        // the companion the reactive event is about (the enterer / mover / attacker)
 
 // ─── Conditions for `if`/`while` ───────────────────────────────────────────────
 export type Condition =
@@ -109,6 +120,8 @@ export type Effect =
   | { op: 'preventAnchorDecay' }                 // (static) your Physical Constructs skip start-of-turn anchor decay
   | { op: 'lineWard' }                           // (static) opposing companions can't attack characters on the line opposite this construct
   | { op: 'exhaustSelf' }                        // exhaust the source permanent (e.g. Library of Memory's "if you do")
+  | { op: 'exhaust'; target: TargetSpec }        // exhaust the target (Pit Trap: 'eventSubject'). Mandatory triggers
+                                                 // still fire when this is a no-op (already-exhausted target — R4)
   // future (declared so authored cards validate; interpreter support added later)
   | { op: 'modal'; options: { label: string; effects: Effect[] }[] }  // Blueprint
   | { op: 'gainControl'; target: TargetSpec; duration: 'while' }

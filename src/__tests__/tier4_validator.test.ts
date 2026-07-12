@@ -19,10 +19,13 @@ describe('data contract: the shipped decks validate clean', () => {
   it('validateCards(CATALOG) reports zero problems (all former gaps authored or owner-flagged)', () => {
     expect(validateCards(CATALOG)).toEqual([]);
   });
-  it('the eight deferred gaps carry dated owner-approved flags (not silently forgotten)', () => {
+  // 2026-07-12 (trap reactive-trigger arc): Tripwire Snare / Pit Trap / Iron Spikes
+  // were AUTHORED against the new trigger stack and dropped their flags — eight
+  // deferred gaps became five.
+  it('the five deferred gaps carry dated owner-approved flags (not silently forgotten)', () => {
     const flagged = CATALOG.filter(c => c.effectsFlag).map(c => c.name).sort();
-    expect(flagged).toEqual(['Crystalline Sentinel', 'Iron Spikes', 'Patient Conjurer', 'Pit Trap',
-      'Reflecting Pool', 'Reinforced Gate', 'Siegeworks', 'Tripwire Snare']);
+    expect(flagged).toEqual(['Crystalline Sentinel', 'Patient Conjurer',
+      'Reflecting Pool', 'Reinforced Gate', 'Siegeworks']);
     for (const c of CATALOG.filter(c => c.effectsFlag)) {
       expect(c.effectsFlag, `${c.name} flag names the missing system + owner date`).toMatch(/awaiting engine capability: .+\(owner 2026-07-08\)/);
     }

@@ -15,9 +15,11 @@ import { recomputeStatics, isImmuneToSplash, HIT_RUN_STATUS,
 export * from '../engine';
 import { ADJ, FRONT_SLOTS, BACK_SLOTS, isFront, findSlot, type SlotId, type Board,
          type Phase, type PlayerState, type GameState,
-         type PeekRequest, type PendingCoercion, type PendingDeadPick,
+         type PendingCoercion, type PendingDeadPick,
          type AttackCtx, type ArmorChoiceData,
-         type PendingItemTransfer,
+         type PendingItemTransfer, type StackEntry,
+         gatherParanoia, gatherReactive, pushStack, setStack, resolveReactiveEntry,
+         orderedForStack, resolveCombatTriggers, combatTriggerEffects,
          findEntityAnywhere, updateEntity, removeEntity, deadCardsOf,
          itemTransferOf, itemProfileOf, itemTransferCandidates, armNextItemTransfer,
          setPcHp, payPcHp, pcIdOf, charsOf,
@@ -146,15 +148,32 @@ function finalizeAttack(game: GameState, ctx: AttackCtx): GameState {
   });
 }
 
-/** Commit an attack: tap the attacker, build the hit queue (primary + Cleave), and drive
- *  it. `bonusDmg` is the optional on-attack bonus the player opted into (else 0). Returns
- *  the finished game (+log) or a mid-combat pause (PendingArmor already set on `game`). */
-function commitAttack(game: GameState, charId: string, targetEntityId: string, bonusDmg: number):
-  | { paused: true; game: GameState }
-  | { paused: false; game: GameState; msg: string } {
+/** Store-side toast factory (same shape/expiry as the inline reducer pattern). The
+ *  timeout writes through `useGameStore.setState` — a plain state patch, not an
+ *  action, so the record middleware never sees it. */
+function mkToasts(msgs: string[]): { id: number; msg: string }[] {
+  return msgs.filter(Boolean).map(msg => {
+    const id = ++toastId;
+    setTimeout(() => useGameStore.setState(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 4000);
+    return { id, msg };
+  });
+}
+
+/**
+ * Commit an attack (R2, owner 2026-07-12: declaration and damage are SEPARATE steps —
+ * damage does not go on the stack at declaration): tap the attacker, build the hit
+ * queue (primary + Cleave), queue the declaration-window triggers ("when/whenever X
+ * attacks" — the attacker's own onAttack clauses first, opposing reactive traps like
+ * Iron Spikes above them), then let the stack run: triggers resolve BEFORE damage is
+ * ever queued, and a dead attacker fizzles the attack. Attacks with no
+ * declaration-window triggers take the legacy inline drive (identical behavior).
+ * `bonusDmg` is the optional on-attack bonus the player opted into (else 0).
+ */
+function commitAttack(s: StackRunCtx, game: GameState, charId: string, targetEntityId: string, bonusDmg: number):
+  { game: GameState; local: Partial<GameStoreState>; toastMsgs: string[] } {
   const attLoc = findEntityAnywhere(game, charId);
   const tgtLoc = findEntityAnywhere(game, targetEntityId);
-  if (!attLoc || !tgtLoc) return { paused: false, game, msg: '' };
+  if (!attLoc || !tgtLoc) return { game, local: {}, toastMsgs: [] };
   const attacker = attLoc.ent;
   const oppPlayer: 'p1' | 'p2' = attLoc.player === 'p1' ? 'p2' : 'p1';
 
@@ -183,9 +202,36 @@ function commitAttack(game: GameState, charId: string, targetEntityId: string, b
     hitRun: attackerKws.includes('Hit & Run'),
     msgs: acroMsgs, events: [], deadSink: [], armorSink: [],
   };
-  const res = driveAttack(newGame, ctx);
-  if (!res.done) return { paused: true, game: { ...res.game, pendingArmor: res.pendingArmor } };
-  return { paused: false, game: finalizeAttack(res.game, res.ctx), msg: res.ctx.msgs.join(' | ') };
+
+  // Declaration-window triggers. Reactive traps (Iron Spikes) fire only when an
+  // opposing COMPANION attacks one of the trap controller's COMPANIONS (R4); the
+  // attacker's own onAttack clauses queue FIRST, traps above them (the ruled queue
+  // order, 2026-07-12) — so the traps resolve first, the attacker's clauses after.
+  const declReactive = attacker.kind === 'companion' && tgtLoc.ent.kind === 'companion'
+    ? gatherReactive(newGame, 'oppCompanionAttacksCompanion', { id: charId, name: attacker.name, controller: attLoc.player })
+    : [];
+  const hasOwnAttack = combatTriggerEffects(attacker, 'onAttack').length > 0;
+
+  if (!declReactive.length && !hasOwnAttack) {
+    // No declaration-window triggers — legacy inline drive, byte-identical behavior.
+    const res = driveAttack(newGame, ctx);
+    if (!res.done) return { game: { ...res.game, pendingArmor: res.pendingArmor }, local: {}, toastMsgs: [] };
+    return { game: finalizeAttack(res.game, res.ctx), local: {}, toastMsgs: [res.ctx.msgs.join(' | ')] };
+  }
+
+  let g = pushStack(newGame, [
+    { kind: 'attackDamage', ctx },
+    ...(hasOwnAttack ? [{ kind: 'ownAttack', attacker, side: attLoc.player } satisfies StackEntry] : []),
+  ]);
+  if (declReactive.length > 1) {
+    // >1 simultaneous reactive trigger — the ACTIVE player orders them (canon:
+    // Rules_Taxonomy Tier 5 #9 / Tier 3 #18; reconfirmed by the owner 2026-07-12
+    // over the in-session trap-controller suggestion).
+    g = { ...g, pendingTriggerOrder: { lp: g.activePlayer, items: declReactive, picked: [] } };
+    return { game: g, local: {}, toastMsgs: [] };
+  }
+  const r = runStack(pushStack(g, declReactive), s);
+  return { game: r.game, local: r.local, toastMsgs: r.toastMsgs };
 }
 
 /**
@@ -218,6 +264,14 @@ export function reactiveHold(game: GameState, localPlayer: 'p1' | 'p2'): string 
   // items) — the active player waits so broadcasts don't clobber the resolution.
   const it = game.pendingItemTransfer;
   if (it && it.lp !== localPlayer) return `${it.sourceName}'s items (Item Transfer)`;
+  // The opponent's simultaneous-trigger ordering pick (trigger stack, 2026-07-12) —
+  // the ACTIVE player orders; everyone else waits.
+  const po = game.pendingTriggerOrder;
+  if (po && po.lp !== localPlayer) return 'simultaneous trigger ordering';
+  // A trigger stack resting on the OTHER client's 'ownEnter' hand-off (its on-enter
+  // machinery arms store-local prompts, so only the controller's client resolves it).
+  const head = game.triggerStack?.[game.triggerStack.length - 1];
+  if (head?.kind === 'ownEnter' && head.controller !== localPlayer) return `${head.card.name} (entering)`;
   return null;
 }
 
@@ -235,6 +289,354 @@ function gameIsOver(game: GameState): boolean {
  *  are exempt: they arm across phase boundaries and must resolve where they armed. */
 function notActionPhase(game: GameState): boolean {
   return game.currentPhase !== 'action';
+}
+
+// ─── Trigger-stack driver (reactive-trigger arc, owner-ratified 2026-07-12) ─────
+// The headless primitives live in src/engine/stack.ts; this driver stays in the
+// store because two entry kinds reach store territory: 'attackDamage' finalizes via
+// finalizeAttack (activation seal = store-level, per the extraction plan) and
+// 'ownEnter' arms store-LOCAL prompts (pendingTrigger/pendingKit/…), so in
+// multiplayer only the controller's client may resolve it.
+
+/** The store fields runStack needs to read (never mutated here). */
+type StackRunCtx = Pick<GameStoreState, 'localPlayer' | 'conn' | 'modalQueue' | 'oathContext'>;
+
+/**
+ * The entered permanent's own on-enter ability — the back half of the old placeCard,
+ * extracted verbatim so it can resolve as a STACK item (R1: it queues before any
+ * reactive enter-triggers, which resolve first; and it still resolves if the entrant
+ * died to one of them — queued triggers survive death, ruled 2026-07-12). `game` is
+ * post-placement (the entity is on the board, or already dead to a trap).
+ */
+function runOnEnter(
+  game: GameState, card: Card, entId: string, lp: 'p1' | 'p2',
+  s: StackRunCtx,
+  deadSink: PendingDeadPick[], armorSink: ArmorChoiceData[],
+): { game: GameState; local: Partial<GameStoreState>; msg: string } {
+  const isCompanion = card.type === 'Companion';
+  let g = game;
+  const local: Partial<GameStoreState> = {};
+  let enterMsg = `${card.name} enters the field!`;
+  const opp: 'p1' | 'p2' = lp === 'p1' ? 'p2' : 'p1';
+
+  // Oathsworn: place a sworn card beneath it (modal). Armed at ENTER — the permanent
+  // is in the encounter now (with a Paranoia pause upstream this runs on the
+  // controller's client via the resumeStack hand-off, like every local prompt here).
+  if (card.keywords.includes('Oathsworn')) {
+    local.modalQueue = [...s.modalQueue, 'oathsworn'];
+    local.oathContext = { permanentId: entId, name: card.name };
+  }
+
+  // On-enter targeting keyword (Reinforce / Dismantle) — Reinforce targets your
+  // own Physical Constructs, Dismantle targets the opponent's. If none exist the
+  // trigger fizzles with a note rather than blocking. (The enterer itself is
+  // excluded — pre-stack this ran against the pre-placement board.)
+  const enterTrig = parseEnterTrigger(card.keywords);
+  let pendingTrigger: PendingTrigger | null = null;
+  if (enterTrig) {
+    const targetBoard = enterTrig.kind === 'reinforce' ? g[lp].board : g[opp].board;
+    const eligibleIds = (Object.values(targetBoard) as (BoardEntity | undefined)[])
+      .filter((e): e is BoardEntity => !!e && isPhysicalConstruct(e) && e.id !== entId)
+      .map(e => e.id);
+    const verb = enterTrig.kind === 'reinforce' ? 'Reinforce' : 'Dismantle';
+    if (eligibleIds.length > 0) {
+      pendingTrigger = { kind: enterTrig.kind, n: enterTrig.n, sourceName: card.name, eligibleIds };
+      enterMsg = `${card.name}: choose a Physical Construct to ${verb} (${enterTrig.n}).`;
+    } else {
+      enterMsg = `${card.name} enters — no Physical Construct to ${verb.toLowerCase()}.`;
+    }
+  }
+
+  // Kit-Master (on-enter): move an item from one of your characters to another.
+  // Computed on the LIVE board (the enterer is already placed, so it counts as a
+  // possible destination — same eligibility the pre-stack code built by hand).
+  let pendingKit: PendingKit | null = null;
+  if (card.keywords.includes('Kit-Master')) {
+    const chars = (Object.values(g[lp].board) as (BoardEntity | undefined)[])
+      .filter((e): e is BoardEntity => !!e && isCharacter(e));
+    // A source is eligible only if it holds an item that some OTHER character
+    // has slot capacity to receive (otherwise highlighting it would dead-end).
+    const sources = chars.filter(e =>
+      allItemsOf(e).some(it => kitDests(g, lp, e.id, it.isWeapon, !!it.item.heavy).length > 0)
+    ).map(e => e.id);
+    if (sources.length > 0) {
+      pendingKit = { sourceName: card.name, step: 'source', eligibleIds: sources };
+      enterMsg = `${card.name}: Kit-Master — choose a character to take an item from.`;
+    } else {
+      enterMsg = `${card.name} enters — no item to move (Kit-Master).`;
+    }
+  }
+
+  // Scavenger (on-enter, optional): return an Item card from your Dead Zone and
+  // attach it to this companion. Rides the existing Dead-Zone prompt with an attach
+  // destination (resolveDeadPick equips instead of returning to hand; a wearer that
+  // died to a trap while entering is skipped by its stale-guard). No items in the
+  // Dead Zone → fizzles with a note rather than blocking.
+  let scavengerPick: PendingDeadPick | null = null;
+  if (isCompanion && card.keywords.includes('Scavenger')) {
+    const options = g[lp].dead
+      .map((c, idx) => ({ card: c, idx }))
+      .filter(o => o.card.type === 'Item');
+    if (options.length > 0) {
+      scavengerPick = { source: card.name, lp, options, postEffects: [], optional: true,
+        attachTo: { id: entId, name: card.name } };
+      enterMsg = `${card.name}: Scavenger — you may return an item from your Dead Zone.`;
+    } else {
+      enterMsg = `${card.name} enters — no item in the Dead Zone (Scavenger).`;
+    }
+  }
+
+  // Animate Magic X (on-enter): choose a Magical (Incantation) Construct you
+  // control — it becomes an X/X Manifest companion via the interpreter's existing
+  // 'animate' op. No Magical Construct → fizzles with a note.
+  let animatePick: PendingActionTarget | null = null;
+  const animateX = parseAnimateMagic(card.keywords);
+  if (animateX != null) {
+    const eligibleIds = (Object.values(g[lp].board) as (BoardEntity | undefined)[])
+      .filter((e): e is BoardEntity => !!e && e.kind === 'construct' && e.subtype === 'Incantation')
+      .map(e => e.id);
+    if (eligibleIds.length > 0) {
+      animatePick = { source: 'enter', sourceName: card.name, lp,
+        effects: [{ op: 'animate', atk: animateX, hp: animateX, target: 'magicalConstruct' }],
+        eligibleIds, sourceId: entId };
+      enterMsg = `${card.name}: Animate Magic — choose a Magical Construct to animate (${animateX}/${animateX}).`;
+    } else {
+      enterMsg = `${card.name} enters — no Magical Construct to animate.`;
+    }
+  }
+
+  // Coercion (on-enter, companions): the OPPONENT must discard a card or sacrifice
+  // a permanent — their choice, routed to their client (the acting player is held
+  // via reactiveHold). Their PC never qualifies as the sacrifice; with an empty
+  // hand and no other permanents the trigger fizzles.
+  let pendingCoercion: PendingCoercion | null = null;
+  if (isCompanion && card.keywords.includes('Coercion')) {
+    const canDiscard = g[opp].hand.length > 0;
+    const canSacrifice = Object.values(g[opp].board).some(e => e && e.kind !== 'pc');
+    if (canDiscard || canSacrifice) {
+      pendingCoercion = { source: card.name, victim: opp };
+      enterMsg = `${card.name}: Coercion — opponent must discard a card or sacrifice a permanent.`;
+    } else {
+      enterMsg = `${card.name} enters — the opponent has nothing to coerce.`;
+    }
+  }
+
+  // Structured on-enter effects (the non-keyword "When this enters, …" text).
+  // Only when no keyword trigger already claimed the enter (avoids double pending).
+  const onEnter = (card.effects ?? []).filter(c => c.trigger === 'onEnter').flatMap(c => c.effects);
+  if (!pendingTrigger && !pendingKit && !scavengerPick && !animatePick && !pendingCoercion && onEnter.length > 0) {
+    // Equip-from-hand (Veteran of the Ashgrove): pick an item from hand for this character.
+    if (onEnter.some(e => e.op === 'equipFromHand')) {
+      const items = g[lp].hand.filter(c => c.type === 'Item');
+      if (items.length > 0) {
+        return {
+          game: g,
+          local: { ...local, pendingTrigger: null, pendingKit: null,
+            pendingEquipPick: { source: card.name, lp, targetId: entId, items } },
+          msg: `${card.name} enters — equip an item from your hand?`,
+        };
+      }
+      // no items in hand — fall through (nothing to equip)
+    }
+
+    // Two-step on-enter: Field Engineer moves an anchor between two Physical Constructs.
+    if (twoStepKind(onEnter) === 'moveAnchor') {
+      const mv = onEnter.find(e => e.op === 'moveAnchor');
+      const count = mv && mv.op === 'moveAnchor' ? mv.count : 1;
+      const physical = ownPhysicalConstructIds(g, lp);
+      const sources = physical.filter(pid => (findEntityAnywhere(g, pid)?.ent.anchors ?? 0) >= count);
+      if (sources.length >= 1 && physical.length >= 2) {
+        return {
+          game: g,
+          local: { ...local, pendingTrigger: null, pendingKit: null,
+            pendingActionTarget: { source: 'enter', sourceName: card.name, lp, effects: onEnter, eligibleIds: sources, sourceId: entId, twoStep: 'moveAnchor' } },
+          msg: `${card.name} enters — move an anchor: choose a source Physical Construct.`,
+        };
+      }
+      // not enough Physical Constructs — fall through (fizzle, it's optional)
+    }
+
+    const enterPeek = onEnter.find(e => e.op === 'deckPeek');
+    if (enterPeek && enterPeek.op === 'deckPeek') {
+      const cards = g[lp].deck.slice(0, enterPeek.look);
+      if (cards.length > 0) {
+        return {
+          game: { ...g, pendingPeek: { source: card.name, lp, deckSide: lp, cards, dests: enterPeek.dests, maxHand: enterPeek.maxHand } },
+          local: { ...local, pendingTrigger: null, pendingKit: null },
+          msg: `${card.name} enters — look at your deck.`,
+        };
+      }
+    }
+    const spec = actionTargetSpec(onEnter);
+    if (spec) {
+      const eligibleIds = eligibleTargets(g, lp, spec).filter(eid => eid !== entId);
+      if (eligibleIds.length > 0) {
+        return {
+          game: g,
+          local: { ...local, pendingTrigger: null, pendingKit: null,
+            pendingActionTarget: { source: 'enter', sourceName: card.name, lp, effects: onEnter, eligibleIds, sourceId: entId } },
+          msg: `${card.name} enters — choose a target.`,
+        };
+      }
+      // No legal target — fizzle (enter without the targeted effect).
+    } else {
+      const r = resolveActionEffects(g, lp, card.name, onEnter, undefined, entId, undefined, deadSink, armorSink);
+      return {
+        game: r.game,
+        local: { ...local, pendingTrigger, pendingKit },
+        msg: r.msgs.length ? `${card.name} enters! ${r.msgs.join(' | ')}` : enterMsg,
+      };
+    }
+  }
+
+  // Scavenger's prompt joins the game-level Dead-Zone queue (behind any active pick).
+  if (scavengerPick) {
+    g = g.pendingDeadPick
+      ? { ...g, pendingDeadPickQueue: [...g.pendingDeadPickQueue, scavengerPick] }
+      : { ...g, pendingDeadPick: scavengerPick };
+  }
+  if (pendingCoercion) g = { ...g, pendingCoercion };
+
+  return {
+    game: g,
+    local: {
+      ...local,
+      pendingTrigger,
+      pendingKit,
+      // Only claim the pendingActionTarget slot when Animate Magic armed one — a null
+      // here must not clobber an unrelated pending target.
+      ...(animatePick ? { pendingActionTarget: animatePick } : {}),
+    },
+    msg: enterMsg,
+  };
+}
+
+/**
+ * Drive the trigger stack (GameState.triggerStack, top = last) until it drains or
+ * PAUSES: on a Paranoia peek (the controller decides), on a simultaneous-trigger
+ * ordering pick (the active player decides), on a mid-combat Armor choice, or on an
+ * 'ownEnter' hand-off owned by the other client. Every pause resumes through the
+ * corresponding resolver, which re-enters this driver. Collected trap toasts are
+ * returned for the calling reducer to surface — no silent outcomes (2026-07-12).
+ */
+function runStack(game: GameState, s: StackRunCtx):
+  { game: GameState; toastMsgs: string[]; local: Partial<GameStoreState> } {
+  let g = game;
+  const toastMsgs: string[] = [];
+  let local: Partial<GameStoreState> = {};
+  let sCtx: StackRunCtx = s;
+  const deadSink: PendingDeadPick[] = [];
+  const armorSink: ArmorChoiceData[] = [];
+
+  while (g.triggerStack?.length) {
+    if (g.pendingTriggerOrder) break; // an ordering pick is pending — resolveTriggerOrder resumes
+    const stack = g.triggerStack;
+    const top = stack[stack.length - 1];
+
+    if (top.kind === 'paranoia') {
+      if (g.pendingPeek) break; // an earlier peek is still up — its resolver re-enters
+      g = setStack(g, stack.slice(0, -1));
+      const cards = g[top.deckSide].deck.slice(0, 1);
+      if (!cards.length) { toastMsgs.push(`${top.sourceName} (Paranoia): the deck is empty.`); continue; }
+      // Canon dests: "You may put that card on the top or bottom of their deck."
+      g = { ...g, pendingPeek: { source: top.sourceName, lp: top.controller, deckSide: top.deckSide, cards, dests: ['top', 'bottom'] } };
+      break; // PAUSE — resolvePeek/cancelPeek re-enter the stack
+    }
+
+    if (top.kind === 'reactive') {
+      g = setStack(g, stack.slice(0, -1));
+      const r = resolveReactiveEntry(g, top, deadSink, armorSink);
+      g = r.game;
+      toastMsgs.push(r.toast);
+      continue;
+    }
+
+    if (top.kind === 'enter') {
+      g = setStack(g, stack.slice(0, -1));
+      // The stack emptied down to the played card — it ENTERS the encounter now (R1).
+      // Defensive: if its slot was somehow occupied while the play sat on the stack
+      // (sandbox side-flip during a Paranoia peek), take the first empty slot instead.
+      const board = g[top.controller].board;
+      const slot = !board[top.slot] ? top.slot
+        : ([...BACK_SLOTS, ...FRONT_SLOTS] as SlotId[]).find(sl => !board[sl]);
+      if (!slot) {
+        const cardObj = CATALOG.find(c => c.name === top.ent.name);
+        g = { ...g, [top.controller]: { ...g[top.controller], dead: cardObj ? [...g[top.controller].dead, cardObj] : g[top.controller].dead } };
+        toastMsgs.push(`${top.ent.name} has nowhere to enter — it is put into the Dead Zone.`);
+        continue;
+      }
+      g = recomputeStatics({ ...g, [top.controller]: { ...g[top.controller], board: { ...board, [slot]: top.ent } } });
+      // Enter-event triggers queue in the RULED order (verbatim sequence, owner
+      // 2026-07-12): the enterer's own on-enter queues FIRST, reactive triggers
+      // (Tripwire Snare) above it — so the traps resolve first, the enter ability after.
+      const batch: StackEntry[] = [{ kind: 'ownEnter', entId: top.ent.id, card: top.card, slot, controller: top.controller }];
+      const reactive = top.ent.kind === 'companion'
+        ? gatherReactive(g, 'oppCompanionEnters', { id: top.ent.id, name: top.ent.name, controller: top.controller })
+        : [];
+      if (reactive.length > 1) {
+        // >1 simultaneous trigger — the ACTIVE player (here: the entering player)
+        // decides the order they go on the stack (Rules_Taxonomy Tier 5 #9 / Tier 3
+        // #18; owner-reconfirmed 2026-07-12).
+        g = { ...pushStack(g, batch), pendingTriggerOrder: { lp: g.activePlayer, items: reactive, picked: [] } };
+        break; // PAUSE — resolveTriggerOrder resumes
+      }
+      g = pushStack(g, [...batch, ...reactive]);
+      continue;
+    }
+
+    if (top.kind === 'ownAttack') {
+      g = setStack(g, stack.slice(0, -1));
+      // Declaration-window clauses resolve from the queued SNAPSHOT — they fire even
+      // if the attacker died to a trap that resolved above them (R1).
+      const ct = resolveCombatTriggers(g, top.attacker, top.side, [], armorSink, ['onAttack']);
+      g = ct.game;
+      if (ct.msgs.length) toastMsgs.push(ct.msgs.join(' | '));
+      continue;
+    }
+
+    if (top.kind === 'attackDamage') {
+      g = setStack(g, stack.slice(0, -1));
+      // Clone the ctx (the stored one is synced state) and fold in anything the
+      // declaration triggers deferred, so finalizeAttack arms everything at once.
+      const ctx: AttackCtx = { ...top.ctx,
+        hitQueue: [...top.ctx.hitQueue], msgs: [...top.ctx.msgs], events: [...top.ctx.events],
+        deadSink: [...top.ctx.deadSink, ...deadSink.splice(0)],
+        armorSink: [...top.ctx.armorSink, ...armorSink.splice(0)],
+      };
+      // R2 (owner 2026-07-12): if the attacker is dead when the attack step would
+      // proceed to damage, damage is never queued — the attack fizzles.
+      if (!findEntityAnywhere(g, ctx.charId)) {
+        toastMsgs.push(`${ctx.attackerName}'s attack fizzles — it left the encounter before dealing damage.`);
+        g = finalizeAttack(g, ctx); // seals activation + arms whatever the triggers deferred
+        continue;
+      }
+      const res = driveAttack(g, ctx);
+      if (!res.done) { g = { ...res.game, pendingArmor: res.pendingArmor }; break; } // PAUSE — resolveArmor resumes + finalizes
+      g = finalizeAttack(res.game, res.ctx);
+      if (res.ctx.msgs.length) toastMsgs.push(res.ctx.msgs.join(' | '));
+      continue;
+    }
+
+    // top.kind === 'ownEnter': arms store-LOCAL prompts, so in multiplayer only the
+    // controller's client may resolve it — everyone else leaves it on the stack
+    // (reactiveHold covers them; the controller's client resumes via resumeStack).
+    if (sCtx.conn.mode !== 'solo' && top.controller !== sCtx.localPlayer) break;
+    g = setStack(g, stack.slice(0, -1));
+    const r = runOnEnter(g, top.card, top.entId, top.controller, sCtx, deadSink, armorSink);
+    g = r.game;
+    local = { ...local, ...r.local };
+    // Later oath pushes in the same run must see the queue the previous one built.
+    sCtx = { ...sCtx,
+      modalQueue: r.local.modalQueue ?? sCtx.modalQueue,
+      oathContext: r.local.oathContext !== undefined ? r.local.oathContext : sCtx.oathContext };
+    if (r.msg) toastMsgs.push(r.msg);
+  }
+
+  // Arm whatever the resolved triggers deferred (dead picks / armor choices / item
+  // transfers). Empty sinks make this a no-op, so an attack that already finalized
+  // (arming its own ctx sinks) is never clobbered.
+  g = armPrompts(g, deadSink, armorSink);
+  return { game: g, toastMsgs, local };
 }
 
 // ─── Store interface ──────────────────────────────────────────────────────────
@@ -356,6 +758,17 @@ interface GameStoreState {
   resolveKit: (targetId: string) => void;
   pickKitItem: (itemId: string) => void;
   cancelKit: () => void;
+
+  /** Simultaneous-trigger ordering (trigger stack, 2026-07-12): the ACTIVE player
+   *  picks which of the queued reactive triggers resolves next. Picks are BLIND —
+   *  nothing resolves between picks; once one unpicked item remains the order is
+   *  complete, the triggers go on the stack and it runs. */
+  resolveTriggerOrder: (idx: number) => void;
+  /** Multiplayer hand-off driver: continue a trigger stack whose head is an
+   *  'ownEnter' owned by this client (its resolution arms store-local prompts, so
+   *  only the controller's client may run it). No-op when there is nothing to run
+   *  or the stack is paused on a prompt — safe to call speculatively. */
+  resumeStack: () => void;
 
   // Action-card target selection
   resolveActionTarget: (targetId: string) => void;
@@ -841,20 +1254,36 @@ export const useGameStore = create<GameStoreState>()(
     if (!pa || pa.twoStep !== 'reposition' || !pa.firstId || !pa.eligibleSlots?.includes(slot)) return s;
     const loc = findEntityAnywhere(s.game, pa.firstId);
     let g = s.game; const msgs: string[] = [];
+    let movedToFront = false;
     if (loc) {
       const board = { ...g[loc.player].board };
       delete board[loc.slot];
       board[slot] = loc.ent;
       g = { ...g, [loc.player]: { ...g[loc.player], board } };
       msgs.push(`${loc.ent.name} repositions`);
+      // An effect-driven reposition is still a MOVE — arriving in the front line
+      // from outside it trips Pit Trap windows (R4, 2026-07-12; companions only).
+      movedToFront = loc.ent.kind === 'companion' && !isFront(loc.slot) && isFront(slot);
     }
     // Resolve the rest of the card's effects (e.g. the draw) after the move.
     const rest = pa.effects.filter(e => e.op !== 'move');
     const r = resolveActionEffects(g, pa.lp, pa.sourceName, rest, undefined); g = r.game; msgs.push(...r.msgs);
-    const finalGame = pa.card ? { ...g, [pa.lp]: { ...g[pa.lp], dead: [...g[pa.lp].dead, pa.card] } } : g;
+    let finalGame = pa.card ? { ...g, [pa.lp]: { ...g[pa.lp], dead: [...g[pa.lp].dead, pa.card] } } : g;
+    const stackMsgs: string[] = [];
+    let stackLocal: Partial<GameStoreState> = {};
+    if (movedToFront && loc) {
+      const reactive = gatherReactive(finalGame, 'oppCompanionMovesToFront', { id: loc.ent.id, name: loc.ent.name, controller: loc.player });
+      if (reactive.length > 1) {
+        finalGame = { ...finalGame, pendingTriggerOrder: { lp: finalGame.activePlayer, items: reactive, picked: [] } };
+      } else if (reactive.length === 1) {
+        const rs = runStack(pushStack(finalGame, reactive), s);
+        finalGame = rs.game; stackMsgs.push(...rs.toastMsgs); stackLocal = rs.local;
+      }
+    }
     const id = ++toastId;
     setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 4000);
-    return { game: finalGame, pendingActionTarget: null, toasts: [...s.toasts, { id, msg: `${pa.sourceName}: ${msgs.join(' | ')}` }] };
+    return { game: finalGame, pendingActionTarget: null, ...stackLocal,
+      toasts: [...s.toasts, { id, msg: `${pa.sourceName}: ${msgs.join(' | ')}` }, ...mkToasts(stackMsgs)] };
   }),
 
   activateAbility: (entityId, idx) => set(s => {
@@ -1046,6 +1475,39 @@ export const useGameStore = create<GameStoreState>()(
     return { pendingActionTarget: null };
   }),
 
+  // ── Simultaneous-trigger ordering (trigger stack, owner-ratified 2026-07-12) ──
+  // Canon: the ACTIVE player decides the order simultaneous triggers go on the
+  // stack (Rules_Taxonomy Tier 5 #9 / Tier 3 #18 — reconfirmed 2026-07-12: active
+  // player, NOT the trap controller). Picks are BLIND: the order is decided at
+  // queue time and nothing resolves between picks.
+  resolveTriggerOrder: (idx) => set(s => {
+    if (gameIsOver(s.game)) return s;
+    const po = s.game.pendingTriggerOrder;
+    if (!po) return s;
+    if (s.conn.mode !== 'solo' && po.lp !== s.localPlayer) return s; // orderer-only
+    if (idx < 0 || idx >= po.items.length || po.picked.includes(idx)) return s;
+    const picked = [...po.picked, idx];
+    if (picked.length < po.items.length - 1) {
+      return { game: { ...s.game, pendingTriggerOrder: { ...po, picked } } };
+    }
+    // Order complete (the last unpicked item is implied) — the triggers go on the
+    // stack in the chosen order and it runs.
+    const g = pushStack({ ...s.game, pendingTriggerOrder: undefined }, orderedForStack(po.items, picked));
+    const r = runStack(g, s);
+    return { ...r.local, game: r.game, toasts: [...s.toasts, ...mkToasts(r.toastMsgs)] };
+  }),
+
+  resumeStack: () => set(s => {
+    if (gameIsOver(s.game)) return s;
+    const stack = s.game.triggerStack;
+    const top = stack?.[stack.length - 1];
+    if (!top) return s;
+    if (s.game.pendingTriggerOrder || s.game.pendingPeek || s.game.pendingArmor) return s; // paused on a prompt, not a hand-off
+    if (top.kind === 'ownEnter' && s.conn.mode !== 'solo' && top.controller !== s.localPlayer) return s;
+    const r = runStack(s.game, s);
+    return { ...r.local, game: r.game, toasts: [...s.toasts, ...mkToasts(r.toastMsgs)] };
+  }),
+
   // ── Deck-peek (scry): apply the player's per-card destinations ─────────────
   resolvePeek: (assignments) => set(s => {
     if (gameIsOver(s.game)) return s;
@@ -1071,11 +1533,25 @@ export const useGameStore = create<GameStoreState>()(
     if (toHand.length) parts.push(`${toHand.length} to hand`);
     if (toBottom.length) parts.push(`${toBottom.length} to bottom`);
     if (toTop.length) parts.push(`${toTop.length} kept on top`);
-    const newGame = { ...s.game, [side]: { ...ps, deck: newDeck, hand: pk.lp === side ? [...s.game[pk.lp].hand, ...toHand] : ps.hand } };
-    const { peek, rest } = nextPeek(newGame, s.game.pendingPeekQueue); // advance any queued start-of-turn peeks
+    let g: GameState = { ...s.game, pendingPeek: null, [side]: { ...ps, deck: newDeck, hand: pk.lp === side ? [...s.game[pk.lp].hand, ...toHand] : ps.hand } };
+    // A paused trigger stack resumes FIRST (a Paranoia peek pauses the stack before
+    // the played companion enters — R3, 2026-07-12): the enter, its traps, and its
+    // on-enter run now (possibly arming the NEXT peek). Only if the stack left no
+    // peek armed do the queued start-of-turn peeks advance.
+    let local: Partial<GameStoreState> = {};
+    const stackMsgs: string[] = [];
+    if (g.triggerStack?.length) {
+      const r = runStack(g, s);
+      g = r.game; local = r.local; stackMsgs.push(...r.toastMsgs);
+    }
+    if (!g.pendingPeek) {
+      const { peek, rest } = nextPeek(g, g.pendingPeekQueue); // advance any queued start-of-turn peeks
+      g = { ...g, pendingPeek: peek, pendingPeekQueue: rest };
+    }
     return {
-      game: armNextItemTransfer({ ...newGame, pendingPeek: peek, pendingPeekQueue: rest }),
-      toasts: [...s.toasts, { id, msg: `${pk.source}: ${parts.join(', ')}` }],
+      ...local,
+      game: armNextItemTransfer(g),
+      toasts: [...s.toasts, { id, msg: `${pk.source}: ${parts.join(', ')}` }, ...mkToasts(stackMsgs)],
     };
   }),
 
@@ -1086,8 +1562,20 @@ export const useGameStore = create<GameStoreState>()(
     // client used to remotely wipe the opponent's peek mid-decision. (Sandbox
     // controls both seats, so it may always cancel.)
     if (s.conn.mode !== 'solo' && pk.lp !== s.localPlayer) return s;
-    const { peek, rest } = nextPeek(s.game, s.game.pendingPeekQueue);
-    return { game: armNextItemTransfer({ ...s.game, pendingPeek: peek, pendingPeekQueue: rest }) };
+    // Cancelling declines the decision (the looked-at card stays where it was) but a
+    // paused trigger stack still resumes — the played companion must still ENTER.
+    let g: GameState = { ...s.game, pendingPeek: null };
+    let local: Partial<GameStoreState> = {};
+    const stackMsgs: string[] = [];
+    if (g.triggerStack?.length) {
+      const r = runStack(g, s);
+      g = r.game; local = r.local; stackMsgs.push(...r.toastMsgs);
+    }
+    if (!g.pendingPeek) {
+      const { peek, rest } = nextPeek(g, g.pendingPeekQueue);
+      g = { ...g, pendingPeek: peek, pendingPeekQueue: rest };
+    }
+    return { ...local, game: armNextItemTransfer(g), toasts: [...s.toasts, ...mkToasts(stackMsgs)] };
   }),
 
   // ── Dead-Zone recovery (Library of Memory) ────────────────────────────────
@@ -1407,10 +1895,27 @@ export const useGameStore = create<GameStoreState>()(
     delete board[src.slot];
     board[targetSlot] = ent;
 
-    return {
-      pending: null,
-      game: { ...game, ...activationPatch(game, pending.charId), [src.player]: { ...game[src.player], board } },
-    };
+    const moved: GameState = { ...game, ...activationPatch(game, pending.charId), [src.player]: { ...game[src.player], board } };
+
+    // Pit Trap window (R4, owner 2026-07-12): "moves INTO the front line" = arriving
+    // in the front line from outside it — movement only (direct entry onto the front
+    // line does not trip it; a lateral front→front step never LEAVES the line, so it
+    // doesn't either). Companions only; the trigger is MANDATORY — it fires even if
+    // the mover is already exhausted (the exhaust no-ops, the trap still sacrifices
+    // itself). The Hit & Run bonus move is still a move — it trips traps too.
+    if (ent.kind === 'companion' && !isFront(src.slot) && isFront(targetSlot)) {
+      const reactive = gatherReactive(moved, 'oppCompanionMovesToFront', { id: ent.id, name: ent.name, controller: src.player });
+      if (reactive.length > 1) {
+        // >1 simultaneous trigger — the ACTIVE player (the mover) orders them.
+        return { pending: null, game: { ...moved, pendingTriggerOrder: { lp: moved.activePlayer, items: reactive, picked: [] } } };
+      }
+      if (reactive.length === 1) {
+        const r = runStack(pushStack(moved, reactive), s);
+        return { pending: null, ...r.local, game: r.game, toasts: [...s.toasts, ...mkToasts(r.toastMsgs)] };
+      }
+    }
+
+    return { pending: null, game: moved };
   }),
 
   // ── Attack ─────────────────────────────────────────────────────────────────
@@ -1520,9 +2025,8 @@ export const useGameStore = create<GameStoreState>()(
         sourceName: opt.sourceName, payHP: opt.payHP, bonus: opt.bonus } } };
     }
 
-    const r = commitAttack(game, pending.charId, targetEntityId, 0);
-    if (r.paused) return { pending: null, game: r.game };
-    return { pending: null, game: r.game, toasts: [...s.toasts, pushToast(r.msg)] };
+    const r = commitAttack(s, game, pending.charId, targetEntityId, 0);
+    return { pending: null, ...r.local, game: r.game, toasts: [...s.toasts, ...mkToasts(r.toastMsgs)] };
   }),
 
   // ── Optional pre-attack ability (Mara): pay HP for +damage, or decline ─────────
@@ -1536,11 +2040,8 @@ export const useGameStore = create<GameStoreState>()(
       game = payPcHp(game, pac.lp, pac.payHP);
       prefix.push(`${pac.sourceName}: pays ${pac.payHP} HP for +${pac.bonus}`);
     }
-    const r = commitAttack(game, pac.charId, pac.targetId, accept ? pac.bonus : 0);
-    if (r.paused) return { game: r.game };
-    const id = ++toastId;
-    setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 3000);
-    return { game: r.game, toasts: [...s.toasts, { id, msg: [...prefix, r.msg].filter(Boolean).join(' | ') }] };
+    const r = commitAttack(s, game, pac.charId, pac.targetId, accept ? pac.bonus : 0);
+    return { ...r.local, game: r.game, toasts: [...s.toasts, ...mkToasts([...prefix, ...r.toastMsgs])] };
   }),
 
   // ── Armor choice (mid-combat): the defender picks which piece absorbs the hit ──
@@ -1762,26 +2263,6 @@ export const useGameStore = create<GameStoreState>()(
     const isCompanion = card.type === 'Companion';
     const isConstruct = card.type === 'Construct';
 
-    // Paranoia (Master_Keyword_List): "Whenever an opponent plays a Companion, look at
-    // the top card of that player's deck. You may put that card on the top or bottom of
-    // their deck." The peek is OWNED by the Paranoia controller (this player's opponent)
-    // and looks at THIS player's deck; the placing player makes no choice and never sees
-    // the card (PeekModal renders only for the owner). One trigger per Paranoia
-    // permanent; extras queue and re-slice the live deck when they become active.
-    const oppSide: 'p1' | 'p2' = lp === 'p1' ? 'p2' : 'p1';
-    const paranoiaReqs: PeekRequest[] = isCompanion
-      ? (Object.values(game[oppSide].board) as (BoardEntity | undefined)[])
-          .filter((e): e is BoardEntity => !!e && effectiveKeywords(e, game).includes('Paranoia'))
-          .map(e => ({ source: e.name, lp: oppSide, deckSide: lp, look: 1, dests: ['top', 'bottom'] }))
-      : [];
-    /** Fold the Paranoia peeks into whatever game the return path built (queue behind
-     *  an already-armed peek so the placer's own scry resolves first). */
-    const armParanoia = (g: GameState): GameState => {
-      if (paranoiaReqs.length === 0) return g;
-      if (g.pendingPeek) return { ...g, pendingPeekQueue: [...g.pendingPeekQueue, ...paranoiaReqs] };
-      const { peek, rest } = nextPeek(g, paranoiaReqs);
-      return peek ? { ...g, pendingPeek: peek, pendingPeekQueue: [...g.pendingPeekQueue, ...rest] } : g;
-    };
     const newEnt: BoardEntity = {
       id: uid(`placed-${card.id}`),
       kind: isConstruct ? 'construct' : 'companion',
@@ -1805,210 +2286,34 @@ export const useGameStore = create<GameStoreState>()(
 
     const newHand = game[lp].hand.filter(c => c.id !== pendingPlay.cardId);
 
-    const id = ++toastId;
-    setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 3000);
-
-    // Trigger Oathsworn modal if the placed card has the Oathsworn keyword
-    const isOathsworn = card.keywords.includes('Oathsworn');
-    const newModals = isOathsworn
-      ? [...s.modalQueue, 'oathsworn']
-      : s.modalQueue;
-    const newOathCtx = isOathsworn
-      ? { permanentId: newEnt.id, name: card.name }
-      : s.oathContext;
-
-    // On-enter targeting keyword (Reinforce / Dismantle) — Reinforce targets your
-    // own Physical Constructs, Dismantle targets the opponent's. If none exist the
-    // trigger fizzles with a note rather than blocking.
-    const enterTrig = parseEnterTrigger(card.keywords);
-    let pendingTrigger: PendingTrigger | null = null;
-    let enterMsg = `${card.name} enters the field!`;
-    if (enterTrig) {
-      const opp: 'p1' | 'p2' = lp === 'p1' ? 'p2' : 'p1';
-      const targetBoard = enterTrig.kind === 'reinforce' ? game[lp].board : game[opp].board;
-      const eligibleIds = (Object.values(targetBoard) as (BoardEntity | undefined)[])
-        .filter((e): e is BoardEntity => !!e && isPhysicalConstruct(e))
-        .map(e => e.id);
-      const verb = enterTrig.kind === 'reinforce' ? 'Reinforce' : 'Dismantle';
-      if (eligibleIds.length > 0) {
-        pendingTrigger = { kind: enterTrig.kind, n: enterTrig.n, sourceName: card.name, eligibleIds };
-        enterMsg = `${card.name}: choose a Physical Construct to ${verb} (${enterTrig.n}).`;
-      } else {
-        enterMsg = `${card.name} enters — no Physical Construct to ${verb.toLowerCase()}.`;
-      }
-    }
-
-    // Kit-Master (on-enter): move an item from one of your characters to another.
-    // Eligibility is computed on the post-placement board so the new companion
-    // counts as a possible destination.
-    let pendingKit: PendingKit | null = null;
-    if (card.keywords.includes('Kit-Master')) {
-      const boardAfter = { ...game[lp].board, [slot]: newEnt };
-      const gameAfter = { ...game, [lp]: { ...game[lp], board: boardAfter } };
-      const chars = (Object.values(boardAfter) as (BoardEntity | undefined)[])
-        .filter((e): e is BoardEntity => !!e && isCharacter(e));
-      // A source is eligible only if it holds an item that some OTHER character
-      // has slot capacity to receive (otherwise highlighting it would dead-end).
-      const sources = chars.filter(e =>
-        allItemsOf(e).some(it => kitDests(gameAfter, lp, e.id, it.isWeapon, !!it.item.heavy).length > 0)
-      ).map(e => e.id);
-      if (sources.length > 0) {
-        pendingKit = { sourceName: card.name, step: 'source', eligibleIds: sources };
-        enterMsg = `${card.name}: Kit-Master — choose a character to take an item from.`;
-      } else {
-        enterMsg = `${card.name} enters — no item to move (Kit-Master).`;
-      }
-    }
-
-    // Scavenger (on-enter, optional): return an Item card from your Dead Zone and
-    // attach it to this companion. Rides the existing Dead-Zone prompt with an attach
-    // destination (resolveDeadPick equips instead of returning to hand). No items in
-    // the Dead Zone → fizzles with a note rather than blocking.
-    let scavengerPick: PendingDeadPick | null = null;
-    if (isCompanion && card.keywords.includes('Scavenger')) {
-      const options = game[lp].dead
-        .map((c, idx) => ({ card: c, idx }))
-        .filter(o => o.card.type === 'Item');
-      if (options.length > 0) {
-        scavengerPick = { source: card.name, lp, options, postEffects: [], optional: true,
-          attachTo: { id: newEnt.id, name: card.name } };
-        enterMsg = `${card.name}: Scavenger — you may return an item from your Dead Zone.`;
-      } else {
-        enterMsg = `${card.name} enters — no item in the Dead Zone (Scavenger).`;
-      }
-    }
-
-    // Animate Magic X (on-enter): choose a Magical (Incantation) Construct you
-    // control — it becomes an X/X Manifest companion via the interpreter's existing
-    // 'animate' op. No Magical Construct → fizzles with a note.
-    let animatePick: PendingActionTarget | null = null;
-    const animateX = parseAnimateMagic(card.keywords);
-    if (animateX != null) {
-      const eligibleIds = (Object.values(game[lp].board) as (BoardEntity | undefined)[])
-        .filter((e): e is BoardEntity => !!e && e.kind === 'construct' && e.subtype === 'Incantation')
-        .map(e => e.id);
-      if (eligibleIds.length > 0) {
-        animatePick = { source: 'enter', sourceName: card.name, lp,
-          effects: [{ op: 'animate', atk: animateX, hp: animateX, target: 'magicalConstruct' }],
-          eligibleIds, sourceId: newEnt.id };
-        enterMsg = `${card.name}: Animate Magic — choose a Magical Construct to animate (${animateX}/${animateX}).`;
-      } else {
-        enterMsg = `${card.name} enters — no Magical Construct to animate.`;
-      }
-    }
-
-    // Coercion (on-enter, companions): the OPPONENT must discard a card or sacrifice
-    // a permanent — their choice, routed to their client (the acting player is held
-    // via reactiveHold). Their PC never qualifies as the sacrifice; with an empty
-    // hand and no other permanents the trigger fizzles.
-    let pendingCoercion: PendingCoercion | null = null;
-    if (isCompanion && card.keywords.includes('Coercion')) {
-      const victim: 'p1' | 'p2' = lp === 'p1' ? 'p2' : 'p1';
-      const canDiscard = game[victim].hand.length > 0;
-      const canSacrifice = Object.values(game[victim].board).some(e => e && e.kind !== 'pc');
-      if (canDiscard || canSacrifice) {
-        pendingCoercion = { source: card.name, victim };
-        enterMsg = `${card.name}: Coercion — opponent must discard a card or sacrifice a permanent.`;
-      } else {
-        enterMsg = `${card.name} enters — the opponent has nothing to coerce.`;
-      }
-    }
-
-    const placedGame = recomputeStatics({
+    // ── The trigger stack (R1, owner-ratified 2026-07-12) ───────────────────────
+    // Playing the card puts it ON THE STACK — it does not enter the encounter until
+    // the stack empties down to it. Play-window triggers (Paranoia — canon:
+    // "Whenever an opponent plays a Companion…", from-hand plays only) queue ABOVE
+    // it and resolve first: the controller's peek happens BEFORE the companion
+    // enters and before its on-enter effects (R3, re-ruled 2026-07-12 — "Peek first
+    // 100%", superseding the 2026-07-04 placer's-scry-first order). The on-enter
+    // machinery itself runs when the stack reaches the entered permanent's own
+    // trigger (runOnEnter); reactive enter-traps resolve before it.
+    const paidGame: GameState = {
       ...game,
-      [lp]: {
-        ...game[lp],
-        hand: newHand,
-        classZone: newCZ,
-        willpower: newWillpower,
-        board: { ...game[lp].board, [slot]: newEnt },
-      },
-    });
-
-    // Structured on-enter effects (the non-keyword "When this enters, …" text).
-    // Only when no keyword trigger already claimed the enter (avoids double pending).
-    const onEnter = (card.effects ?? []).filter(c => c.trigger === 'onEnter').flatMap(c => c.effects);
-    if (!pendingTrigger && !pendingKit && !scavengerPick && !animatePick && !pendingCoercion && onEnter.length > 0) {
-      // Equip-from-hand (Veteran of the Ashgrove): pick an item from hand for this character.
-      if (onEnter.some(e => e.op === 'equipFromHand')) {
-        const items = placedGame[lp].hand.filter(c => c.type === 'Item');
-        if (items.length > 0) {
-          return {
-            pendingPlay: null, oathContext: newOathCtx, modalQueue: newModals, game: armParanoia(placedGame),
-            pendingEquipPick: { source: card.name, lp, targetId: newEnt.id, items },
-            toasts: [...s.toasts, { id, msg: `${card.name} enters — equip an item from your hand?` }],
-          };
-        }
-        // no items in hand — fall through (nothing to equip)
-      }
-
-      // Two-step on-enter: Field Engineer moves an anchor between two Physical Constructs.
-      if (twoStepKind(onEnter) === 'moveAnchor') {
-        const mv = onEnter.find(e => e.op === 'moveAnchor');
-        const count = mv && mv.op === 'moveAnchor' ? mv.count : 1;
-        const physical = ownPhysicalConstructIds(placedGame, lp);
-        const sources = physical.filter(pid => (findEntityAnywhere(placedGame, pid)?.ent.anchors ?? 0) >= count);
-        if (sources.length >= 1 && physical.length >= 2) {
-          return {
-            pendingPlay: null, oathContext: newOathCtx, modalQueue: newModals, game: armParanoia(placedGame),
-            pendingActionTarget: { source: 'enter', sourceName: card.name, lp, effects: onEnter, eligibleIds: sources, sourceId: newEnt.id, twoStep: 'moveAnchor' },
-            toasts: [...s.toasts, { id, msg: `${card.name} enters — move an anchor: choose a source Physical Construct.` }],
-          };
-        }
-        // not enough Physical Constructs — fall through (fizzle, it's optional)
-      }
-
-      const enterPeek = onEnter.find(e => e.op === 'deckPeek');
-      if (enterPeek && enterPeek.op === 'deckPeek') {
-        const cards = placedGame[lp].deck.slice(0, enterPeek.look);
-        if (cards.length > 0) {
-          return {
-            pendingPlay: null, oathContext: newOathCtx, modalQueue: newModals,
-            game: armParanoia({ ...placedGame, pendingPeek: { source: card.name, lp, deckSide: lp, cards, dests: enterPeek.dests, maxHand: enterPeek.maxHand } }),
-            toasts: [...s.toasts, { id, msg: `${card.name} enters — look at your deck.` }],
-          };
-        }
-      }
-      const spec = actionTargetSpec(onEnter);
-      if (spec) {
-        const eligibleIds = eligibleTargets(placedGame, lp, spec).filter(eid => eid !== newEnt.id);
-        if (eligibleIds.length > 0) {
-          return {
-            pendingPlay: null, oathContext: newOathCtx, modalQueue: newModals, game: armParanoia(placedGame),
-            pendingActionTarget: { source: 'enter', sourceName: card.name, lp, effects: onEnter, eligibleIds, sourceId: newEnt.id },
-            toasts: [...s.toasts, { id, msg: `${card.name} enters — choose a target.` }],
-          };
-        }
-        // No legal target — fizzle (enter without the targeted effect).
-      } else {
-        const armorSink: ArmorChoiceData[] = [];
-        const r = resolveActionEffects(placedGame, lp, card.name, onEnter, undefined, newEnt.id, undefined, undefined, armorSink);
-        return {
-          pendingPlay: null, pendingTrigger, pendingKit, oathContext: newOathCtx, modalQueue: newModals,
-          game: armParanoia(armPrompts(r.game, [], armorSink)),
-          toasts: [...s.toasts, { id, msg: r.msgs.length ? `${card.name} enters! ${r.msgs.join(' | ')}` : enterMsg }],
-        };
-      }
+      [lp]: { ...game[lp], hand: newHand, classZone: newCZ, willpower: newWillpower },
+    };
+    const paranoia = isCompanion ? gatherParanoia(paidGame, lp) : [];
+    const g = pushStack(paidGame, [{ kind: 'enter', ent: newEnt, card, slot, controller: lp }]);
+    if (paranoia.length > 1) {
+      // >1 simultaneous play-window trigger — the ACTIVE player orders them.
+      return { pendingPlay: null, pendingTrigger: null, pendingKit: null,
+        game: { ...g, pendingTriggerOrder: { lp: g.activePlayer, items: paranoia, picked: [] } } };
     }
-
-    // Scavenger's prompt joins the game-level Dead-Zone queue (behind any active pick).
-    const withScavenger: GameState = !scavengerPick ? placedGame
-      : placedGame.pendingDeadPick
-        ? { ...placedGame, pendingDeadPickQueue: [...placedGame.pendingDeadPickQueue, scavengerPick] }
-        : { ...placedGame, pendingDeadPick: scavengerPick };
-    const withCoercion: GameState = pendingCoercion ? { ...withScavenger, pendingCoercion } : withScavenger;
-
+    const r = runStack(pushStack(g, paranoia), s);
     return {
       pendingPlay: null,
-      pendingTrigger,
-      pendingKit,
-      // Only claim the pendingActionTarget slot when Animate Magic armed one — a null
-      // here must not clobber an unrelated pending target.
-      ...(animatePick ? { pendingActionTarget: animatePick } : {}),
-      oathContext: newOathCtx,
-      modalQueue: newModals,
-      game: armParanoia(withCoercion),
-      toasts: [...s.toasts, { id, msg: enterMsg }],
+      pendingTrigger: null,
+      pendingKit: null,
+      ...r.local,
+      game: r.game,
+      toasts: [...s.toasts, ...mkToasts(r.toastMsgs)],
     };
   }),
 
@@ -2120,6 +2425,9 @@ export const useGameStore = create<GameStoreState>()(
   endTurn: () => set(s => {
     if (reactiveHold(s.game, s.localPlayer)) return s;
     if (gameIsOver(s.game)) return s;
+    // Unresolved triggers hold the turn: the stack must drain (and any simultaneous-
+    // trigger ordering pick must resolve) before the turn can pass (R1, 2026-07-12).
+    if (s.game.triggerStack?.length || s.game.pendingTriggerOrder) return s;
     const g = s.game;
     const nextPlayer: 'p1' | 'p2' = g.activePlayer === 'p1' ? 'p2' : 'p1';
     const nextTurn = nextPlayer === 'p1' ? g.turn + 1 : g.turn;

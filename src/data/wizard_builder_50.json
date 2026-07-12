@@ -1061,7 +1061,22 @@
       "flavor": "",
       "createdAt": "2026-05-16T19:02:21.324479Z",
       "updatedAt": "2026-05-16T19:02:21.324482Z",
-      "effectsFlag": "awaiting engine capability: trap reactive-trigger system (owner 2026-07-08)"
+      "effects": [
+        {
+          "trigger": "oppCompanionEnters",
+          "effects": [
+            {
+              "op": "damage",
+              "amount": 1,
+              "target": "eventSubject"
+            },
+            {
+              "op": "sacrifice",
+              "target": "self"
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "ffa9ba63",
@@ -1083,7 +1098,21 @@
       "flavor": "",
       "createdAt": "2026-05-16T19:02:21.324493Z",
       "updatedAt": "2026-05-16T19:02:21.324495Z",
-      "effectsFlag": "awaiting engine capability: trap reactive-trigger system (owner 2026-07-08)"
+      "effects": [
+        {
+          "trigger": "oppCompanionMovesToFront",
+          "effects": [
+            {
+              "op": "exhaust",
+              "target": "eventSubject"
+            },
+            {
+              "op": "sacrifice",
+              "target": "self"
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "348b9285",
@@ -1169,7 +1198,18 @@
       "flavor": "",
       "createdAt": "2026-05-16T19:02:21.324549Z",
       "updatedAt": "2026-05-16T19:02:21.324552Z",
-      "effectsFlag": "awaiting engine capability: trap reactive-trigger system (owner 2026-07-08)"
+      "effects": [
+        {
+          "trigger": "oppCompanionAttacksCompanion",
+          "effects": [
+            {
+              "op": "damage",
+              "amount": 1,
+              "target": "eventSubject"
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "47c06500",
