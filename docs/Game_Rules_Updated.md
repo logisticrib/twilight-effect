@@ -246,6 +246,18 @@ Existing canon (Card_Design_Parameters §13, quoted verbatim): "**Use a stack** 
 - **Rules Note (2026-07-13) — "Moves into" a line or zone.** "Moves into [the front line / the back line / a zone]" means arriving there by movement from outside it. Entering the encounter directly onto that line is not a move and does not meet the condition; nor does lateral repositioning between slots within the same line.
 - There are no player priority windows: nothing in the game allows casting in response. All reactions are automatic triggers; player decisions inside them (Paranoia's top/bottom, the active player's ordering of simultaneous triggers, "may" choices) are made when the trigger resolves.
 
+**Damage Prevention:**
+Prevention is one family of effects: anything that intervenes when a character "would take" or "would be dealt" damage. Armor is its longest-standing member (existing canon, quoted verbatim: "If the equipped character would be dealt damage, prevent all of that damage and put an armor counter on this item. When this item has X armor counters, sacrifice it."); board-sourced "prevent N of that damage" effects are members of the same family. The Rules Notes below are the owner-ratified operational model (2026-07-14).
+
+- **Rules Note (2026-07-14) — Deal-side modifiers apply before receipt-side prevention.** Effects that modify the damage a source DEALS (e.g. a doubling worded "this deals double damage") are applied first, forming the dealt amount. Prevention effects then apply to that formed amount. Ruled example: a doubled 2-damage hit (→ 4) against a character covered by a prevent-1 effect resolves as 4 − 1 = 3, not (2 − 1) × 2 = 2.
+- **Rules Note (2026-07-14) — Fully prevented damage is no damage.** If prevention reduces a damage instance to 0, the character takes no damage at all: no Poison is applied, and no "when damaged"-style triggers fire. (This states as a rule for ALL prevention what has always been true of an armor-blocked hit.)
+- **Rules Note (2026-07-14) — The affected character's controller orders prevention effects.** When more than one prevention effect could apply to the same damage instance, the affected character's controller chooses the order in which they apply. (This extends the existing armor rule — the controlling player chooses which armor prevents the damage — to the whole prevention family.) Canonical consequence: a 1-damage hit on an armored character also covered by a prevent-1 effect — the controller may apply the prevent-1 first (the damage reaches 0, armor never engages, no counter is spent) or the armor first (the whole hit is prevented and the counter is added).
+- **Scope and application (2026-07-14):**
+  - An ongoing prevention effect applies to EVERY qualifying damage instance while its source stands — each hit separately, including each splash hit of a Cleave against a different covered character.
+  - Duplicate prevention effects stack (two prevent-1 sources prevent 2 in total, ordered with any other preventions per the Rules Note above).
+  - Prevention applies to all damage the covered character would take — combat and effect damage alike, including reactive-trigger damage.
+  - Scope is exactly what the card names: an effect covering a class of companions you control never covers the Player Character, companions outside that class, opposing characters, or the player. (Poison-failure damage is dealt to the PLAYER and is therefore never covered by companion-scoped prevention.)
+
 ### POSITIONING & MOVEMENT
 
 **Geometry recap.** Each player controls a 2x3 grid (3 Front Line, 3 Back Line) called the Command Zone. The two players' grids are mirrored but spatially independent — adjacency does not cross between them.

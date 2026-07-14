@@ -155,7 +155,7 @@ export function itemTransferCandidates(game: GameState, it: PendingItemTransfer,
  *  window with nothing claimable evaporates without a prompt. */
 export function armNextItemTransfer(game: GameState): GameState {
   if (game.pendingItemTransfer) return game;
-  if (game.pendingPoison || game.pendingPeek || game.pendingDeadPick || game.pendingArmor || game.pendingModalChoice) return game;
+  if (game.pendingPoison || game.pendingPeek || game.pendingDeadPick || game.pendingArmor || game.pendingModalChoice || game.pendingPreventOrder) return game;
   const queue = [...game.pendingItemTransferQueue];
   while (queue.length) {
     const req = queue.shift()!;

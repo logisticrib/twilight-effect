@@ -28,7 +28,7 @@ import { ADJ, FRONT_SLOTS, BACK_SLOTS, isFront, findSlot, type SlotId, type Boar
          permanentEffects, gatherActivated, abilityUsedTag, magicCtx,
          destroyEntity, applyDamage, applyCombatHit, driveAttack, optionalAttackAbility,
          attackDamageBonus, resolveActionEffects, armPrompts, armNextArmorChoice,
-         applyArmorCounter,
+         applyArmorCounter, applyPreventionOrder, armNextPreventOrder,
          freshActs, uid, computeWillpower, makeNewGame, nextPeek, resolveStartOfTurn,
          controlsPreventAnchorDecay, equipOnto, kitDests } from '../engine';
 
@@ -215,7 +215,7 @@ function commitAttack(s: StackRunCtx, game: GameState, charId: string, targetEnt
   if (!declReactive.length && !hasOwnAttack) {
     // No declaration-window triggers — legacy inline drive, byte-identical behavior.
     const res = driveAttack(newGame, ctx);
-    if (!res.done) return { game: { ...res.game, pendingArmor: res.pendingArmor }, local: {}, toastMsgs: [] };
+    if (!res.done) return { game: { ...res.game, pendingArmor: res.pendingArmor ?? null, pendingPreventOrder: res.pendingPreventOrder }, local: {}, toastMsgs: [] };
     return { game: finalizeAttack(res.game, res.ctx), local: {}, toastMsgs: [res.ctx.msgs.join(' | ')] };
   }
 
@@ -268,6 +268,10 @@ export function reactiveHold(game: GameState, localPlayer: 'p1' | 'p2'): string 
   // the ACTIVE player orders; everyone else waits.
   const po = game.pendingTriggerOrder;
   if (po && po.lp !== localPlayer) return 'simultaneous trigger ordering';
+  // The opponent's prevention-ordering pick (R3, 2026-07-14) — the affected
+  // character's controller orders; everyone else (usually the attacker) waits.
+  const pv = game.pendingPreventOrder;
+  if (pv && pv.chooser !== localPlayer) return `${pv.entityName}'s damage prevention`;
   // A trigger stack resting on the OTHER client's 'ownEnter' hand-off (its on-enter
   // machinery arms store-local prompts, so only the controller's client resolves it).
   const head = game.triggerStack?.[game.triggerStack.length - 1];
@@ -611,7 +615,7 @@ function runStack(game: GameState, s: StackRunCtx):
         continue;
       }
       const res = driveAttack(g, ctx);
-      if (!res.done) { g = { ...res.game, pendingArmor: res.pendingArmor }; break; } // PAUSE — resolveArmor resumes + finalizes
+      if (!res.done) { g = { ...res.game, pendingArmor: res.pendingArmor ?? null, pendingPreventOrder: res.pendingPreventOrder }; break; } // PAUSE — resolveArmor/resolvePreventOrder resumes + finalizes
       g = finalizeAttack(res.game, res.ctx);
       if (res.ctx.msgs.length) toastMsgs.push(res.ctx.msgs.join(' | '));
       continue;
@@ -739,6 +743,10 @@ interface GameStoreState {
   resolveAttack: (targetEntityId: string) => void;
   /** Defender's mid-combat Armor pick — resolves `game.pendingArmor` and resumes the attack. */
   resolveArmor: (pieceId: string) => void;
+  /** The affected character's controller's prevention-ordering pick (R3, 2026-07-14):
+   *  one blind pick per call (the PendingTriggerOrder pattern) — when one unpicked
+   *  item remains the order is complete and the damage instance resolves. */
+  resolvePreventOrder: (idx: number) => void;
   /** Resolve Mara's pre-attack optional ability — pay HP for +damage, or decline; commits the attack. */
   resolveAttackChoice: (accept: boolean) => void;
 
@@ -1502,7 +1510,7 @@ export const useGameStore = create<GameStoreState>()(
     const stack = s.game.triggerStack;
     const top = stack?.[stack.length - 1];
     if (!top) return s;
-    if (s.game.pendingTriggerOrder || s.game.pendingPeek || s.game.pendingArmor) return s; // paused on a prompt, not a hand-off
+    if (s.game.pendingTriggerOrder || s.game.pendingPeek || s.game.pendingArmor || s.game.pendingPreventOrder) return s; // paused on a prompt, not a hand-off
     if (top.kind === 'ownEnter' && s.conn.mode !== 'solo' && top.controller !== s.localPlayer) return s;
     const r = runStack(s.game, s);
     return { ...r.local, game: r.game, toasts: [...s.toasts, ...mkToasts(r.toastMsgs)] };
@@ -2057,11 +2065,17 @@ export const useGameStore = create<GameStoreState>()(
       return { id, msg };
     };
 
-    // Non-combat deferred choice: apply the counter, then arm the next queued one.
+    // Non-combat deferred choice: apply the counter, then arm the next queued one
+    // (then any deferred prevention ordering held back behind the armor prompts).
     if (!pa.ctx) {
       const r = applyArmorCounter(s.game, pa.entityId, pieceId);
       const next = armNextArmorChoice(r.game, pa.queue ?? []);
-      return { game: armNextItemTransfer({ ...next.game, pendingArmor: next.pendingArmor }), toasts: [...s.toasts, mkToast(r.msgs.join(' | '))] };
+      let g: GameState = { ...next.game, pendingArmor: next.pendingArmor };
+      if (!g.pendingArmor && g.preventOrderQueue?.length) {
+        const p = armNextPreventOrder(g);
+        g = { ...p.game, pendingPreventOrder: p.pendingPreventOrder };
+      }
+      return { game: armNextItemTransfer(g), toasts: [...s.toasts, mkToast(r.msgs.join(' | '))] };
     }
 
     // Combat: resume the paused attack on a cloned ctx (the stored one is synced state).
@@ -2070,7 +2084,50 @@ export const useGameStore = create<GameStoreState>()(
     g = applyCombatHit(g, ctx, chosen.id); // resolve the paused hit with the chosen piece
     const res = driveAttack(g, ctx);
     if (!res.done) {
-      return { game: { ...res.game, pendingArmor: res.pendingArmor } };
+      return { game: { ...res.game, pendingArmor: res.pendingArmor ?? null, pendingPreventOrder: res.pendingPreventOrder } };
+    }
+    return { game: finalizeAttack(res.game, res.ctx), toasts: [...s.toasts, mkToast(res.ctx.msgs.join(' | '))] };
+  }),
+
+  // ── Prevention ordering (R3, owner 2026-07-14) ─────────────────────────────
+  resolvePreventOrder: (idx) => set(s => {
+    if (gameIsOver(s.game)) return s;
+    const po = s.game.pendingPreventOrder;
+    if (!po) return s;
+    if (s.conn.mode !== 'solo' && po.chooser !== s.localPlayer) return s; // the affected character's controller orders; others hold
+    if (idx < 0 || idx >= po.items.length || po.picked.includes(idx)) return s;
+    const picked = [...po.picked, idx];
+    if (picked.length < po.items.length - 1) {
+      return { game: { ...s.game, pendingPreventOrder: { ...po, picked } } };
+    }
+    // Order complete (the last unpicked item is implied — the blind-pick pattern).
+    const lastIdx = po.items.findIndex((_, i) => !picked.includes(i));
+    const order = [...picked, lastIdx].map(i => po.items[i]);
+    const mkToast = (msg: string) => {
+      const id = ++toastId;
+      setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 3000);
+      return { id, msg };
+    };
+
+    // Deferred non-combat ordering: the HP outcome landed at damage time (it is
+    // order-independent) — the chosen order decides only the armor-counter
+    // consequences. Then arm the next queued ordering / held-back item transfers.
+    if (!po.ctx) {
+      const w = applyPreventionOrder(s.game, po.entityId, po.dmg, order);
+      const p = armNextPreventOrder({ ...w.game, pendingPreventOrder: undefined });
+      const g: GameState = { ...p.game, pendingPreventOrder: p.pendingPreventOrder };
+      const msgs = [...w.msgs, ...p.msgs];
+      return { game: armNextItemTransfer(g), toasts: msgs.length ? [...s.toasts, mkToast(msgs.join(' | '))] : s.toasts };
+    }
+
+    // Combat: resume the paused attack on a cloned ctx, replaying the head hit with
+    // the chosen prevention order (the resolveArmor resume pattern).
+    const ctx: AttackCtx = { ...po.ctx, hitQueue: [...po.ctx.hitQueue], msgs: [...po.ctx.msgs], events: [...po.ctx.events], deadSink: [...po.ctx.deadSink], armorSink: [...po.ctx.armorSink] };
+    let g: GameState = { ...s.game, pendingPreventOrder: undefined };
+    g = applyCombatHit(g, ctx, undefined, order);
+    const res = driveAttack(g, ctx);
+    if (!res.done) {
+      return { game: { ...res.game, pendingArmor: res.pendingArmor ?? null, pendingPreventOrder: res.pendingPreventOrder } };
     }
     return { game: finalizeAttack(res.game, res.ctx), toasts: [...s.toasts, mkToast(res.ctx.msgs.join(' | '))] };
   }),
@@ -2427,7 +2484,9 @@ export const useGameStore = create<GameStoreState>()(
     if (gameIsOver(s.game)) return s;
     // Unresolved triggers hold the turn: the stack must drain (and any simultaneous-
     // trigger ordering pick must resolve) before the turn can pass (R1, 2026-07-12).
+    // Likewise an open prevention ordering / deferred prevention queue (R3, 2026-07-14).
     if (s.game.triggerStack?.length || s.game.pendingTriggerOrder) return s;
+    if (s.game.pendingPreventOrder || s.game.preventOrderQueue?.length) return s;
     const g = s.game;
     const nextPlayer: 'p1' | 'p2' = g.activePlayer === 'p1' ? 'p2' : 'p1';
     const nextTurn = nextPlayer === 'p1' ? g.turn + 1 : g.turn;

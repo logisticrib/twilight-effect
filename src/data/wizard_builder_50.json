@@ -385,7 +385,9 @@
       "flavor": "",
       "createdAt": "2026-05-16T19:02:21.324227Z",
       "updatedAt": "2026-05-16T19:02:21.324229Z",
-      "effectsFlag": "awaiting engine capability: damage-prevention replacement system (owner 2026-07-08)"
+      "effects": [
+        { "trigger": "static", "effects": [{ "op": "preventDamage", "amount": 1, "scope": "ownCompanions", "where": { "cls": "Wizard" } }] }
+      ]
     },
     {
       "id": "cdbf2f86",

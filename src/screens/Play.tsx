@@ -40,7 +40,7 @@ function GameView() {
         || !!game.pendingPeek || !!game.pendingDeadPick || !!game.pendingArmor
         || !!game.pendingAttackChoice || !!game.pendingPoison || !!game.pendingCoercion
         || !!game.pendingItemTransfer || !!game.pendingModalChoice || !!game.gameOver
-        || !!game.pendingTriggerOrder
+        || !!game.pendingTriggerOrder || !!game.pendingPreventOrder
         || !!s.pendingEquipPick || s.pendingKit?.step === 'item' || !!s.pileView;
 
       if (e.key === 'Tab') {
@@ -80,6 +80,7 @@ function GameView() {
       <ModalChoiceHost />
       <ItemTransferModal />
       <ArmorModal />
+      <PreventOrderModal />
       <AttackChoiceModal />
       <PoisonHost />
       <CoercionModal />
@@ -254,6 +255,39 @@ function TriggerOrderModal() {
   );
 }
 
+/** Prevention-ordering picker (R3, owner 2026-07-14): >1 prevention effect could
+ *  apply to one damage instance — the AFFECTED character's controller orders them,
+ *  blind pick by blind pick (the TriggerOrderModal pattern). Each armor piece is its
+ *  own item: ordering a piece first both engages armor and picks the piece. Forced —
+ *  prevention is mandatory (no decline), only the order is chosen. */
+function PreventOrderModal() {
+  const po = useGameStore(s => s.game.pendingPreventOrder);
+  const pa = useGameStore(s => s.game.pendingArmor);
+  const localPlayer = useGameStore(s => s.localPlayer);
+  const isSolo = useGameStore(s => s.conn.mode === 'solo');
+  const resolvePreventOrder = useGameStore(s => s.resolvePreventOrder);
+  if (!po || pa) return null; // never stack over an armor prompt
+  if (!isSolo && po.chooser !== localPlayer) return null; // the controller orders; others hold
+  const remaining = po.items.map((it, i) => ({ it, i })).filter(x => !po.picked.includes(x.i));
+  const nth = po.picked.length + 1;
+  const label = (it: (typeof po.items)[number]) => it.kind === 'prevent'
+    ? `${it.sourceName} — prevent ${it.amount}`
+    : `${it.pieceName} — armor: prevents ALL remaining damage (${it.counters + 1}/${it.armor} counters)`;
+  return (
+    <ModalShell glyph="⛨" eyebrow={`${po.sourceName} deals ${po.dmg} damage to ${po.entityName}`}
+      title={nth === 1 ? 'Choose which prevention applies first' : `Choose the prevention to apply #${nth}`}
+      sub="More than one prevention effect could apply — as the affected character's controller, you decide the order. Armor reached after the damage is already 0 never engages (no counter).">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {remaining.map(({ it, i }) => (
+          <button key={i} onClick={() => resolvePreventOrder(i)} style={md.btn('primary')}>
+            {label(it)}
+          </button>
+        ))}
+      </div>
+    </ModalShell>
+  );
+}
+
 /** Multiplayer hand-off driver: a trigger stack resting on an 'ownEnter' owned by
  *  this client (its resolution arms store-LOCAL prompts, so only the controller's
  *  client may run it) is resumed here. Solo stacks drain synchronously inside the
@@ -268,7 +302,7 @@ function StackResumeDriver() {
     if (head?.kind !== 'ownEnter') return;
     const s = useGameStore.getState();
     if ((s.conn.mode === 'solo' || head.controller === s.localPlayer)
-      && !s.game.pendingPeek && !s.game.pendingTriggerOrder && !s.game.pendingArmor) {
+      && !s.game.pendingPeek && !s.game.pendingTriggerOrder && !s.game.pendingArmor && !s.game.pendingPreventOrder) {
       s.resumeStack();
     }
   }, [head]);
@@ -292,6 +326,7 @@ function PoisonHost() {
 function ReactiveHoldBanner() {
   const dp = useGameStore(s => s.game.pendingDeadPick);
   const pa = useGameStore(s => s.game.pendingArmor);
+  const pv = useGameStore(s => s.game.pendingPreventOrder);
   const it = useGameStore(s => s.game.pendingItemTransfer);
   const localPlayer = useGameStore(s => s.localPlayer);
   const isSolo = useGameStore(s => s.conn.mode === 'solo');
@@ -301,6 +336,7 @@ function ReactiveHoldBanner() {
   // is always "the opponent" (synced player names are perspective-relative).
   const source = (dp && dp.lp !== localPlayer) ? dp.source
                : (pa && pa.defender !== localPlayer) ? `${pa.entityName}'s armor`
+               : (pv && pv.chooser !== localPlayer) ? `${pv.entityName}'s damage prevention`
                : (it && it.lp !== localPlayer) ? `${it.sourceName}'s Item Transfer`
                : null;
   if (!source) return null;

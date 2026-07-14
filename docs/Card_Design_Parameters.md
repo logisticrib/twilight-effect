@@ -462,6 +462,11 @@ Three distinct trigger conditions:
 - **Replacement effects:** Modify HOW things happen (use "would" and "instead")
 - **Triggered abilities:** Respond AFTER things happen (use "when/whenever")
 
+- Rules Note (ruled 2026-07-14): damage PREVENTION ("would take/would be dealt damage" → prevent some or all of it) is engine-implemented as one family — Armor and board-sourced prevent-N effects alike. Deal-side modifiers form the dealt amount before prevention applies; fully prevented damage is no damage (no Poison, no "when damaged" triggers); when several preventions could apply to one damage instance, the affected character's controller orders them. Full dated notes: Game_Rules_Updated.md §Core Mechanics, "Damage Prevention".
+
+### PRINCIPLE (2026-07-14): No arbitrary orderings between cards
+**The rules never rank cards or effects against each other by list, timestamp, or type hierarchy.** Whenever card effects collide and order matters, a player present at the collision decides — the active player for simultaneous triggers; the affected character's controller for prevention. Rationale: every card is unique and the pool is unbounded — players always have partial information about what exists, so any global ordering is unlearnable by design. Every future mechanic must satisfy this constraint.
+
 ---
 
 ## 16. DURATION & EFFECT TIMING

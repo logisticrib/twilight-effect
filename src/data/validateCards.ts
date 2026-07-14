@@ -50,7 +50,7 @@ const OPS = [
   'anchor', 'sacrifice', 'sacrificeItem', 'equipFromHand', 'animate', 'dieCheck',
   'attackDisarm', 'moveAnchor', 'attackBonus', 'magicDamageBonus', 'preventAnchorDecay',
   'lineWard', 'exhaustSelf', 'exhaust', 'modal', 'gainControl', 'suppressKeywords', 'counterAction',
-  'grantKeywords', 'backLineAttack',
+  'grantKeywords', 'backLineAttack', 'preventDamage',
 ] as const satisfies readonly Effect['op'][];
 export type _ExhaustiveOps = AssertNever<Exclude<Effect['op'], (typeof OPS)[number]>>;
 
@@ -203,6 +203,13 @@ function validateEffect(e: Effect, path: string, p: (msg: string) => void, keywo
       break;
     case 'backLineAttack':
       break; // no parameters
+    case 'preventDamage':
+      // Engine-supported scopes only — the contract must not advertise coverage the
+      // damage pipeline doesn't gather (perControlled precedent, 2026-07-03).
+      if (!isInt(e.amount) || e.amount < 1) p(`${path}(preventDamage): amount must be an integer ≥ 1`);
+      if (e.scope !== 'ownCompanions' && e.scope !== 'ownParty') p(`${path}(preventDamage): scope must be ownCompanions or ownParty`);
+      if (e.where?.cls !== undefined && (typeof e.where.cls !== 'string' || !e.where.cls)) p(`${path}(preventDamage): bad where.cls`);
+      break;
   }
 }
 

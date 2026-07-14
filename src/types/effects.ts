@@ -116,6 +116,13 @@ export type Effect =
   | { op: 'moveAnchor'; count: number }  // two-step: move N anchors from one of your Physical Constructs to another
   // damage MODIFIERS (passive, consulted by the damage pipeline — not standalone instances)
   | { op: 'attackBonus'; amount: number }        // (onAttack, gated by clause `if`) +dmg to the bearer's attack
+  // (static) receipt-side damage prevention aura (Reflecting Pool): while this
+  // permanent is in play, prevent `amount` of each damage instance a covered
+  // character would take. Deal-side modifiers form the dealt amount FIRST; prevention
+  // then applies to it (R1, owner 2026-07-14). Scope is exactly what the card names —
+  // 'ownCompanions' never covers the PC (R-scope); `where.cls` narrows by class.
+  // Engine-supported scopes only (contract must not advertise unimplemented space).
+  | { op: 'preventDamage'; amount: number; scope: 'ownCompanions' | 'ownParty'; where?: { cls?: string } }
   | { op: 'magicDamageBonus'; amount: number }   // (static) +dmg to each enemy your Magic Actions damage
   | { op: 'preventAnchorDecay' }                 // (static) your Physical Constructs skip start-of-turn anchor decay
   | { op: 'lineWard' }                           // (static) opposing companions can't attack characters on the line opposite this construct

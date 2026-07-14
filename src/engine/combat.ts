@@ -5,7 +5,7 @@
 import type { BoardEntity, EquippedItem } from '../types/card';
 import type { Effect, Condition, Trigger, Cost } from '../types/effects';
 import { CATALOG } from '../data/catalog';
-import type { GameState, DamageEvent, PendingDeadPick, ArmorChoiceData, PendingArmor, AttackCtx } from './state';
+import type { GameState, DamageEvent, PendingDeadPick, ArmorChoiceData, PendingArmor, AttackCtx, PreventItem, PendingPreventOrder } from './state';
 import { findEntityAnywhere, updateEntity, setPcHp, destroyEntity, pcIdOf, armNextItemTransfer } from './entities';
 import { hasModifier, isCharacter, isPhysicalConstruct, poisonHitPatch, isBaneTarget, grantHitRun } from './stats';
 import { resolveActionEffects, actionTargetSpec, eligibleTargets, conditionMet, type EffectCtx } from './interpreter';
@@ -46,26 +46,108 @@ export function applyArmorCounter(game: GameState, entityId: string, pieceId: st
   }
   return { game: updateEntity(game, entityId, { loadout: { ...loc.ent.loadout!, gear } }), msgs };
 }
-export function applyDamage(game: GameState, entityId: string, dmg: number, sourceName: string, sourcePlayer: 'p1' | 'p2', sink?: PendingDeadPick[], armorPieceId?: string, armorSink?: ArmorChoiceData[]): { game: GameState; msgs: string[] } {
+// ─── Damage prevention (capability arc 2, owner-ratified 2026-07-14) ───────────
+/** Board-sourced prevention effects covering `ent` (Reflecting Pool: "When a Wizard
+ *  companion you control would take damage, prevent 1 of that damage"). Gathered
+ *  aura-style from the controller's in-play permanents' static clauses at damage
+ *  time — the auraGrantedKeywords discipline. Prevention scopes are character
+ *  scopes: constructs are never covered; 'ownCompanions' never covers the PC. */
+export function preventionEffectsFor(game: GameState, ent: BoardEntity, controller: 'p1' | 'p2'): { sourceId: string; sourceName: string; amount: number }[] {
+  if (ent.kind === 'construct') return [];
+  const out: { sourceId: string; sourceName: string; amount: number }[] = [];
+  for (const src of Object.values(game[controller].board)) {
+    if (!src) continue;
+    const card = CATALOG.find(c => c.name === src.name);
+    for (const ce of card?.effects ?? []) {
+      if (ce.trigger !== 'static') continue;
+      for (const e of ce.effects) {
+        if (e.op !== 'preventDamage') continue;
+        if (e.scope === 'ownCompanions' && ent.kind !== 'companion') continue;
+        if (e.where?.cls && e.where.cls !== ent.cls) continue;
+        out.push({ sourceId: src.id, sourceName: src.name, amount: e.amount });
+      }
+    }
+  }
+  return out;
+}
+
+/** Walk prevention items in the chosen order against one damage instance (R3).
+ *  prevent-N cuts the running damage (toast names source + amount — no silent
+ *  outcomes); an armor piece reached while damage remains prevents ALL of it and
+ *  takes its counter; a piece reached at 0 never engages (no counter — R3's
+ *  canonical consequence). Returns the damage left after all prevention. */
+export function applyPreventionOrder(game: GameState, entityId: string, dmg: number, order: PreventItem[]): { game: GameState; remaining: number; msgs: string[] } {
+  const entName = findEntityAnywhere(game, entityId)?.ent.name ?? 'the character';
+  let g = game;
+  let remaining = dmg;
+  const msgs: string[] = [];
+  for (const item of order) {
+    if (item.kind === 'prevent') {
+      const cut = Math.min(remaining, item.amount);
+      if (cut > 0) { remaining -= cut; msgs.push(`${item.sourceName} prevents ${cut} of the damage to ${entName}`); }
+    } else if (remaining > 0) {
+      const r = applyArmorCounter(g, entityId, item.pieceId);
+      g = r.game; msgs.push(...r.msgs);
+      remaining = 0; // armor prevents all of the remaining damage
+    }
+  }
+  return { game: g, remaining, msgs };
+}
+
+export function applyDamage(game: GameState, entityId: string, dmg: number, sourceName: string, sourcePlayer: 'p1' | 'p2', sink?: PendingDeadPick[], armorPieceId?: string, armorSink?: ArmorChoiceData[], preventOrder?: PreventItem[]): { game: GameState; msgs: string[] } {
   const loc = findEntityAnywhere(game, entityId);
   if (!loc) return { game, msgs: [] };
   const ent = loc.ent;
   const msgs: string[] = [];
+  let g = game;
 
-  const armorPieces = armorPiecesOf(ent);
-  if (armorPieces.length) {
-    // 2+ pieces with no forced choice and a sink to defer into → the defender picks
-    // which absorbs (armed after this resolution). Damage is fully prevented either way.
-    if (armorPieces.length >= 2 && armorSink && !armorPieceId) {
-      armorSink.push({ defender: loc.player, entityId, entityName: ent.name,
-        candidates: armorPieces.map(p => ({ id: p.id, name: p.name, counters: p.counters ?? 0, armor: p.armor ?? 0 })) });
-      msgs.push(`${ent.name}'s armor blocks! (choose which)`);
-      return { game, msgs };
+  // `dmg` arrives as the FORMED dealt amount — deal-side modifiers (Bane doubling,
+  // magic damage bonuses) are already applied. Receipt-side prevention consults it
+  // from here (R1, owner 2026-07-14).
+  const pools = preventOrder ? [] : preventionEffectsFor(game, ent, loc.player);
+  if (preventOrder) {
+    // Forced plan (resolvePreventOrder resuming a paused combat hit): walk it.
+    const w = applyPreventionOrder(g, entityId, dmg, preventOrder);
+    g = w.game; msgs.push(...w.msgs); dmg = w.remaining;
+    if (dmg <= 0) return { game: g, msgs }; // fully prevented = no damage at all (R2)
+  } else if (pools.length) {
+    const pieces = armorPiecesOf(ent);
+    if (pools.length === 1 && pieces.length === 0) {
+      // Exactly one prevention applies → silently, with its toast (no prompt).
+      const w = applyPreventionOrder(g, entityId, dmg, [{ kind: 'prevent', ...pools[0] }]);
+      g = w.game; msgs.push(...w.msgs); dmg = w.remaining;
+      if (dmg <= 0) return { game: g, msgs }; // fully prevented = no damage at all (R2)
+    } else {
+      // >1 prevention could apply (R3) — the combat driver pre-pauses in driveAttack
+      // and never reaches here, so this is the NON-COMBAT deferral (armorSink
+      // discipline). The HP outcome is order-independent — with armor among the
+      // items the instance is fully prevented; without, dmg − Σprevent — and lands
+      // NOW. The queued choice decides only whether/which armor piece takes the
+      // counter, armed at the resolution boundary (armPrompts).
+      const total = pools.reduce((s, p) => s + p.amount, 0);
+      const outcome = pieces.length ? 0 : Math.max(0, dmg - total);
+      g = { ...g, preventOrderQueue: [...(g.preventOrderQueue ?? []), {
+        chooser: loc.player, entityId, entityName: ent.name, dmg, sourceName }] };
+      msgs.push(`${ent.name}: prevention applies — ${ent.name}'s controller orders the effects`);
+      dmg = outcome;
+      if (dmg <= 0) return { game: g, msgs }; // fully prevented = no damage at all (R2)
     }
-    // Single piece, or a forced/auto choice → apply the counter now.
-    const piece = armorPieceId ? armorPieces.find(p => p.id === armorPieceId) ?? pickDefaultArmor(armorPieces) : pickDefaultArmor(armorPieces);
-    const r = applyArmorCounter(game, entityId, piece.id);
-    return { game: r.game, msgs: [...msgs, ...r.msgs] };
+  } else {
+    const armorPieces = armorPiecesOf(ent);
+    if (armorPieces.length) {
+      // 2+ pieces with no forced choice and a sink to defer into → the defender picks
+      // which absorbs (armed after this resolution). Damage is fully prevented either way.
+      if (armorPieces.length >= 2 && armorSink && !armorPieceId) {
+        armorSink.push({ defender: loc.player, entityId, entityName: ent.name,
+          candidates: armorPieces.map(p => ({ id: p.id, name: p.name, counters: p.counters ?? 0, armor: p.armor ?? 0 })) });
+        msgs.push(`${ent.name}'s armor blocks! (choose which)`);
+        return { game, msgs };
+      }
+      // Single piece, or a forced/auto choice → apply the counter now.
+      const piece = armorPieceId ? armorPieces.find(p => p.id === armorPieceId) ?? pickDefaultArmor(armorPieces) : pickDefaultArmor(armorPieces);
+      const r = applyArmorCounter(game, entityId, piece.id);
+      return { game: r.game, msgs: [...msgs, ...r.msgs] };
+    }
   }
 
   const floor = hasModifier(ent, 'hpFloor1') ? 1 : 0;
@@ -74,35 +156,43 @@ export function applyDamage(game: GameState, entityId: string, dmg: number, sour
   // The Player Character's HP is the single source of truth, mirrored to the
   // PlayerState headline HP (stats pane) so combat and the display stay married.
   if (ent.kind === 'pc') {
-    const g = setPcHp(game, loc.player, entityId, newHp, sourcePlayer);
+    const g2 = setPcHp(g, loc.player, entityId, newHp, sourcePlayer);
     msgs.push(newHp <= 0
       ? `💀 ${ent.name} (PC) is defeated!`
       : `${sourceName} hits ${ent.name} for ${dmg} (${newHp} HP left)`);
-    return { game: g, msgs };
+    return { game: g2, msgs };
   }
 
   if (newHp <= 0) {
     msgs.push(`${sourceName} destroys ${ent.name}!`);
-    const d = destroyEntity(game, entityId, sink, armorSink); // fires death triggers
+    const d = destroyEntity(g, entityId, sink, armorSink); // fires death triggers
     msgs.push(...d.msgs);
     return { game: d.game, msgs };
   }
   msgs.push(`${sourceName} hits ${ent.name} for ${dmg} (${newHp} HP left)`);
-  return { game: updateEntity(game, entityId, { hp: newHp }), msgs };
+  return { game: updateEntity(g, entityId, { hp: newHp }), msgs };
+}
+
+/** The formed dealt amount for a combat hit on `defender` (R1, owner 2026-07-14):
+ *  deal-side modifiers (Bane doubling) form the dealt amount BEFORE receipt-side
+ *  prevention consults it. Single source for applyCombatHit and the prevention-
+ *  ordering pause. */
+export function combatDealt(ctx: AttackCtx, defender: BoardEntity): number {
+  return isBaneTarget(ctx.banes, defender) ? ctx.dmg * 2 : ctx.dmg;
 }
 
 /** Apply one queued combat hit to `ctx.hitQueue[0]`, recording a DamageEvent for
- *  combat triggers (armor-blocked hits are excluded — they deal no HP damage). */
-export function applyCombatHit(game: GameState, ctx: AttackCtx, armorPieceId?: string): GameState {
+ *  combat triggers (fully-prevented hits are excluded — they deal no HP damage). */
+export function applyCombatHit(game: GameState, ctx: AttackCtx, armorPieceId?: string, preventOrder?: PreventItem[]): GameState {
   const entityId = ctx.hitQueue[0];
   const beforeLoc = findEntityAnywhere(game, entityId);
   if (!beforeLoc) { ctx.hitQueue.shift(); return game; }
   const before = beforeLoc.ent;
   // Bane doubles per hit (primary AND Cleave splash), keyed off each defender.
   const bane = isBaneTarget(ctx.banes, before);
-  const dmg = bane ? ctx.dmg * 2 : ctx.dmg;
+  const dmg = combatDealt(ctx, before);
   if (bane) ctx.msgs.push(`${ctx.attackerName} strikes ${before.name} for double damage (Bane)`);
-  const r = applyDamage(game, entityId, dmg, ctx.attackerName, ctx.attackerPlayer, ctx.deadSink, armorPieceId);
+  const r = applyDamage(game, entityId, dmg, ctx.attackerName, ctx.attackerPlayer, ctx.deadSink, armorPieceId, undefined, preventOrder);
   ctx.msgs.push(...r.msgs);
   const after = findEntityAnywhere(r.game, entityId);
   const tookDamage = !after || after.ent.hp < before.hp; // armor-blocked hits don't count
@@ -129,7 +219,7 @@ export function applyCombatHit(game: GameState, ctx: AttackCtx, armorPieceId?: s
  *  finished game, or a `PendingArmor` to arm when a 2+armor character is hit. */
 export function driveAttack(game: GameState, ctx: AttackCtx):
   | { done: true; game: GameState; ctx: AttackCtx }
-  | { done: false; game: GameState; pendingArmor: PendingArmor } {
+  | { done: false; game: GameState; pendingArmor?: PendingArmor; pendingPreventOrder?: PendingPreventOrder } {
   let g = game;
 
   if (ctx.phase === 'damage') {
@@ -138,16 +228,35 @@ export function driveAttack(game: GameState, ctx: AttackCtx):
       const loc = findEntityAnywhere(g, entityId);
       if (!loc) { ctx.hitQueue.shift(); continue; } // already removed by an earlier hit
       const pieces = armorPiecesOf(loc.ent);
-      if (pieces.length >= 2) {
-        // Pause: the defender chooses which piece absorbs this hit. The head of the
-        // queue stays put so the choice resolves it.
+      const pools = preventionEffectsFor(g, loc.ent, loc.player);
+      if (pools.length && pools.length + pieces.length >= 2) {
+        // >1 prevention effect could apply to this hit → PAUSE: the affected
+        // character's controller orders them (R3, owner 2026-07-14). Each armor
+        // piece is its own orderable item — placing a piece first both engages
+        // armor AND picks the piece, so this pause subsumes the legacy piece-pick
+        // whenever board prevention is present. The head of the queue stays put so
+        // resolvePreventOrder resolves it. Gathered per hit — each Cleave splash
+        // hit on a covered character gets its own prevention (per-hit application).
+        return { done: false, game: g, pendingPreventOrder: {
+          chooser: loc.player, entityId, entityName: loc.ent.name,
+          dmg: combatDealt(ctx, loc.ent), sourceName: ctx.attackerName,
+          items: [
+            ...pools.map(p => ({ kind: 'prevent' as const, ...p })),
+            ...pieces.map(p => ({ kind: 'armor' as const, pieceId: p.id, pieceName: p.name, counters: p.counters ?? 0, armor: p.armor ?? 0 })),
+          ],
+          picked: [], ctx,
+        } };
+      }
+      if (!pools.length && pieces.length >= 2) {
+        // Armor-only (legacy, unchanged): the defender chooses which piece absorbs
+        // this hit. The head of the queue stays put so the choice resolves it.
         return { done: false, game: g, pendingArmor: {
           defender: loc.player, entityId, entityName: loc.ent.name,
           candidates: pieces.map(p => ({ id: p.id, name: p.name, counters: p.counters ?? 0, armor: p.armor ?? 0 })),
           ctx,
         } };
       }
-      g = applyCombatHit(g, ctx); // 0 or 1 armor → resolve immediately
+      g = applyCombatHit(g, ctx); // 0 or 1 prevention → resolve immediately (a single pool applies silently with its toast)
     }
     ctx.phase = 'after';
   }
@@ -347,11 +456,52 @@ export function armNextArmorChoice(game: GameState, queue: ArmorChoiceData[]): {
   return { game: g, pendingArmor: null };
 }
 
-/** End-of-resolution patch arming any deferred Dead-Zone + Armor prompts. */
+/** Arm the next deferred non-combat prevention ordering from game.preventOrderQueue,
+ *  re-deriving items against the current board (the armNextArmorChoice discipline:
+ *  a source destroyed since damage time drops out). The HP outcome already landed at
+ *  damage time; a collapsed choice leaves at most one mechanical residue: a lone
+ *  remaining armor piece must have engaged (the instance was fully prevented), so it
+ *  auto-takes its counter. Clears the queue field to undefined when drained (replay-
+ *  hash neutrality for prevention-free games). */
+export function armNextPreventOrder(game: GameState): { game: GameState; pendingPreventOrder: PendingPreventOrder | undefined; msgs: string[] } {
+  let g = game;
+  const msgs: string[] = [];
+  const rest = [...(g.preventOrderQueue ?? [])];
+  while (rest.length) {
+    const c = rest.shift()!;
+    const loc = findEntityAnywhere(g, c.entityId);
+    if (!loc) continue; // entity gone since
+    const pools = preventionEffectsFor(g, loc.ent, loc.player);
+    const pieces = armorPiecesOf(loc.ent);
+    const items: PreventItem[] = [
+      ...pools.map(p => ({ kind: 'prevent' as const, ...p })),
+      ...pieces.map(p => ({ kind: 'armor' as const, pieceId: p.id, pieceName: p.name, counters: p.counters ?? 0, armor: p.armor ?? 0 })),
+    ];
+    if (items.length >= 2) {
+      const q = rest.length ? rest : undefined;
+      return { game: { ...g, preventOrderQueue: q }, pendingPreventOrder: { ...c, items, picked: [] }, msgs };
+    }
+    if (items.length === 1 && items[0].kind === 'armor') {
+      const r = applyArmorCounter(g, c.entityId, items[0].pieceId);
+      g = r.game; msgs.push(...r.msgs);
+    }
+    // a lone prevent (or nothing) → no residue to place
+  }
+  return { game: { ...g, preventOrderQueue: undefined }, pendingPreventOrder: undefined, msgs };
+}
+
+/** End-of-resolution patch arming any deferred Dead-Zone + Armor + prevention prompts. */
 export function armPrompts(game: GameState, deadSink: PendingDeadPick[], armorSink: ArmorChoiceData[]): GameState {
   const a = armNextArmorChoice(game, armorSink);
+  let g: GameState = { ...a.game, ...armDeadPicks(deadSink), pendingArmor: a.pendingArmor };
+  // Deferred prevention orderings arm behind an armor prompt (resolveArmor re-arms
+  // when it drains) — dialogs never stack.
+  if (!g.pendingArmor && g.preventOrderQueue?.length) {
+    const p = armNextPreventOrder(g);
+    g = { ...p.game, pendingPreventOrder: p.pendingPreventOrder };
+  }
   // Item Transfer windows queued by destroyEntity during this resolution arm LAST —
-  // armNextItemTransfer holds itself back while the dead-pick/armor prompts just armed
-  // are up (their resolvers re-call it when they drain).
-  return armNextItemTransfer({ ...a.game, ...armDeadPicks(deadSink), pendingArmor: a.pendingArmor });
+  // armNextItemTransfer holds itself back while the dead-pick/armor/prevention prompts
+  // just armed are up (their resolvers re-call it when they drain).
+  return armNextItemTransfer(g);
 }

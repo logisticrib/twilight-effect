@@ -2,7 +2,79 @@
 
 Self-contained context for continuing the card-effect engine work in a fresh session.
 
-## Latest session (2026-07-13, later) — design-doc housekeeping: root cleanup + archive/ DONE
+## Latest session (2026-07-14) — Capability arc 2: damage prevention + Reflecting Pool DONE
+**Suite: 23 files / 286 tests green (t5 + t8 fixtures replay clean, hashes untouched); tsc ZERO;
+validate:decks clean (100 cards).** LOCAL session — Rules Notes landed in parent + docs/ snapshots
+word-identical in the same change. Built the damage-prevention capability at the applyDamage
+chokepoint per owner-ratified R1–R4 (2026-07-14) and authored **Reflecting Pool** (effectsFlag
+removed — flagged gaps 5 → 4: Crystalline Sentinel, Patient Conjurer, Reinforced Gate, Siegeworks).
+- **Schema/validator:** new `preventDamage` op (static aura; `amount`, `scope:
+  'ownCompanions'|'ownParty'`, `where?.cls`) — scope deliberately narrowed to engine-supported
+  values (contract-honesty precedent); tier4 negative tests (amount<1, unsupported scope, empty
+  where.cls). Reflecting Pool = `{static: [{preventDamage 1, ownCompanions, cls Wizard}]}`.
+- **Engine (combat.ts):** `preventionEffectsFor` (aura-style gather from the AFFECTED side's board
+  statics at damage time; constructs never covered; 'ownCompanions' excludes the PC),
+  `combatDealt` (R1: Bane doubling forms the dealt amount BEFORE prevention — single source for
+  applyCombatHit + the pause), `applyPreventionOrder` (the shared ordered walk: prevent-N cuts;
+  an armor piece reached with damage remaining prevents ALL of it + takes its counter; a piece
+  reached at 0 never engages — R3's canonical consequence). `applyDamage` now: forced-plan walk
+  (combat resume) / single-pool silent-apply-with-toast / ≥2-items NON-COMBAT DEFERRAL (HP outcome
+  is order-independent — armor present → 0, else dmg−Σ — and lands at damage time; only the
+  counter decision defers via the new OPTIONAL `game.preventOrderQueue`, armed at armPrompts) /
+  legacy armor path byte-identical when no pools. R2 falls out of tookDamage: a prevented-to-0
+  hit produces no DamageEvent, no Poison, no onDealDamage.
+- **Prompt (R3):** new synced OPTIONAL `game.pendingPreventOrder` (both new fields undefined when
+  absent/drained → prevention-free games keep their exact canonical replay hash, same discipline
+  as the stack fields — t5/t8 prove it). Combat: driveAttack pre-pauses per hit when ≥1 pool and
+  pools+armorPieces ≥ 2 (each armor piece is its own orderable item — ordering a piece first both
+  engages armor and picks the piece, so the pause subsumes the legacy piece-pick when pools are
+  present; ARMOR-ONLY hits keep the legacy PendingArmor flow untouched). Store
+  `resolvePreventOrder(idx)` = blind picks (PendingTriggerOrder pattern), then combat-resume via
+  applyCombatHit(plan)+driveAttack+finalizeAttack, or deferred counter-only walk + arm-next.
+  UI `PreventOrderModal` (forced, no decline; render-gated behind pendingArmor). endTurn refuses
+  on open ordering/queue; resumeStack + StackResumeDriver + keyboard modalUp gates extended;
+  armNextItemTransfer holds behind it. **reactiveHold covers the non-chooser — live two-peer MP
+  UNTESTED, joins the existing list (arc-1 holds, hand-off).**
+- **Chokepoint audit (every damage source):** THROUGH applyDamage: combat hits + Cleave splash
+  (applyCombatHit), interpreter `damage` op (actions, activated abilities, attackDisarm, arc-1
+  reactive/trap damage via resolveActionEffects), `damageSelfPC`. DELIBERATE BYPASSES (reported,
+  unchanged): **Reckless recoil** (driveAttack after-phase writes HP directly — pinned
+  "Reckless bypasses armor" tier1_combat 2026-07-03; ⚠ OWNER QUESTION: should prevention cover
+  recoil? Today it does NOT, consistent with the armor pin); **Poison-failure damage** (resolvePoison
+  → setPcHp — dealt to the PLAYER per canon, never companion-covered; also bypasses PC armor —
+  consistent with "player damage", flagged for awareness); **payHP costs** (costs, not damage —
+  documented); **sandbox adjustHp** (manual debug control, not damage). armNextPreventOrder's
+  collapsed-case auto-counter drops its msgs like armNextArmorChoice always has (board chip shows it).
+- **Armor prompt conformance VERIFIED (no divergence):** ArmorModal is a forced piece-pick — no
+  decline/skip path exists anywhere (modal has no cancel footer; resolveArmor requires a real
+  candidate; non-combat single piece auto-absorbs). Canon "prevention is mandatory" holds.
+- **Tests (`prevention.test.ts`, 10):** R1 4−1=3 Bane×pool pin; R2 prevent-to-zero (no Poison, no
+  Burning Heir onDealDamage ping); R3 armor+pool 1-damage BOTH ways through the real prompt (incl.
+  endTurn refusal + chooser=defender); two-pool stacking (prevent 2, via prompt); per-hit Cleave
+  splash; scope exclusions (Rogue companion + Wizard PC uncovered); trap interop (Tripwire's
+  damage prevented; Iron Spikes' declaration-window damage → the non-combat DEFERRAL path:
+  HP at damage time, ordering armed post-stack, pool-first spends no counter). **Non-vacuity —
+  8 mutations, each caught by exactly the expected pin(s), all restored:** (2−1)×2 reading → R1;
+  poison ignores tookDamage → R2; chooser flipped to attacker → R3; armor engages at 0 → both
+  no-counter pins; splash-slot uncovered → Cleave; gather sliced to 1 → stacking; scope guards
+  deleted → scope; gather returns [] → all 9 positive pins.
+- **Preview E2E (real UI):** modal renders on a live pool+armor hit; clicking "Reflecting Pool —
+  prevent 1" resolves pool-first: hp intact, 0 counters, toast "Reflecting Pool prevents 1 of the
+  damage to Storm-Touched" (no silent outcomes). Screenshot tool still hangs on the live board
+  (known gotcha) — DOM/eval verification used.
+- **Docs (dated 2026-07-14, parent + docs/ snapshots word-identical):** Game_Rules_Updated
+  §Core Mechanics gained the "Damage Prevention" block (R1/R2/R3 Rules Notes + scope/application
+  bullets, card-agnostic); Master_Keyword_List §ARMOR X gained the prevention-family Rules Note;
+  Card_Design_Parameters §15 gained the prevention pointer note + **PRINCIPLE (2026-07-14): No
+  arbitrary orderings between cards** (R4 verbatim). Owner should re-upload all three + HANDOFF
+  to the design Project.
+- **Open flags for owner:** (1) Reckless-recoil × prevention (above); (2) live two-peer MP pass
+  over the new hold; (3) two-pool-no-armor ordering prompts even though order can't matter —
+  literal per the brief and the no-auto-ordering philosophy; flag if friction warrants an engine
+  default; (4) deferred orderings re-derive items at arm time (armor-queue discipline) — a pool
+  destroyed between damage and arming silently drops out (mild counterfactual, documented).
+
+## Previous session (2026-07-13, later) — design-doc housekeeping: root cleanup + archive/ DONE
 LOCAL filing session (no engine/test/doc-content changes; owner-approved proposal in
 `tasks/cleanup_proposal_2026-07-13.md`). Every duplicate was compared by CONTENT before moving;
 NOTHING was deleted — moves only, into a new root `archive/` (subfoldered by origin).

@@ -122,6 +122,19 @@ export interface GameState {
    *  Tier 3 #18, reconfirmed by the owner 2026-07-12: it is the ACTIVE player, not
    *  the trap controller). Present only while a choice is pending. */
   pendingTriggerOrder?: PendingTriggerOrder | null;
+  // ── Damage prevention (capability arc 2, owner-ratified 2026-07-14). Both fields
+  //    are OPTIONAL and set back to `undefined` when drained, so games with no
+  //    prevention sources keep their exact pre-arc canonical replay hash (same
+  //    discipline as the trigger-stack fields above). ─────────────────────────────
+  /** Prevention-ordering prompt (R3): >1 prevention effect could apply to one damage
+   *  instance — the AFFECTED character's controller orders them (blind picks, the
+   *  PendingTriggerOrder pattern). Present only while a choice is pending. */
+  pendingPreventOrder?: PendingPreventOrder | null;
+  /** Deferred non-combat prevention orderings (armorSink discipline: the HP outcome
+   *  is order-independent and was applied at damage time; the queued choice decides
+   *  only whether/which armor piece takes a counter). Armed at resolution boundaries
+   *  via armPrompts. Present only while non-empty. */
+  preventOrderQueue?: PreventOrderData[];
 }
 
 // ─── Trigger-stack entries (R1–R4, owner-ratified 2026-07-12) ──────────────────
@@ -168,6 +181,38 @@ export interface PendingTriggerOrder {
   lp: 'p1' | 'p2';
   items: ReactiveStackEntry[];
   picked: number[];
+}
+
+// ─── Damage prevention (arc 2, owner-ratified 2026-07-14) ──────────────────────
+/** One orderable prevention item on a single damage instance. Armor is a member of
+ *  the prevention family (canon ARMOR X: "If the equipped character would be dealt
+ *  damage, prevent all of that damage and put an armor counter on this item") — each
+ *  equipped piece is its own item, so ordering a piece first both engages armor AND
+ *  picks the piece. An armor item reached when the running damage is already 0 never
+ *  engages: no counter is spent (R3's canonical consequence). */
+export type PreventItem =
+  | { kind: 'prevent'; sourceId: string; sourceName: string; amount: number }
+  | { kind: 'armor'; pieceId: string; pieceName: string; counters: number; armor: number };
+
+/** A damage instance whose prevention ordering awaits the affected character's
+ *  controller (R3). `dmg` is the FORMED dealt amount — deal-side modifiers (Bane
+ *  doubling, magic damage bonuses) are already applied (R1). */
+export interface PreventOrderData {
+  chooser: 'p1' | 'p2';        // the affected character's controller (R3)
+  entityId: string;
+  entityName: string;
+  dmg: number;
+  sourceName: string;          // what dealt the damage (modal title / toasts)
+}
+export interface PendingPreventOrder extends PreventOrderData {
+  items: PreventItem[];
+  /** Blind picks in RESOLUTION order (PendingTriggerOrder pattern): when one unpicked
+   *  item remains the order is complete and the damage instance resolves. */
+  picked: number[];
+  /** Present = a PAUSED combat hit (resolvePreventOrder replays it with the chosen
+   *  order and resumes the attack). Absent = a deferred non-combat ordering: the HP
+   *  outcome already landed at damage time; resolution only places armor counters. */
+  ctx?: AttackCtx;
 }
 
 /** A deck-peek (scry) awaiting the player to assign each looked-at card a

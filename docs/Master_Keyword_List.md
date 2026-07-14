@@ -44,6 +44,7 @@ This document consolidates all keywords from Game Rules, Keyword Glossary, and C
   - Armor X can prevent up to X separate attacks before being sacrificed
   - Characters can equip multiple armors; each tracks its own counters independently
   - If a character has multiple pieces of armor equipped, the controlling player chooses which armor prevents the damage
+  - **Rules Note (2026-07-14):** Armor is a member of the damage-prevention family (Game_Rules_Updated §Core Mechanics, Damage Prevention). When armor and other prevention effects could apply to the same damage instance, the affected character's controller chooses the order they apply; armor reached after the damage is already reduced to 0 never engages and spends no counter. Deal-side modifiers (e.g. damage doubling) form the dealt amount before any prevention applies.
 
 **ARMOR X (companion variant)** - If this character would be dealt damage, prevent all of that damage and put an armor counter on this companion. When this companion has X armor counters, it no longer prevents damage via this ability.
 

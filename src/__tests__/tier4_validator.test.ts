@@ -21,11 +21,12 @@ describe('data contract: the shipped decks validate clean', () => {
   });
   // 2026-07-12 (trap reactive-trigger arc): Tripwire Snare / Pit Trap / Iron Spikes
   // were AUTHORED against the new trigger stack and dropped their flags — eight
-  // deferred gaps became five.
-  it('the five deferred gaps carry dated owner-approved flags (not silently forgotten)', () => {
+  // deferred gaps became five. 2026-07-14 (damage-prevention arc): Reflecting Pool
+  // authored against the prevention hook — five became four.
+  it('the four deferred gaps carry dated owner-approved flags (not silently forgotten)', () => {
     const flagged = CATALOG.filter(c => c.effectsFlag).map(c => c.name).sort();
     expect(flagged).toEqual(['Crystalline Sentinel', 'Patient Conjurer',
-      'Reflecting Pool', 'Reinforced Gate', 'Siegeworks']);
+      'Reinforced Gate', 'Siegeworks']);
     for (const c of CATALOG.filter(c => c.effectsFlag)) {
       expect(c.effectsFlag, `${c.name} flag names the missing system + owner date`).toMatch(/awaiting engine capability: .+\(owner 2026-07-08\)/);
     }
@@ -57,6 +58,13 @@ describe('the validator catches each class of authoring mistake (mint-gate behav
 
   it('nested branch validation (dieCheck)', () => {
     expectCaught(clone({ effects: [{ trigger: 'onPlay', effects: [{ op: 'dieCheck', threshold: 4, onPass: [{ op: 'zap', target: 'self' }], onFail: [] }] }] }), 'bad op inside a dieCheck branch');
+  });
+
+  it('preventDamage (2026-07-14): engine-supported scopes only; amount ≥ 1; where.cls non-empty', () => {
+    expect(validateCards([clone({ effects: [{ trigger: 'static', effects: [{ op: 'preventDamage', amount: 1, scope: 'ownCompanions', where: { cls: 'Wizard' } }] }], text: '' })]), 'the Reflecting Pool shape validates').toEqual([]);
+    expectCaught(clone({ effects: [{ trigger: 'static', effects: [{ op: 'preventDamage', amount: 0, scope: 'ownCompanions' }] }], text: '' }), 'amount must be ≥ 1');
+    expectCaught(clone({ effects: [{ trigger: 'static', effects: [{ op: 'preventDamage', amount: 1, scope: 'allEnemies' }] }], text: '' }), 'unsupported scope (contract must not advertise unimplemented coverage)');
+    expectCaught(clone({ effects: [{ trigger: 'static', effects: [{ op: 'preventDamage', amount: 1, scope: 'ownParty', where: { cls: '' } }] }], text: '' }), 'empty where.cls');
   });
 
   it('activated ability without cost or oncePerTurn (§11 guard)', () => {
