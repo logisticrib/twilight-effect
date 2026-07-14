@@ -2,7 +2,42 @@
 
 Self-contained context for continuing the card-effect engine work in a fresh session.
 
-## Latest session (2026-07-12) — Capability arc 1: trigger stack + the three trap cards DONE
+## Latest session (2026-07-13) — trap-arc branch merged + Rules Notes mirrored to parent canon DONE
+Documentation-only session (no engine or test changes). **Suite re-confirmed post-merge: 22
+files / 276 tests green; tsc ZERO.**
+- **Merged `origin/claude/reactive-trigger-traps-3qpvsf` (b99e142) into main** (fast-forward)
+  and pushed — the 2026-07-12 trap-arc session below existed only on that remote branch until
+  now.
+- **Task 1 — parent canonical docs updated** (owner-supplied card-agnostic wording, inserted
+  verbatim): parent `Game_Rules_Updated.md` gained the "Triggered Abilities & The Trigger
+  Stack" block (Rules Notes: The Trigger Stack 2026-07-12; Mandatory triggers 2026-07-12;
+  Identical simultaneous triggers 2026-07-13 — active player orders even identical copies, no
+  auto-ordering exception; "Moves into" a line or zone 2026-07-13 — movement-only, entering
+  directly onto a line or lateral same-line repositioning does not count) + the attack
+  declaration/damage separation note under Targeting Rules; parent `Master_Keyword_List.md`
+  §PARANOIA gained the ordering RE-RULE (peek resolves BEFORE the played companion enters —
+  supersedes the 2026-07-04 ordering); parent `Card_Design_Parameters.md` gained the §Triggered
+  Abilities pointer line (mirror of the snapshot's).
+- **Task 2 — docs/ snapshots aligned**: b99e142's card-named Rules Note phrasings (Tripwire
+  Snare / Pit Trap / Iron Spikes examples) in `docs/Game_Rules_Updated.md` +
+  `docs/Master_Keyword_List.md` replaced by the card-agnostic wording, now WORD-IDENTICAL to
+  the parent docs (owner convention 2026-07-13: rules docs never reference individual cards —
+  card-level specifics stay in the pinning tests, unchanged). The two 2026-07-13 notes are new
+  canon. The trap-windows note's card specifics (Pit Trap movement-only; Iron Spikes
+  declaration window) are now expressed by the generic "Moves into" + attack-separation notes
+  and remain pinned in `trigger_stack_traps.test.ts`.
+- **Task 3 — `docs/Rules_Taxonomy.md` added** (verbatim copy of the parent taxonomy; the two
+  parent copies in `play testing/` and `May 2026 files/` are byte-identical). It is
+  load-bearing: gameStore/engine cite Rules_Taxonomy Tier 5 #9 / Tier 3 #18 (active player
+  orders simultaneous triggers).
+- **Canonical `tasks/HANDOFF.md` (parent) re-synced from this file** — it had been missing the
+  2026-07-10 and 2026-07-12 entries (those sessions were repo-only and updated docs/HANDOFF.md
+  directly).
+- Parent files touched (outside the repo — owner should re-upload to the design Project):
+  `Game_Rules_Updated.md`, `Master_Keyword_List.md`, `Card_Design_Parameters.md`,
+  `tasks/HANDOFF.md`.
+
+## Previous session (2026-07-12) — Capability arc 1: trigger stack + the three trap cards DONE
 **Suite: 22 files / 276 tests green (t5 + t8 fixtures replay clean); tsc ZERO; validate:decks
 clean (100 cards).** Built the reactive-trigger foundation (owner-ratified rulings R1–R4,
 2026-07-12) and authored **Tripwire Snare / Pit Trap / Iron Spikes** (effectsFlags removed —
