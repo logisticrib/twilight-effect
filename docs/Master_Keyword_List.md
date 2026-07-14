@@ -63,6 +63,7 @@ This document consolidates all keywords from Game Rules, Keyword Glossary, and C
 
 **RECKLESS** - When this character attacks, it deals 1 damage to itself.
 - *Common:* Sorcerer, Warrior
+- **Rules Note (RE-RULED 2026-07-14):** the recoil is damage the character takes, so the damage-prevention family applies to it — armor absorbs it (spending a counter) and "prevent N" effects reduce it, ordered by the character's controller as usual (Game_Rules_Updated §Core Mechanics, Damage Prevention). This supersedes the earlier engine reading (2026-07-03) that the recoil bypassed armor.
 
 ---
 

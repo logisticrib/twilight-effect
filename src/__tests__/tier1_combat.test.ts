@@ -94,7 +94,9 @@ describe('item 6: armor per-hit picker', () => {
     expect(g.p2.board.f1?.loadout?.gear[0]?.counters, 'chosen piece took the counter').toBe(1);
   });
 
-  it('Reckless self-damage bypasses armor (current ruling)', () => {
+  it('Reckless recoil routes through the damage chokepoint — armor absorbs it (RE-RULED 2026-07-14; supersedes the 2026-07-03 bypass reading)', () => {
+    // Canon RECKLESS "deals 1 damage to itself" is damage the character takes, so
+    // the prevention family applies (owner ruling 2026-07-14, damage-prevention arc).
     freshGame();
     const att = mkComp('rb-att', compCard.name, {
       atk: 9, hp: 5, keywords: ['Reckless'],
@@ -107,8 +109,8 @@ describe('item 6: armor per-hit picker', () => {
     }, pending: { action: 'attack', charId: 'rb-att' } }));
     gs.getState().resolveAttack('rb-def');
     const g = gs.getState().game;
-    expect(g.p1.board.f1?.hp, 'recoil applied despite armor').toBe(4);
-    expect(g.p1.board.f1?.loadout?.gear[0]?.counters, 'armor NOT consumed by the recoil').toBe(0);
+    expect(g.p1.board.f1?.hp, 'recoil fully prevented by armor').toBe(5);
+    expect(g.p1.board.f1?.loadout?.gear[0]?.counters, 'the armor piece took the counter').toBe(1);
   });
 });
 

@@ -144,6 +144,21 @@ describe('per-instance application and scope', () => {
   });
 });
 
+describe('Reckless recoil is prevention-family damage (RE-RULED 2026-07-14)', () => {
+  it("a Wizard attacker's own Reflecting Pool prevents its Reckless recoil", () => {
+    freshGame();
+    const att = wiz('pv-rk', { atk: 3, keywords: ['Reckless'] });
+    gs.setState(s => ({ game: { ...s.game,
+      p1: { ...s.game.p1, board: { f1: att, f2: pool('pv-pool') } },
+      p2: { ...s.game.p2, board: { f1: mkComp('pv-def', compCard.name, { hp: 9 }) } },
+    }, pending: { action: 'attack', charId: 'pv-rk' } }));
+    gs.getState().resolveAttack('pv-def');
+    const g = gs.getState().game;
+    expect(g.p1.board.f1?.hp, 'recoil fully prevented (1 dealt − 1 prevented)').toBe(5);
+    expect(g.p2.board.f1?.hp, 'the attack itself still landed on the defender').toBe(6);
+  });
+});
+
 describe('arc-1 interop — reactive-trigger (trap) damage is prevented like any other', () => {
   const czCards = CATALOG.slice(20, 25);
   const mkHandComp = (id: string, name: string, hp: number): Card => ({

@@ -255,7 +255,7 @@ Prevention is one family of effects: anything that intervenes when a character "
 - **Scope and application (2026-07-14):**
   - An ongoing prevention effect applies to EVERY qualifying damage instance while its source stands — each hit separately, including each splash hit of a Cleave against a different covered character.
   - Duplicate prevention effects stack (two prevent-1 sources prevent 2 in total, ordered with any other preventions per the Rules Note above).
-  - Prevention applies to all damage the covered character would take — combat and effect damage alike, including reactive-trigger damage.
+  - Prevention applies to all damage the covered character would take — combat and effect damage alike, including reactive-trigger damage and a character's own Reckless recoil (re-ruled 2026-07-14; supersedes the earlier engine reading that the recoil bypassed armor).
   - Scope is exactly what the card names: an effect covering a class of companions you control never covers the Player Character, companions outside that class, opposing characters, or the player. (Poison-failure damage is dealt to the PLAYER and is therefore never covered by companion-scoped prevention.)
 
 ### POSITIONING & MOVEMENT
@@ -423,7 +423,7 @@ Class bonuses are applied in turn order. The player who will take the first turn
 
 **KIT-MASTER** - When this companion enters the encounter, you may move target item from one character to another. *Common:* Warrior. *Occasional:* Paladin
 
-**RECKLESS** - When this character attacks, it deals 1 damage to itself. *Common:* Sorcerer, Warrior.
+**RECKLESS** - When this character attacks, it deals 1 damage to itself. *Common:* Sorcerer, Warrior. (Rules Note, re-ruled 2026-07-14: the recoil is damage the character takes — the damage-prevention family, armor included, applies to it. See §Core Mechanics, Damage Prevention.)
 
 **ARMOR X** - If the equipped character would be dealt damage, prevent all of that damage and put an armor counter on this item. When this item has X armor counters, sacrifice it. Common on Light Armor (Armor 1-2). Heavy Armor typically has Armor 3-4 or higher
 

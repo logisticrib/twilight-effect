@@ -37,10 +37,16 @@ removed — flagged gaps 5 → 4: Crystalline Sentinel, Patient Conjurer, Reinfo
   UNTESTED, joins the existing list (arc-1 holds, hand-off).**
 - **Chokepoint audit (every damage source):** THROUGH applyDamage: combat hits + Cleave splash
   (applyCombatHit), interpreter `damage` op (actions, activated abilities, attackDisarm, arc-1
-  reactive/trap damage via resolveActionEffects), `damageSelfPC`. DELIBERATE BYPASSES (reported,
-  unchanged): **Reckless recoil** (driveAttack after-phase writes HP directly — pinned
-  "Reckless bypasses armor" tier1_combat 2026-07-03; ⚠ OWNER QUESTION: should prevention cover
-  recoil? Today it does NOT, consistent with the armor pin); **Poison-failure damage** (resolvePoison
+  reactive/trap damage via resolveActionEffects), `damageSelfPC`, and — **RE-RULED same day
+  (owner 2026-07-14, ruling round below)** — **Reckless recoil**, which now routes through
+  applyDamage: armor absorbs it (counter spent) and prevent-N effects reduce it (a pools+armor
+  collision takes the non-combat deferral — the after-phase never pauses; PC-defeat credit
+  attribution unchanged). The 2026-07-03 tier1 pin "Reckless bypasses armor" was REWRITTEN as
+  the re-ruled pin (dated comment), + a pool-prevents-recoil pin in prevention.test.ts; both
+  mutation-proven against the old direct write; recoil now also honors hpFloor1 (chokepoint
+  side-benefit). Rules Notes: Master_Keyword_List §RECKLESS + Game_Rules_Updated (keyword line +
+  the prevention scope bullet), parent + snapshots. t5/t8 still replay clean (no recorded
+  armored-Reckless attack). REMAINING BYPASSES (deliberate): **Poison-failure damage** (resolvePoison
   → setPcHp — dealt to the PLAYER per canon, never companion-covered; also bypasses PC armor —
   consistent with "player damage", flagged for awareness); **payHP costs** (costs, not damage —
   documented); **sandbox adjustHp** (manual debug control, not damage). armNextPreventOrder's
@@ -68,11 +74,14 @@ removed — flagged gaps 5 → 4: Crystalline Sentinel, Patient Conjurer, Reinfo
   Card_Design_Parameters §15 gained the prevention pointer note + **PRINCIPLE (2026-07-14): No
   arbitrary orderings between cards** (R4 verbatim). Owner should re-upload all three + HANDOFF
   to the design Project.
-- **Open flags for owner:** (1) Reckless-recoil × prevention (above); (2) live two-peer MP pass
-  over the new hold; (3) two-pool-no-armor ordering prompts even though order can't matter —
-  literal per the brief and the no-auto-ordering philosophy; flag if friction warrants an engine
-  default; (4) deferred orderings re-derive items at arm time (armor-queue discipline) — a pool
-  destroyed between damage and arming silently drops out (mild counterfactual, documented).
+- **Ruling round (owner, in-session 2026-07-14):** (1) Reckless recoil IS covered by prevention
+  → implemented same day (see the audit bullet above); (2) two-pool-no-armor ordering prompts
+  stay AS IS ("correct as is") — literal R3, no engine default; (3) the MP-untested note was
+  informational only.
+- **Open flags for owner:** (1) live two-peer MP pass over the new prevention hold (joins the
+  existing untested-holds list); (2) deferred orderings re-derive items at arm time (armor-queue
+  discipline) — a pool destroyed between damage and arming silently drops out (mild
+  counterfactual, documented).
 
 ## Previous session (2026-07-13, later) — design-doc housekeeping: root cleanup + archive/ DONE
 LOCAL filing session (no engine/test/doc-content changes; owner-approved proposal in

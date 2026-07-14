@@ -276,16 +276,16 @@ export function driveAttack(game: GameState, ctx: AttackCtx):
   if (ctx.reckless) {
     const aLoc = findEntityAnywhere(g, ctx.charId);
     if (aLoc) {
-      const atkHp = Math.max(0, aLoc.ent.hp - 1);
+      // RE-RULED (owner 2026-07-14): Reckless recoil is damage the character takes —
+      // it routes through the damage chokepoint, so the prevention family (armor
+      // included) applies. Supersedes the 2026-07-03 engine reading that recoil
+      // bypassed armor. A pools+armor collision here takes applyDamage's NON-COMBAT
+      // deferral (this after-phase never pauses); the attacker's own opponent keeps
+      // game-over credit when recoil defeats a PC (unchanged attribution).
       ctx.msgs.push(`${ctx.attackerName} takes 1 damage (Reckless)`);
-      if (aLoc.ent.kind === 'pc') {
-        g = setPcHp(g, aLoc.player, ctx.charId, atkHp); // mirrors the headline; recoil at 0 HP loses the game
-      } else if (atkHp <= 0) {
-        const d = destroyEntity(g, ctx.charId, ctx.deadSink, ctx.armorSink); // fires death triggers
-        g = d.game; ctx.msgs.push(...d.msgs);
-      } else {
-        g = updateEntity(g, ctx.charId, { hp: atkHp });
-      }
+      const opp: 'p1' | 'p2' = aLoc.player === 'p1' ? 'p2' : 'p1';
+      const r = applyDamage(g, ctx.charId, 1, 'Reckless', opp, ctx.deadSink, undefined, ctx.armorSink);
+      g = r.game; ctx.msgs.push(...r.msgs);
     }
   }
   if (ctx.hitRun) {
