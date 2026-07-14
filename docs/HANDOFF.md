@@ -2,7 +2,36 @@
 
 Self-contained context for continuing the card-effect engine work in a fresh session.
 
-## Latest session (2026-07-13) — trap-arc branch merged + Rules Notes mirrored to parent canon DONE
+## Latest session (2026-07-13, later) — design-doc housekeeping: root cleanup + archive/ DONE
+LOCAL filing session (no engine/test/doc-content changes; owner-approved proposal in
+`tasks/cleanup_proposal_2026-07-13.md`). Every duplicate was compared by CONTENT before moving;
+NOTHING was deleted — moves only, into a new root `archive/` (subfoldered by origin).
+- **Root is now the single master location for every design doc.** `Rules_Taxonomy.md` PROMOTED
+  to the root (the `play testing/` copy; all three prior copies were byte-identical). The
+  `May 2026 files/` and `play testing/` folders (identical-twin May 4 snapshots, fully superseded
+  by the July root masters — verified keyword-by-keyword and section-by-section) moved wholesale
+  to `archive/from May 2026 files/` + `archive/from play testing/`.
+- **Archived from the root**: Card_Generation_Workflow.docx (quarter-length partial of the .md),
+  USER_GUIDE.md.pdf (manual for the RETIRED pre-app Python card tool), Keyword_Glossary_New.txt
+  (folded into Master_Keyword_List — owner confirmed), twilight-workbench-v5.html +
+  sorcerer_warrior_50.json (pre-app workbench — owner confirmed retired), three `~$` Word lock
+  files, stale root `node_modules/` + `.vite/` caches. From `Ashglow March/`: the July 31
+  .docx.pdf + ashglow_march_word_doc.md exports (the .md holds some early-draft wording, e.g.
+  "Ashgrove" — preserved in archive). Old `Archive (old versions)/` folded in as
+  `archive/old versions/`.
+- **Verified after the moves**: all five `twilight-app/docs/` snapshots (3 canon docs,
+  Rules_Taxonomy, HANDOFF) hash-identical to their root masters; `start-dev.js` still boots the
+  app clean via the preview launcher (full library renders, zero console errors) — it never used
+  the root caches.
+- **NEW root guide `WHERE_THINGS_LIVE.md`** — one-page owner-facing map: root = masters,
+  archive/ = never-delete, docs/ = session-managed snapshots, the LOCAL vs CLOUD environment
+  rule (also added to Conventions below).
+- **Owner should refresh the design Project uploads**: Game_Rules_Updated.md,
+  Master_Keyword_List.md, Card_Design_Parameters.md, **Rules_Taxonomy.md (likely never uploaded
+  before)**, tasks/HANDOFF.md; REMOVE from the Project if present: Keyword_Glossary_New.txt and
+  any May-era copies of the canon docs.
+
+## Previous session (2026-07-13) — trap-arc branch merged + Rules Notes mirrored to parent canon DONE
 Documentation-only session (no engine or test changes). **Suite re-confirmed post-merge: 22
 files / 276 tests green; tsc ZERO.**
 - **Merged `origin/claude/reactive-trigger-traps-3qpvsf` (b99e142) into main** (fast-forward)
@@ -916,6 +945,12 @@ owner-ruling flags in OPEN QUESTIONS.
   OWN Physical Constructs (source→dest).
 
 ## Conventions / lessons
+- **ENVIRONMENT RULE (2026-07-13):** parent/root design docs are reachable from LOCAL sessions
+  only. CLOUD sessions see only the `twilight-app/` repo and read the `docs/` snapshots
+  (sessions update snapshots; never hand-edit them). LOCAL sessions must `git fetch` inside
+  twilight-app before trusting the repo's state — cloud work arrives on remote branches.
+  One master per design doc, at the ROOT; every other copy is an archive copy (root
+  `archive/`, never deleted — see `WHERE_THINGS_LIVE.md`).
 - Keep `tasks/todo.md` review sections + the memory file (`memory/project_state.md`) updated
   per slice. Follow the user's global CLAUDE.md (plan-first, verify-before-done, simplicity).
 - One slice at a time, verify in preview, remove temp hook, typecheck, update memory.
