@@ -258,6 +258,17 @@ Prevention is one family of effects: anything that intervenes when a character "
   - Prevention applies to all damage the covered character would take — combat and effect damage alike, including reactive-trigger damage and a character's own Reckless recoil (re-ruled 2026-07-14; supersedes the earlier engine reading that the recoil bypassed armor).
   - Scope is exactly what the card names: an effect covering a class of companions you control never covers the Player Character, companions outside that class, opposing characters, or the player. (Poison-failure damage is dealt to the PLAYER and is therefore never covered by companion-scoped prevention.)
 
+**Standing Restrictions ("cannot" effects):**
+Some permanents project a standing restriction — an ongoing "cannot [act]" over a stated group (e.g. "opposing back-line companions cannot attack", "opposing companions cannot move between front and back lines"). The Rules Notes below are the owner-ratified operational model (2026-07-15).
+
+- **Rules Note (2026-07-15) — "Cannot" beats "can".** When a restriction ("cannot") and a permission ("can") apply to the same action, the restriction wins. A keyword or aura permitting attacks from the back line does not override an effect stating back-line companions cannot attack — the companion cannot attack.
+- **Rules Note (2026-07-15) — Restrictions are checked when the action is attempted.** A standing restriction gates the action at the moment it would be taken: attack restrictions apply at attack declaration (consistent with the 2026-07-12 declaration/damage separation); movement restrictions apply when the move would begin. Restrictions are not retroactive — an already-declared legal attack is not undone by conditions changing mid-resolution.
+- **Rules Note (2026-07-15) — Movement restrictions cover ALL movement.** "Cannot move between [lines/zones]" stops every form of movement between them — chosen move actions and effect-driven (forced) movement alike.
+- **Scope (2026-07-15):**
+  - Entering the encounter is not movement (per the 2026-07-13 "moves into" note): a companion may enter directly onto either line regardless of movement restrictions, and lateral repositioning within one line is not "between" lines and is unrestricted by such wording.
+  - "Opposing" is always from the aura controller's perspective; the controller's own companions are never restricted by their own aura.
+  - A restriction aura lives and dies with its source: when the permanent leaves (Anchor decay, Dismantle, destruction, sacrifice), the restriction ends immediately and previously-restricted actions become legal again.
+
 ### POSITIONING & MOVEMENT
 
 **Geometry recap.** Each player controls a 2x3 grid (3 Front Line, 3 Back Line) called the Command Zone. The two players' grids are mirrored but spatially independent — adjacency does not cross between them.

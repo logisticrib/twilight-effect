@@ -2,7 +2,73 @@
 
 Self-contained context for continuing the card-effect engine work in a fresh session.
 
-## Latest session (2026-07-14) — Capability arc 2: damage prevention + Reflecting Pool DONE
+## Latest session (2026-07-15) — Capability arc 3: restriction auras (Crystalline Sentinel + Reinforced Gate) DONE
+**Suite: 24 files / 303 tests green (t5 + t8 fixtures replay clean, hashes untouched); tsc ZERO;
+validate:decks clean (100 cards).** LOCAL session — Rules Notes (2026-07-15) in parent +
+docs/ snapshots word-identical. Built standing-restriction ("cannot X") aura evaluation at the
+legality gates per owner-ratified R1–R4 (2026-07-15) and authored BOTH cards (owner-approved
+bundling): **Crystalline Sentinel** ("Opposing back-line companions cannot attack.") +
+**Reinforced Gate** ("Opposing companions cannot move between front and back lines.") —
+**flagged gaps 4 → 2 (remaining: Patient Conjurer, Siegeworks).**
+- **Schema/validator:** static ops `restrictAttack {scope:'oppCompanions', where?.line}` and
+  `restrictMove {scope:'oppCompanions', between:'lines'}` — scope deliberately narrowed to the
+  engine-supported value (contract honesty; own side is never restricted by design). Tier4
+  negative tests (bad scope / where.line / between). **STANDING REQUIREMENT recorded at the
+  validator's 'move'-op stub AND in Conventions below: when the interpreter's forced-'move' op
+  lands (arc-1 flag), it MUST consult moveRestrictedBy (R3 — restrictions cover forced movement).**
+- **Engine (stats.ts):** `attackRestrictedBy` / `moveRestrictedBy` — aura-style gather from the
+  OPPOSING side's in-play statics at check time (arc-2 discipline, no cached state → the
+  restriction dies with its source, R4). Companions only; moveRestrictedBy returns null for
+  same-line (lateral) steps structurally (R4). Both return the SOURCE NAME for player-facing
+  reasons.
+- **Gates (R1 structural: restrictions AFTER permissions, so "cannot" has the final word):**
+  beginAttack (after the Ranged/Watchtower permission block) + resolveAttack (the declaration
+  COMMIT re-checks — covers a Sentinel arriving while the targeting UI is up, R2); resolveMove
+  (after adjacency/occupancy); reposition arming (resolveActionTarget filters cross-line
+  eligibleSlots out — never offered) + resolveActionSlot (defense-in-depth re-check). endTurn
+  untouched (restrictions are passive legality). **NO new MP holds — passive legality only, no
+  prompts, as the brief predicted.** Zero-cost when absent: no new GameState fields at all;
+  t5/t8 byte-identical.
+- **Effect-driven attack ops audited:** `extraAttack` only refreshes the budget — the actual
+  attack still routes through beginAttack/resolveAttack → restriction applies; `forceAttack`
+  resolves from the controller's own FRONT-line companions only → cannot collide with a
+  back-line attack restriction (noted, nothing to change). **Watchtower interop: the brief said
+  Watchtower affects constructs — it actually covers back-line COMPANIONS (engine + doc), so it
+  CAN collide with the Sentinel; pinned: the restriction overrides the Watchtower grant.**
+- **UI (no silent outcomes):** LoadoutPanel's Attack button renders DISABLED (0.45 'used' state)
+  with tooltip "Cannot attack — <source> (opposing aura)"; beginAttack/resolveAttack/resolveMove
+  refusals toast the source; CommandZone never highlights a Gate-blocked destination (verified
+  live: back-line mover with the Gate up offers exactly "Empty slot B2", the lateral step);
+  reposition prompts never offer cross-line slots. DOM/eval verification (screenshot tool still
+  hangs on the live board — known gotcha).
+- **Tests (`restriction_auras.test.ts`, 14):** R1 Ranged-vs-Sentinel + Watchtower-grant-vs-
+  Sentinel (with no-Sentinel control); Sentinel scope (front-liner attacks; OWN back-line Ranged
+  free; legal again after a REAL destruction path — sacrificeEntity → destroyEntity); R2
+  (unrestricted declaration resolves; the commit re-check refuses a mid-targeting Sentinel);
+  Gate scope (front→back AND back→front blocked, no move consumed on refusal; own side crosses
+  freely; lateral unrestricted; entry-not-movement via real placeCard; legal again on leave);
+  R3 reposition (cross-line slots not offered + executor re-check refuses a forced slot); both
+  auras independent (combined board). **Non-vacuity — 7 mutations, each caught by exactly the
+  expected pins, all restored:** gate disconnected (5 pins); attack-scope inverted to own side
+  (6 pins incl. the own-side pin); move-scope inverted (move pins incl. own-crosses-freely);
+  permission-overrides-restriction (the 4 cannot-beats-can pins — commit-recheck pin correctly
+  survives); lateral guard removed (3); where.line ignored (3); reposition arming filter
+  removed (1). HARNESS NOTE: one mutation's restore initially failed silently (python
+  string-replace didn't match after a line merge) and CONTAMINATED two runs — caught because
+  the failure set didn't match the prediction; re-ran clean. Predict the exact failure set for
+  every mutation and verify `grep MUTATION` returns nothing before the final gate.
+- **Docs (2026-07-15, parent + snapshots word-identical):** Game_Rules_Updated §Core Mechanics
+  gained the "Standing Restrictions" block (R1/R2/R3 + scope bullets, card-agnostic);
+  Master_Keyword_List §RANGED gained the permission-vs-restriction pointer note. Owner should
+  re-upload Game_Rules_Updated.md + Master_Keyword_List.md + HANDOFF.md to the design Project.
+- **OWNER DESIGN NOTE (recorded here, NOT in the rules docs):** the owner considers Crystalline
+  Sentinel's current text weak and may replace/re-word it later (e.g. "Characters with Ranged
+  cannot attack from the back line"). The CURRENT canon text is implemented as written, for
+  completeness — do not redesign the card without an owner ruling.
+- **Open flags for owner:** none new. (Standing: live two-peer MP over the arc-1/arc-2 holds;
+  the forced-'move'-op requirement above when that op lands.)
+
+## Previous session (2026-07-14) — Capability arc 2: damage prevention + Reflecting Pool DONE
 **Suite: 23 files / 286 tests green (t5 + t8 fixtures replay clean, hashes untouched); tsc ZERO;
 validate:decks clean (100 cards).** LOCAL session — Rules Notes landed in parent + docs/ snapshots
 word-identical in the same change. Built the damage-prevention capability at the applyDamage
@@ -1026,6 +1092,11 @@ owner-ruling flags in OPEN QUESTIONS.
   OWN Physical Constructs (source→dest).
 
 ## Conventions / lessons
+- **STANDING REQUIREMENT (owner 2026-07-15):** when the interpreter's forced-movement `move` op
+  is implemented (arc-1 flag #4), it MUST consult `moveRestrictedBy` — "cannot move between
+  lines" covers effect-driven/forced movement too (R3, restriction-aura arc). A matching comment
+  sits at the op's case in `src/data/validateCards.ts`. There is nothing to test until the op
+  exists; whoever builds it writes the pin.
 - **ENVIRONMENT RULE (2026-07-13):** parent/root design docs are reachable from LOCAL sessions
   only. CLOUD sessions see only the `twilight-app/` repo and read the `docs/` snapshots
   (sessions update snapshots; never hand-edit them). LOCAL sessions must `git fetch` inside

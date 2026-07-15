@@ -50,7 +50,7 @@ const OPS = [
   'anchor', 'sacrifice', 'sacrificeItem', 'equipFromHand', 'animate', 'dieCheck',
   'attackDisarm', 'moveAnchor', 'attackBonus', 'magicDamageBonus', 'preventAnchorDecay',
   'lineWard', 'exhaustSelf', 'exhaust', 'modal', 'gainControl', 'suppressKeywords', 'counterAction',
-  'grantKeywords', 'backLineAttack', 'preventDamage',
+  'grantKeywords', 'backLineAttack', 'preventDamage', 'restrictAttack', 'restrictMove',
 ] as const satisfies readonly Effect['op'][];
 export type _ExhaustiveOps = AssertNever<Exclude<Effect['op'], (typeof OPS)[number]>>;
 
@@ -157,6 +157,11 @@ function validateEffect(e: Effect, path: string, p: (msg: string) => void, keywo
       if (typeof e.cardType !== 'string' || !e.cardType) p(`${path}(search): cardType required`);
       break;
     case 'move':
+      // STANDING REQUIREMENT (owner 2026-07-15, restriction-aura arc): the
+      // interpreter's forced-movement 'move' op is still unimplemented (flagged in
+      // arc 1). WHEN IT LANDS it MUST consult moveRestrictedBy — "cannot move
+      // between lines" covers effect-driven/forced movement too (R3). Also recorded
+      // in tasks/HANDOFF.md Conventions.
       target('target');
       if (e.to !== 'anySlot' && e.to !== 'adjacent') p(`${path}(move): bad to "${String(e.to)}"`);
       break;
@@ -209,6 +214,15 @@ function validateEffect(e: Effect, path: string, p: (msg: string) => void, keywo
       if (!isInt(e.amount) || e.amount < 1) p(`${path}(preventDamage): amount must be an integer ≥ 1`);
       if (e.scope !== 'ownCompanions' && e.scope !== 'ownParty') p(`${path}(preventDamage): scope must be ownCompanions or ownParty`);
       if (e.where?.cls !== undefined && (typeof e.where.cls !== 'string' || !e.where.cls)) p(`${path}(preventDamage): bad where.cls`);
+      break;
+    case 'restrictAttack':
+      // Engine-supported scope only (the legality gates scan for opposing companions).
+      if (e.scope !== 'oppCompanions') p(`${path}(restrictAttack): scope must be oppCompanions`);
+      if (e.where?.line !== undefined && e.where.line !== 'front' && e.where.line !== 'back') p(`${path}(restrictAttack): bad where.line`);
+      break;
+    case 'restrictMove':
+      if (e.scope !== 'oppCompanions') p(`${path}(restrictMove): scope must be oppCompanions`);
+      if (e.between !== 'lines') p(`${path}(restrictMove): between must be "lines"`);
       break;
   }
 }

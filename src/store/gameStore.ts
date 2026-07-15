@@ -8,7 +8,8 @@ import { recomputeStatics, isImmuneToSplash, HIT_RUN_STATUS,
          isPhysicalConstruct, parseEnterTrigger, type EnterTriggerKind,
          isCharacter, firstItemOf, allItemsOf, canHoldItem, effectiveAttack, effectiveKeywords, effectiveMaxHp, wardedLines,
          canPlayActionCard, actionTypeOf, currentWillpower, parseBanes,
-         POISONED_STATUS, parseAnimateMagic, hasBackLineAttackAura } from './keywords';
+         POISONED_STATUS, parseAnimateMagic, hasBackLineAttackAura,
+         attackRestrictedBy, moveRestrictedBy } from './keywords';
 
 // Everything relocated to the headless engine stays importable from this module —
 // external import sites don't churn during the extraction (see src/engine/index.ts).
@@ -1179,7 +1180,12 @@ export const useGameStore = create<GameStoreState>()(
     if (pa.twoStep && !pa.firstId) {
       // Step 1: chose the first entity → arm step 2 (slot, enemy, or dest construct).
       if (pa.twoStep === 'reposition') {
-        const emptySlots = [...FRONT_SLOTS, ...BACK_SLOTS].filter(sl => !s.game[pa.lp].board[sl]);
+        // Effect-driven repositioning is still MOVEMENT (R3, owner 2026-07-15): an
+        // opposing between-lines restriction removes cross-line destinations here,
+        // so restricted slots are never offered as clickable.
+        const mover = findEntityAnywhere(s.game, targetId);
+        const emptySlots = [...FRONT_SLOTS, ...BACK_SLOTS].filter(sl => !s.game[pa.lp].board[sl])
+          .filter(sl => !mover || !moveRestrictedBy(s.game, mover.ent, mover.player, mover.slot, sl));
         return { pendingActionTarget: { ...pa, firstId: targetId, eligibleIds: [], eligibleSlots: emptySlots } };
       }
       if (pa.twoStep === 'moveAnchor') {
@@ -1261,6 +1267,16 @@ export const useGameStore = create<GameStoreState>()(
     const pa = s.pendingActionTarget;
     if (!pa || pa.twoStep !== 'reposition' || !pa.firstId || !pa.eligibleSlots?.includes(slot)) return s;
     const loc = findEntityAnywhere(s.game, pa.firstId);
+    // Defense-in-depth (R3): eligibleSlots was already restriction-filtered at arming;
+    // re-check against the CURRENT board in case a restriction source entered since.
+    if (loc) {
+      const blocked = moveRestrictedBy(s.game, loc.ent, loc.player, loc.slot, slot);
+      if (blocked) {
+        const tid = ++toastId;
+        setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== tid) })), 4000);
+        return { pendingActionTarget: null, toasts: [...s.toasts, { id: tid, msg: `${loc.ent.name} cannot move between lines — ${blocked} (opposing aura).` }] };
+      }
+    }
     let g = s.game; const msgs: string[] = [];
     let movedToFront = false;
     if (loc) {
@@ -1893,6 +1909,16 @@ export const useGameStore = create<GameStoreState>()(
       return { pending: null, toasts: [...s.toasts, { id, msg: 'That slot is occupied.' }] };
     }
 
+    // Standing movement restrictions LAST — "cannot" beats "can" (R1/R2, owner
+    // 2026-07-15): an opposing aura may bar movement between the lines. Checked at
+    // the moment the move would begin; lateral within-line steps are never "between".
+    const moveRestricted = moveRestrictedBy(game, src.ent, src.player, src.slot, targetSlot);
+    if (moveRestricted) {
+      const id = ++toastId;
+      setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 3000);
+      return { pending: null, toasts: [...s.toasts, { id, msg: `${src.ent.name} cannot move between lines — ${moveRestricted} (opposing aura).` }] };
+    }
+
     const board = { ...game[src.player].board };
     const ent = {
       ...src.ent,
@@ -1964,6 +1990,13 @@ export const useGameStore = create<GameStoreState>()(
       return { ...toast('Must be in the Front Line to attack (no Ranged).') };
     }
 
+    // Standing restrictions LAST — "cannot" beats "can" (R1, owner 2026-07-15): an
+    // opposing restriction aura overrides Ranged and Watchtower coverage alike.
+    const restricted = attackRestrictedBy(s.game, ent, attLoc.player, attLoc.slot);
+    if (restricted) {
+      return { ...toast(`${ent.name} cannot attack — ${restricted} (opposing aura).`) };
+    }
+
     return { pending: { action: 'attack', charId } };
   }),
 
@@ -1988,6 +2021,14 @@ export const useGameStore = create<GameStoreState>()(
       setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 3000);
       return { id, msg };
     };
+
+    // Declaration-time restriction check (R2, owner 2026-07-15): this is the moment
+    // the attack is DECLARED, so the gate runs here too — beginAttack already refused
+    // in normal flow; this covers a board that changed while the targeting UI was up.
+    const restricted = attackRestrictedBy(game, attacker, attLoc.player, attLoc.slot);
+    if (restricted) {
+      return { pending: null, toasts: [...s.toasts, pushToast(`${attacker.name} cannot attack — ${restricted} (opposing aura).`)] };
+    }
 
     // ── Targeting rules (only for characters, not constructs) ──────────────────
     if (target.kind !== 'construct') {

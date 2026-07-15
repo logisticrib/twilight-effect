@@ -1,6 +1,8 @@
 import type { BoardEntity, Card, EquippedItem } from '../types/card';
 import type { CardEffect, Modifier } from '../types/effects';
 import type { GameState, PlayerState } from './state';
+import type { SlotId } from './geometry';
+import { isFront } from './geometry';
 import { CATALOG } from '../data/catalog';
 
 /**
@@ -283,6 +285,56 @@ export function hasBackLineAttackAura(game: GameState, side: 'p1' | 'p2'): boole
   return Object.values(game[side].board).some(src => !!src
     && (effectsOf(src.name) ?? []).some(ce => ce.trigger === 'static'
       && ce.effects.some(e => e.op === 'backLineAttack')));
+}
+
+// ─── Standing-restriction auras (arc 3, owner-ratified 2026-07-15) ─────────────
+// "Cannot" beats "can" (R1): the legality gates call these AFTER every permission
+// (Ranged, Watchtower coverage, Zealous, …), so a restriction always has the final
+// word — a structural property of the gate order, not a per-card special case.
+// Aura-style detection at check time from the OPPOSING side's in-play statics
+// (the preventionEffectsFor / auraGrantedKeywords discipline — no cached state, so
+// the restriction lives and dies with its source, R4).
+
+/** The opposing static aura restricting `ent` (a companion in `slot`, controlled by
+ *  `controller`) from ATTACKING right now — returns the source card's name for the
+ *  player-facing reason, or null when unrestricted. */
+export function attackRestrictedBy(game: GameState, ent: BoardEntity, controller: 'p1' | 'p2', slot: SlotId): string | null {
+  if (ent.kind !== 'companion') return null; // engine-supported scope: opposing COMPANIONS
+  const opp: 'p1' | 'p2' = controller === 'p1' ? 'p2' : 'p1';
+  for (const src of Object.values(game[opp].board)) {
+    if (!src) continue;
+    for (const ce of effectsOf(src.name) ?? []) {
+      if (ce.trigger !== 'static') continue;
+      for (const e of ce.effects) {
+        if (e.op !== 'restrictAttack') continue;
+        if (e.where?.line && (e.where.line === 'front') !== isFront(slot)) continue;
+        return src.name;
+      }
+    }
+  }
+  return null;
+}
+
+/** The opposing static aura restricting `ent` from MOVING from `fromSlot` to
+ *  `toSlot` — returns the source card's name, or null. Only movement BETWEEN the
+ *  front and back lines can be restricted (R4: lateral within-line repositioning is
+ *  not "between" lines; entering the encounter is not movement and never consults
+ *  this). Covers ALL movement forms — chosen moves and effect-driven repositioning
+ *  alike (R3): every mover-execution path calls this. */
+export function moveRestrictedBy(game: GameState, ent: BoardEntity, controller: 'p1' | 'p2', fromSlot: SlotId, toSlot: SlotId): string | null {
+  if (ent.kind !== 'companion') return null; // engine-supported scope: opposing COMPANIONS
+  if (isFront(fromSlot) === isFront(toSlot)) return null; // lateral — not "between" lines
+  const opp: 'p1' | 'p2' = controller === 'p1' ? 'p2' : 'p1';
+  for (const src of Object.values(game[opp].board)) {
+    if (!src) continue;
+    for (const ce of effectsOf(src.name) ?? []) {
+      if (ce.trigger !== 'static') continue;
+      for (const e of ce.effects) {
+        if (e.op === 'restrictMove' && e.between === 'lines') return src.name;
+      }
+    }
+  }
+  return null;
 }
 
 /** Whether a flag modifier (e.g. 'hpFloor1') is currently active on an entity. */

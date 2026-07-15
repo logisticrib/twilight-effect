@@ -442,7 +442,9 @@
       "flavor": "A held breath, frozen.",
       "createdAt": "2026-05-16T19:02:21.324242Z",
       "updatedAt": "2026-05-16T19:02:21.324243Z",
-      "effectsFlag": "awaiting engine capability: attack-eligibility restriction aura (owner 2026-07-08)"
+      "effects": [
+        { "trigger": "static", "effects": [{ "op": "restrictAttack", "scope": "oppCompanions", "where": { "line": "back" } }] }
+      ]
     },
     {
       "id": "9cf32caf",
@@ -1271,7 +1273,9 @@
       "flavor": "",
       "createdAt": "2026-05-16T19:02:21.324573Z",
       "updatedAt": "2026-05-16T19:02:21.324574Z",
-      "effectsFlag": "awaiting engine capability: movement-restriction aura (owner 2026-07-08)"
+      "effects": [
+        { "trigger": "static", "effects": [{ "op": "restrictMove", "scope": "oppCompanions", "between": "lines" }] }
+      ]
     },
     {
       "id": "78dd05de",

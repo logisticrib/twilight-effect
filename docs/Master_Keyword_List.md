@@ -10,6 +10,7 @@ This document consolidates all keywords from Game Rules, Keyword Glossary, and C
 ### Combat & Positioning Keywords
 
 **RANGED** - This character can attack from the Back Line.
+- **Rules Note (2026-07-15):** Ranged is a permission, and "cannot" beats "can" — a standing restriction stating back-line companions cannot attack overrides Ranged (and any aura-granted attack eligibility). See Game_Rules_Updated §Core Mechanics, Standing Restrictions.
 - *Common:* Archer companions, ranged weapons, magical attacks like fireballs
 
 **CLEAVE** - When this character attacks, it deals damage equal to its attack to each character on the same line as the target. This is exclusive to two-handed weapons.

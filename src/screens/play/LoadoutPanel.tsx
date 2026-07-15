@@ -4,7 +4,7 @@ import { CATALOG } from '../../data/catalog';
 import { TBL, CLASSCLR, GLYPH } from '../../tokens';
 import { btnProps } from '../../lib/a11y';
 import { useGameStore, gatherActivated, abilityUsedTag, type GameState } from '../../store/gameStore';
-import { canPlayActionCard, hasBackLineAttackAura } from '../../store/keywords';
+import { canPlayActionCard, hasBackLineAttackAura, attackRestrictedBy } from '../../store/keywords';
 import { handlePreviewWheel } from './previewScroll';
 import type { BoardEntity, EquippedItem } from '../../types/card';
 
@@ -99,9 +99,15 @@ function computeActions(
   // "move must come first" / exhausted gates (consumed in resolveMove).
   const hitRunMove = ent.statuses.includes('hit-run-ready');
 
+  // Standing restrictions have the final word — "cannot" beats "can" (R1, owner
+  // 2026-07-15): an opposing restriction aura disables Attack even for Ranged /
+  // Watchtower-covered companions, and the tooltip names the restricting source.
+  const attackRestricted = entSlot ? attackRestrictedBy(game, ent, side, entSlot as Parameters<typeof attackRestrictedBy>[3]) : null;
+
   // Zealous bypasses the entry-turn ("fresh") restriction for attacks (only).
-  const attackOk = !sealed && !acts.major && !isExhausted && (!fresh || zealous) && (!isPC || hasWeapon) && canAttackFromPosition;
+  const attackOk = !sealed && !acts.major && !isExhausted && (!fresh || zealous) && (!isPC || hasWeapon) && canAttackFromPosition && !attackRestricted;
   const attackReason = sealed ? 'Activation finished' :
+    attackRestricted ? `Cannot attack — ${attackRestricted} (opposing aura)` :
     !canAttackFromPosition ? 'Must be in Front Line (or have Ranged)' :
     isPC && !hasWeapon ? 'Needs a weapon' :
     fresh && !zealous ? 'Cannot attack on its entry turn' :

@@ -22,11 +22,11 @@ describe('data contract: the shipped decks validate clean', () => {
   // 2026-07-12 (trap reactive-trigger arc): Tripwire Snare / Pit Trap / Iron Spikes
   // were AUTHORED against the new trigger stack and dropped their flags — eight
   // deferred gaps became five. 2026-07-14 (damage-prevention arc): Reflecting Pool
-  // authored against the prevention hook — five became four.
-  it('the four deferred gaps carry dated owner-approved flags (not silently forgotten)', () => {
+  // authored — five became four. 2026-07-15 (restriction-aura arc): Crystalline
+  // Sentinel + Reinforced Gate authored — four became two.
+  it('the two deferred gaps carry dated owner-approved flags (not silently forgotten)', () => {
     const flagged = CATALOG.filter(c => c.effectsFlag).map(c => c.name).sort();
-    expect(flagged).toEqual(['Crystalline Sentinel', 'Patient Conjurer',
-      'Reinforced Gate', 'Siegeworks']);
+    expect(flagged).toEqual(['Patient Conjurer', 'Siegeworks']);
     for (const c of CATALOG.filter(c => c.effectsFlag)) {
       expect(c.effectsFlag, `${c.name} flag names the missing system + owner date`).toMatch(/awaiting engine capability: .+\(owner 2026-07-08\)/);
     }
@@ -65,6 +65,14 @@ describe('the validator catches each class of authoring mistake (mint-gate behav
     expectCaught(clone({ effects: [{ trigger: 'static', effects: [{ op: 'preventDamage', amount: 0, scope: 'ownCompanions' }] }], text: '' }), 'amount must be ≥ 1');
     expectCaught(clone({ effects: [{ trigger: 'static', effects: [{ op: 'preventDamage', amount: 1, scope: 'allEnemies' }] }], text: '' }), 'unsupported scope (contract must not advertise unimplemented coverage)');
     expectCaught(clone({ effects: [{ trigger: 'static', effects: [{ op: 'preventDamage', amount: 1, scope: 'ownParty', where: { cls: '' } }] }], text: '' }), 'empty where.cls');
+  });
+
+  it('restriction auras (2026-07-15): engine-supported scope only; where.line / between domains', () => {
+    expect(validateCards([clone({ effects: [{ trigger: 'static', effects: [{ op: 'restrictAttack', scope: 'oppCompanions', where: { line: 'back' } }] }], text: '' })]), 'the Sentinel shape validates').toEqual([]);
+    expect(validateCards([clone({ effects: [{ trigger: 'static', effects: [{ op: 'restrictMove', scope: 'oppCompanions', between: 'lines' }] }], text: '' })]), 'the Gate shape validates').toEqual([]);
+    expectCaught(clone({ effects: [{ trigger: 'static', effects: [{ op: 'restrictAttack', scope: 'ownCompanions' }] }], text: '' }), 'unsupported restrict scope (own side is never restricted)');
+    expectCaught(clone({ effects: [{ trigger: 'static', effects: [{ op: 'restrictAttack', scope: 'oppCompanions', where: { line: 'middle' } }] }], text: '' }), 'bad where.line');
+    expectCaught(clone({ effects: [{ trigger: 'static', effects: [{ op: 'restrictMove', scope: 'oppCompanions', between: 'zones' }] }], text: '' }), 'bad between');
   });
 
   it('activated ability without cost or oncePerTurn (§11 guard)', () => {

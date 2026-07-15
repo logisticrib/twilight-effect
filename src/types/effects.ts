@@ -135,6 +135,16 @@ export type Effect =
   | { op: 'suppressKeywords'; scope: TargetSpec; where?: { line?: 'front' | 'back' } }  // static aura: affected lose all keywords
   | { op: 'grantKeywords'; keywords: string[]; scope: TargetSpec; where?: { line?: 'front' | 'back' } }  // static aura: affected GAIN keywords (Bastion Wall)
   | { op: 'backLineAttack' }  // static: your back-line COMPANIONS may attack as if they had Ranged — attack eligibility ONLY, no defensive Ranged targetability (Watchtower)
+  // (static) standing-restriction auras (arc 3, owner-ratified 2026-07-15). "Cannot"
+  // beats "can" (R1): legality gates consult these AFTER permissions, so a restriction
+  // always has the final word. Checked when the action is attempted (R2) — never
+  // retroactive. Scope is the aura controller's OPPOSING companions only
+  // (engine-supported scopes only; the controller's own side is never restricted).
+  | { op: 'restrictAttack'; scope: 'oppCompanions'; where?: { line?: 'front' | 'back' } }  // Crystalline Sentinel
+  // 'lines' = between front and back. Covers ALL movement between them — chosen moves
+  // and effect-driven repositioning alike (R3). Entering the encounter is not movement,
+  // and lateral within-line repositioning is not "between" lines (R4 / 2026-07-13 note).
+  | { op: 'restrictMove'; scope: 'oppCompanions'; between: 'lines' }  // Reinforced Gate
   | { op: 'counterAction' };  // sacrifice this; the opponent's Action is countered to their Dead Zone
 
 /** Non-stat continuous modifiers a buff can grant (rules-flavored flags). */

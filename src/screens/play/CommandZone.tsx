@@ -3,7 +3,7 @@ import { CardFace, BASE_W, BASE_H } from '../../components/CardFace';
 import { TBL } from '../../tokens';
 import { btnProps } from '../../lib/a11y';
 import { useGameStore, ADJ, type SlotId, type PlayerState, type Board, type GameState } from '../../store/gameStore';
-import { effectiveKeywords, wardedLines } from '../../store/keywords';
+import { effectiveKeywords, wardedLines, moveRestrictedBy } from '../../store/keywords';
 import { handlePreviewWheel } from './previewScroll';
 import type { BoardEntity } from '../../types/card';
 
@@ -180,7 +180,11 @@ export function CommandZone({ player, owner, flip, boardScale = DEFAULT_BOARD_SC
             const isPcPlacement = awaitingPcPlacement && !card && isBackLine;
 
             const isMoveTarget   = !awaitingPcPlacement && pending?.action === 'move' && owner === localPlayer && !card
-              && attackerSlot != null && ADJ[attackerSlot]?.includes(sid);
+              && attackerSlot != null && ADJ[attackerSlot]?.includes(sid)
+              // Standing movement restrictions (R1/R3, 2026-07-15): a destination an
+              // opposing aura bars is never highlighted as clickable.
+              && !(game[localPlayer].board[attackerSlot]
+                && moveRestrictedBy(game, game[localPlayer].board[attackerSlot]!, localPlayer, attackerSlot, sid));
             const isPlayTarget   = !awaitingPcPlacement && !!pendingPlay && playGoesOnBoard && owner === localPlayer && !card
               && (!playIsCompanion || isBackLine);
             const isAttackTarget = !awaitingPcPlacement && pending?.action === 'attack' && attackerCanAttack
