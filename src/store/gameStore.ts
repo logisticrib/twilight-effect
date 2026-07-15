@@ -19,7 +19,7 @@ import { ADJ, FRONT_SLOTS, BACK_SLOTS, isFront, findSlot, type SlotId, type Boar
          type PendingCoercion, type PendingDeadPick,
          type AttackCtx, type ArmorChoiceData,
          type PendingItemTransfer, type StackEntry,
-         gatherParanoia, gatherReactive, pushStack, setStack, resolveReactiveEntry,
+         gatherParanoia, gatherReactive, gatherOwnPlay, pushStack, setStack, resolveReactiveEntry,
          orderedForStack, resolveCombatTriggers, combatTriggerEffects,
          findEntityAnywhere, updateEntity, removeEntity, deadCardsOf,
          itemTransferOf, itemProfileOf, itemTransferCandidates, armNextItemTransfer,
@@ -2398,13 +2398,22 @@ export const useGameStore = create<GameStoreState>()(
       [lp]: { ...game[lp], hand: newHand, classZone: newCZ, willpower: newWillpower },
     };
     const paranoia = isCompanion ? gatherParanoia(paidGame, lp) : [];
+    // On-play listeners (arc 4, owner 2026-07-15): "When you play a Magical
+    // Construct…" — own-side listeners, from-hand plays ONLY (this reducer IS the
+    // from-hand path; conversions/placements never emit a play event, R1). A
+    // companion play can only queue Paranoia, a construct play only on-play
+    // listeners — the two windows never coexist in one play.
+    const onPlay = isConstruct && card.subtype === 'Incantation'
+      ? gatherOwnPlay(paidGame, 'ownPlaysMagicalConstruct', { id: newEnt.id, name: card.name, controller: lp })
+      : [];
+    const playWindow = [...paranoia, ...onPlay];
     const g = pushStack(paidGame, [{ kind: 'enter', ent: newEnt, card, slot, controller: lp }]);
-    if (paranoia.length > 1) {
+    if (playWindow.length > 1) {
       // >1 simultaneous play-window trigger — the ACTIVE player orders them.
       return { pendingPlay: null, pendingTrigger: null, pendingKit: null,
-        game: { ...g, pendingTriggerOrder: { lp: g.activePlayer, items: paranoia, picked: [] } } };
+        game: { ...g, pendingTriggerOrder: { lp: g.activePlayer, items: playWindow, picked: [] } } };
     }
-    const r = runStack(pushStack(g, paranoia), s);
+    const r = runStack(pushStack(g, playWindow), s);
     return {
       pendingPlay: null,
       pendingTrigger: null,

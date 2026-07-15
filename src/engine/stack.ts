@@ -87,6 +87,31 @@ export function gatherParanoia(game: GameState, placer: 'p1' | 'p2'): ReactiveSt
 }
 
 /**
+ * Gather OWN-SIDE on-play listeners for a card being PLAYED from hand (arc 4,
+ * owner-ratified 2026-07-15): permanents on the PLACER'S OWN board whose card
+ * carries a clause with this trigger ("When YOU play …" — 'ownPlaysMagicalConstruct',
+ * Patient Conjurer). "Play" means from hand, universally (R1 2026-07-15): only the
+ * from-hand play path calls this — conversions, placements, and every other
+ * entry-into-play route never emit a play event. Queues ABOVE the played card
+ * (the gatherParanoia discipline), so it resolves BEFORE the played card enters.
+ */
+export function gatherOwnPlay(
+  game: GameState, trigger: Trigger,
+  subject: { id: string; name: string; controller: 'p1' | 'p2' },
+): ReactiveStackEntry[] {
+  const out: ReactiveStackEntry[] = [];
+  for (const slot of SLOT_SCAN) {
+    const ent = game[subject.controller].board[slot];
+    if (!ent) continue;
+    if (effectsOfCard(ent.name).some(c => c.trigger === trigger)) {
+      out.push({ kind: 'reactive', sourceId: ent.id, sourceName: ent.name, controller: subject.controller,
+        trigger, subjectId: subject.id, subjectName: subject.name });
+    }
+  }
+  return out;
+}
+
+/**
  * Resolve one queued 'reactive' entry: run the source CARD's matching clauses with
  * the event subject bound to 'eventSubject'. Mandatory triggers fire regardless of
  * whether their effects do anything (R4: an already-exhausted mover still trips Pit

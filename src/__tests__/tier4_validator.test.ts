@@ -23,10 +23,11 @@ describe('data contract: the shipped decks validate clean', () => {
   // were AUTHORED against the new trigger stack and dropped their flags — eight
   // deferred gaps became five. 2026-07-14 (damage-prevention arc): Reflecting Pool
   // authored — five became four. 2026-07-15 (restriction-aura arc): Crystalline
-  // Sentinel + Reinforced Gate authored — four became two.
-  it('the two deferred gaps carry dated owner-approved flags (not silently forgotten)', () => {
+  // Sentinel + Reinforced Gate — four became two. 2026-07-15 (on-play arc):
+  // Patient Conjurer — two became ONE.
+  it('the one deferred gap carries a dated owner-approved flag (not silently forgotten)', () => {
     const flagged = CATALOG.filter(c => c.effectsFlag).map(c => c.name).sort();
-    expect(flagged).toEqual(['Patient Conjurer', 'Siegeworks']);
+    expect(flagged).toEqual(['Siegeworks']);
     for (const c of CATALOG.filter(c => c.effectsFlag)) {
       expect(c.effectsFlag, `${c.name} flag names the missing system + owner date`).toMatch(/awaiting engine capability: .+\(owner 2026-07-08\)/);
     }

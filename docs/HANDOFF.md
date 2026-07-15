@@ -2,7 +2,51 @@
 
 Self-contained context for continuing the card-effect engine work in a fresh session.
 
-## Latest session (2026-07-15) — Capability arc 3: restriction auras (Crystalline Sentinel + Reinforced Gate) DONE
+## Latest session (2026-07-15, later) — Capability arc 4: on-play triggers (Patient Conjurer) DONE
+**Suite: 25 files / 311 tests green (t5 + t8 replay clean, hashes untouched); tsc ZERO;
+validate:decks clean.** LOCAL session. Lightest arc as briefed — a LISTENER on arc-1's stack, no
+new machinery. Authored **Patient Conjurer** ("When you play a Magical Construct, this character
+heals 1.") — **flagged gaps 2 → 1 (Siegeworks only).**
+- **Schema:** new reactive Trigger `'ownPlaysMagicalConstruct'` (OWN-side play-window listener).
+  `heal` op already existed with the cap-at-max convention (interpreter: min(effectiveMaxHp,
+  hp+amt)) — matches the owner-expected reading, nothing surfaced. Magical Construct =
+  subtype 'Incantation' (engine-wide convention: eligibleTargets + Animate Magic both key it).
+- **Engine:** `gatherOwnPlay` in stack.ts (gatherParanoia discipline, scans the PLACER'S OWN
+  board); placeCard queues on-play listeners ABOVE the 'enter' entry for from-hand Incantation
+  plays (resolves BEFORE the construct enters — 2026-07-12 canon); >1 listeners ride the
+  existing pendingTriggerOrder (identical triggers actively ordered, 2026-07-13 canon — NOT a
+  new hold kind). From-hand only (R1 2026-07-15): placeCard IS the sole play path; Animate
+  Magic conversions + placePc emit nothing (verified: no other entry-into-play path emits a
+  play event). Card play windows never coexist: companion plays gather only Paranoia,
+  construct plays only on-play listeners. Zero new GameState fields — t5/t8 byte-identical.
+- **Card:** Patient Conjurer = `{ownPlaysMagicalConstruct: [{heal 1, self}]}` — resolution via
+  resolveReactiveEntry binds sourceId → 'self' = the Conjurer; a departed Conjurer's queued
+  trigger resolves as a no-op (R1 2026-07-12 survival). Toast via the reactive-entry
+  "<source> triggers: …" line (no silent outcomes).
+- **Tests (`onplay_trigger.test.ts`, 8):** heals 1 (+toast); mandatory no-op at full HP (capped,
+  toast still fires); NOT on the opponent's play ("you"); NOT on Animate Magic conversion (real
+  interpreter path, R1); NOT on Physical-construct or companion plays; **stack order pinned via
+  a synthetic CATALOG listener gated on `controlsType Incantation`** — no draw proves the
+  trigger resolved before the construct entered (the condition could only be true post-enter);
+  two listeners → active-player ordering prompt + departed-listener no-op + survivor heals;
+  arc-1 interop both directions (companion play trips Tripwire not the Conjurer; construct play
+  trips the Conjurer not the companion-scoped trap). **Non-vacuity — 5 mutations, every failure
+  set predicted EXACTLY in advance and grep-verified restored (arc-3 lesson applied):** gather
+  disconnected (4 pins); enter-above-window order flip (order pin only); Incantation filter
+  dropped (filter pin only); gather scans the opponent (5 pins incl. the "you" pin); a
+  conversion wrongly emitting the event (R1 pin only).
+- **INTEROP NOTE (brief's "played construct trips arc-1 reactions" test):** no shipped arc-1
+  reaction fires on a CONSTRUCT entering — all three trap windows are companion-scoped — so a
+  same-play collision is impossible; the interop pin covers both windows across the two play
+  kinds instead (the arc-3 Watchtower-note discipline).
+- **Docs (2026-07-15, parent + snapshots word-identical):** Game_Rules_Updated §Triggered
+  Abilities gained the R1 note ("Play" means from hand, universally — generalizes the
+  2026-07-04 Paranoia ruling); Master_Keyword_List §PARANOIA note now cross-references it as
+  the game-wide definition rather than a Paranoia special case. Owner re-uploads:
+  Game_Rules_Updated.md, Master_Keyword_List.md, HANDOFF.md.
+- **Open flags for owner:** none new. Capability program: ONE flagged system left (Siegeworks).
+
+## Previous session (2026-07-15) — Capability arc 3: restriction auras (Crystalline Sentinel + Reinforced Gate) DONE
 **Suite: 24 files / 303 tests green (t5 + t8 fixtures replay clean, hashes untouched); tsc ZERO;
 validate:decks clean (100 cards).** LOCAL session — Rules Notes (2026-07-15) in parent +
 docs/ snapshots word-identical. Built standing-restriction ("cannot X") aura evaluation at the

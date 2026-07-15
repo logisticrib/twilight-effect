@@ -146,7 +146,7 @@ This document consolidates all keywords from Game Rules, Keyword Glossary, and C
 **PARANOIA** - Whenever an opponent plays a Companion, look at the top card of that player's deck. You may put that card on the top or bottom of their deck.
 - Represents Duke Flintwake's increasing suspicion and control
 - Primarily associated with military/authority cards in Ashglow March
-- **Rules Note (2026-07-12) — Ordering RE-RULED, supersedes the 2026-07-04 ordering note.** Paranoia triggers on the play. Under the trigger stack, the peek resolves BEFORE the played companion enters the encounter and before any of its on-enter effects. The 2026-07-04 note stating that the placer's own on-enter effects resolve first is superseded as of this date. All other Paranoia rulings stand unchanged: the Paranoia controller peeks the placer's deck and chooses top or bottom; the trigger fires on plays from hand only (placing the PC and Animate Magic conversions do not trigger it).
+- **Rules Note (2026-07-12) — Ordering RE-RULED, supersedes the 2026-07-04 ordering note.** Paranoia triggers on the play. Under the trigger stack, the peek resolves BEFORE the played companion enters the encounter and before any of its on-enter effects. The 2026-07-04 note stating that the placer's own on-enter effects resolve first is superseded as of this date. All other Paranoia rulings stand unchanged: the Paranoia controller peeks the placer's deck and chooses top or bottom; the trigger fires on plays from hand only (placing the PC and Animate Magic conversions do not trigger it) — as of 2026-07-15 this is the GAME-WIDE definition of "play", not a Paranoia special case (Game_Rules_Updated §Core Mechanics, Triggered Abilities: "Play" means from hand, universally).
 
 ### VERDANT PACT
 

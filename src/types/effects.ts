@@ -37,8 +37,16 @@ export type Trigger =
   | 'oppCompanionEnters'            // an opposing companion enters the encounter (Tripwire Snare)
   | 'oppCompanionMovesToFront'      // an opposing companion MOVES into the front line — movement only,
                                     // NOT direct entry onto the front line (R4, owner 2026-07-12) (Pit Trap)
-  | 'oppCompanionAttacksCompanion'; // an opposing companion declares an attack on one of YOUR companions
+  | 'oppCompanionAttacksCompanion'  // an opposing companion declares an attack on one of YOUR companions
                                     // ("attacks" = declaration; resolves before damage — R2) (Iron Spikes)
+  // On-play window (arc 4, owner-ratified 2026-07-15). "Play" means FROM HAND,
+  // universally (R1 2026-07-15, generalizing the 2026-07-04 Paranoia ruling):
+  // placements, Animate Magic conversions, and every other entry-into-play route
+  // never emit a play event. Queues ABOVE the played card on the stack, so it
+  // resolves BEFORE the played card enters ("plays" and "enters" are distinct
+  // sequential events — Trigger Stack note 2026-07-12).
+  | 'ownPlaysMagicalConstruct';     // YOU (the listener's controller) play a Magical
+                                    // (Incantation) Construct from hand (Patient Conjurer)
 
 // ─── WHO/WHAT an effect targets ────────────────────────────────────────────────
 // Interactive specs require a board selection step (reuses the pendingTrigger layer).
