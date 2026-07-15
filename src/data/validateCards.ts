@@ -30,7 +30,7 @@ const TRIGGERS = [
   'onOpponentAction', 'activated',
   // Reactive trap windows (trigger-stack arc, owner-ratified 2026-07-12).
   'oppCompanionEnters', 'oppCompanionMovesToFront', 'oppCompanionAttacksCompanion',
-  'ownPlaysMagicalConstruct',
+  'ownPlaysMagicalConstruct', 'ownPhysicalConstructSacrificed',
 ] as const satisfies readonly Trigger[];
 export type _ExhaustiveTriggers = AssertNever<Exclude<Trigger, (typeof TRIGGERS)[number]>>;
 

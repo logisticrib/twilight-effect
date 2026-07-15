@@ -2,7 +2,76 @@
 
 Self-contained context for continuing the card-effect engine work in a fresh session.
 
-## Latest session (2026-07-15, later) — Capability arc 4: on-play triggers (Patient Conjurer) DONE
+## Latest session (2026-07-15, latest) — Capability arc 5 (FINAL): on-sacrifice triggers (Siegeworks) + rewordings — PROGRAM CLOSED
+**Suite: 26 files / 316 tests green; tsc ZERO; validate:decks clean. FLAGGED GAPS 1 → 0 — the
+2026-07-08 engine-capability program is COMPLETE** (tier4 pin now asserts the flag list is EMPTY
+and guards the convention itself). ⚠ **BOTH REPLAY FIXTURES RETIRED — see below; owner must
+re-record.**
+- **Rewordings (owner-ruled 2026-07-15, R1 — anchor caps removed from the game):** Siegeworks →
+  "When one of your Physical Constructs is sacrificed, draw a card." (cap sentence deleted);
+  Grudrik Stonebrace → "GUARDIAN. When this enters, add 2 Anchor counters to each Physical
+  Construct you control." (cap sentence deleted; his existing onEnter anchor+2 effects already
+  implement the surviving text exactly — verified, not rebuilt). Card text found NOWHERE else
+  in-repo (CODE_BUNDLE.md is regenerated; archived workbench data is stale by design).
+- **⚠ FIXTURES t5 + t8 RETIRED BY NAME (the 2026-07-08 protocol: delete, never edit).** Root
+  cause PROVEN by isolation: with old texts restored and ALL new engine code active, both
+  replayed clean (29/29) and the new listener never fired — the divergence is SOLELY the
+  rewording (recorded board entities carry the old text inside the canonical hash; both games
+  placed Grudrik/Siegeworks). The hook itself is byte-neutral. **Replay coverage is EMPTY until
+  the owner re-records from a RESTARTED server** (stamp check via the REC chip).
+- **Engine:** new reactive Trigger `'ownPhysicalConstructSacrificed'`; `fireSacrificeTriggers`
+  (entities.ts) gathers listeners from the controller's board AS OF the event (pre-removal → the
+  dying permanent's own listener fires, R3) and resolves in slot-scan order (mandatory, no
+  choices, NO new holds); `destroyEntity` gained `cause?: 'sacrifice'` — listeners fire ONLY on
+  the sacrifice cause, never on damage deaths. **Audited sacrifice paths, all threaded:**
+  interpreter sacrifice-self op (trap self-sac), anchor op drained to 0 (Dismantle), manifest
+  bounce-replacement; store: sacrificeSelf ability cost, removeAnchor cost at 0, sacrificeEntity
+  (✕ button), Pyre modal cost, moveAnchor drain, resolveTrigger anchor drain, Coercion sacrifice.
+  NON-sacrifice (correctly uncaused): combat/effect damage deaths, Reckless recoil death, flee.
+  Armor-threshold sacrifice is an ITEM sacrifice — items aren't entities/Physical Constructs;
+  filter can't match (brief's "where applicable" = not applicable).
+- **Decay wiring (named debt #2, PARTIALLY landed):** ready-phase decay now FIRES on-sacrifice
+  listeners — endTurn collects decayed constructs and resolves listeners on the readied state
+  BEFORE the turn draw (Ready precedes Draw), gathered from the PRE-ready board. Decay still
+  does NOT route through destroyEntity itself (byte-safety; the full readyPlayer/exit-path
+  unification remains open with the readyPlayer-split design, owner 2026-07-10) — construct
+  onDestroy-style death triggers on decay stay unwired (still no shipped construct carries one).
+  ENGINE READING (flagged): same-ready simultaneous decays HEAR EACH OTHER (event-time board) —
+  two Siegeworks both decaying = each draws for both events. Confirm or rule sequential.
+- **Tests (`onsacrifice_trigger.test.ts`, 8):** decay draw (+turn draw accounting); OWN-decay
+  draw (R3); opponent-caused Dismantle drain; arc-1 Tripwire self-sac mid-stack; negatives
+  (Incantation sac / OPPOSING Physical sac / damage-destruction via the real chokepoint — no
+  shipped card damages constructs, so the cause-gate is pinned at applyDamage directly, as the
+  brief provides); two Siegeworks = two draws; R1 no-cap (Reinforce 4→7 above printed, printed
+  value untouched). **Non-vacuity — 6 mutations, every failure set predicted exactly:** cause
+  gate removed (damage negative only); filter inverted to Incantation (7); opponent-scope at
+  destroyEntity (5 — decay pins correctly survive, they ride the endTurn call); decay wiring
+  disconnected (both decay pins); R3 self-exclusion (own-decay only); anchor clipped at printed
+  (R1 only). Hygiene grep clean.
+- **Grudrik flag audit (mechanism found):** his effects AND the never-implemented cap sentence
+  both date from the INITIAL COMMIT — pre-dating the effectsFlag convention (invented
+  2026-07-08). The prose-completeness gate is structurally blind to partials
+  (validateCards.ts:267 — any card WITH effects returns early), and the 2026-07-08 PARTIAL list
+  was human triage that missed him. **Sweep of the other 99 (sentence-vs-op heuristic, 29 hits
+  eyeballed): ONE new Grudrik-shaped partial — `Master of Foundations`: carries only the static
+  preventAnchorDecay clause; "When this enters play, add 3 Anchor counters to target Physical
+  Construct" has NO op and NO flag. ⚠ OWNER QUESTION — not fixed (brief: report only).** The
+  five known 2026-07-08 partials remain open (Embercast Wand, Ashforged Pendant, Captain's
+  Belt, Engineer's Toolbelt, Runic Convergence Staff); everything else was a false positive
+  (single ops covering multi-sentence prose). **Guard adopted (cheap):** authoring-checklist
+  line added to Conventions below; the sweep script is re-runnable but too noisy to be a hard
+  gate (24 false positives) — offered to the owner as an optional advisory validate:decks
+  section, not built.
+- **Docs (2026-07-15, parent + snapshots word-identical):** Game_Rules_Updated §Constructs
+  gained the R1 no-cap Rules Note + the sacrifice-events/triggers Rules Note (R2 restated
+  legibly in one place + R3). No residual "maximum Anchor" text anywhere in canon (grep-clean).
+  Owner re-uploads: Game_Rules_Updated.md, HANDOFF.md.
+- **Open flags for owner:** (1) ⚠ re-record replay fixtures (coverage empty); (2) Master of
+  Foundations partial (above); (3) simultaneous-decay mutual-hearing reading (above); (4) the
+  owner's standing design note: Crystalline Sentinel's text may be replaced later (recorded
+  arc 3); (5) live two-peer MP pass over arcs 1–5 holds (unchanged list; arc 5 added none).
+
+## Previous session (2026-07-15, later) — Capability arc 4: on-play triggers (Patient Conjurer) DONE
 **Suite: 25 files / 311 tests green (t5 + t8 replay clean, hashes untouched); tsc ZERO;
 validate:decks clean.** LOCAL session. Lightest arc as briefed — a LISTENER on arc-1's stack, no
 new machinery. Authored **Patient Conjurer** ("When you play a Magical Construct, this character
@@ -1136,6 +1205,11 @@ owner-ruling flags in OPEN QUESTIONS.
   OWN Physical Constructs (source→dest).
 
 ## Conventions / lessons
+- **AUTHORING CHECKLIST (2026-07-15, from the Grudrik audit):** when authoring or rewording ANY
+  card's structured effects, verify EVERY sentence of its rules text maps to an op, a declared
+  keyword, or reminder text — the prose-completeness gate returns early for any card that has
+  effects at all (validateCards.ts) and CANNOT see partial implementations. A partial without
+  an effectsFlag is invisible to every automated sweep.
 - **STANDING REQUIREMENT (owner 2026-07-15):** when the interpreter's forced-movement `move` op
   is implemented (arc-1 flag #4), it MUST consult `moveRestrictedBy` — "cannot move between
   lines" covers effect-driven/forced movement too (R3, restriction-aura arc). A matching comment

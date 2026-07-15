@@ -24,13 +24,12 @@ describe('data contract: the shipped decks validate clean', () => {
   // deferred gaps became five. 2026-07-14 (damage-prevention arc): Reflecting Pool
   // authored — five became four. 2026-07-15 (restriction-aura arc): Crystalline
   // Sentinel + Reinforced Gate — four became two. 2026-07-15 (on-play arc):
-  // Patient Conjurer — two became ONE.
-  it('the one deferred gap carries a dated owner-approved flag (not silently forgotten)', () => {
-    const flagged = CATALOG.filter(c => c.effectsFlag).map(c => c.name).sort();
-    expect(flagged).toEqual(['Siegeworks']);
-    for (const c of CATALOG.filter(c => c.effectsFlag)) {
-      expect(c.effectsFlag, `${c.name} flag names the missing system + owner date`).toMatch(/awaiting engine capability: .+\(owner 2026-07-08\)/);
-    }
+  // Patient Conjurer — two became one. 2026-07-15 (on-sacrifice arc): Siegeworks —
+  // the capability program is CLOSED: zero flags. This pin now guards the
+  // convention itself: any future effectsFlag must be a deliberate, owner-dated
+  // deferral that updates this list by name.
+  it('ZERO deferred gaps remain (capability program closed 2026-07-15)', () => {
+    expect(CATALOG.filter(c => c.effectsFlag).map(c => c.name)).toEqual([]);
   });
 });
 

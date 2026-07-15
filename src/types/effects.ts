@@ -45,8 +45,18 @@ export type Trigger =
   // never emit a play event. Queues ABOVE the played card on the stack, so it
   // resolves BEFORE the played card enters ("plays" and "enters" are distinct
   // sequential events — Trigger Stack note 2026-07-12).
-  | 'ownPlaysMagicalConstruct';     // YOU (the listener's controller) play a Magical
+  | 'ownPlaysMagicalConstruct'      // YOU (the listener's controller) play a Magical
                                     // (Incantation) Construct from hand (Patient Conjurer)
+  // On-sacrifice window (arc 5, owner-ratified 2026-07-15). Fires on every event
+  // canon words as SACRIFICE — anchor decay reaching zero, Dismantle, sacrifice
+  // costs, trap self-sacrifice, Coercion — regardless of which player caused it;
+  // NEVER on destruction by damage or non-sacrifice removal (the cause is threaded
+  // through destroyEntity, not inferred from death generally). R3: the sacrificed
+  // permanent's OWN listener fires too — gathered at event time (pre-removal),
+  // resolved after it leaves (2026-07-12 queued-trigger canon).
+  | 'ownPhysicalConstructSacrificed'; // one of YOUR (the listener's controller's)
+                                      // Physical (Trap/Fortification) Constructs is
+                                      // sacrificed (Siegeworks)
 
 // ─── WHO/WHAT an effect targets ────────────────────────────────────────────────
 // Interactive specs require a board selection step (reuses the pendingTrigger layer).

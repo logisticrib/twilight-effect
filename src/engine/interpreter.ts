@@ -350,7 +350,7 @@ export function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceNam
           // Via destroyEntity so its card AND any equipped items reach the Dead Zone
           // (the old inline removal LOST the items) and an Item Transfer window queues.
           if (loc.ent.statuses.includes('manifest')) {
-            const d = destroyEntity(g, id, sink, armorSink); // sacrifice = death (fires triggers)
+            const d = destroyEntity(g, id, sink, armorSink, 'sacrifice'); // sacrifice = death (fires triggers + on-sacrifice listeners)
             g = d.game;
             msgs.push(`${loc.ent.name} is sacrificed (Manifest)`, ...d.msgs);
             continue;
@@ -418,7 +418,7 @@ export function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceNam
         const cur = loc.ent.anchors ?? 0;
         const next = Math.max(0, cur + e.delta);
         if (e.delta < 0 && next <= 0) {
-          const d = destroyEntity(g, targetId, sink, armorSink); // sacrifice = death (fires triggers)
+          const d = destroyEntity(g, targetId, sink, armorSink, 'sacrifice'); // sacrifice = death (fires triggers + on-sacrifice listeners)
           g = d.game;
           msgs.push(`${loc.ent.name} loses its last anchor — sacrificed!`, ...d.msgs);
         }
@@ -512,7 +512,7 @@ export function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceNam
         if (e.target !== 'self' || !sourceId) break;
         const loc = findEntityAnywhere(g, sourceId);
         if (!loc) break; // source already gone (e.g. destroyed while its trigger was queued)
-        const d = destroyEntity(g, sourceId, sink, armorSink); // sacrifice = death (fires triggers)
+        const d = destroyEntity(g, sourceId, sink, armorSink, 'sacrifice'); // sacrifice = death (fires triggers + on-sacrifice listeners)
         g = d.game;
         msgs.push(`${loc.ent.name} is sacrificed`, ...d.msgs);
         break;

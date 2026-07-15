@@ -27,7 +27,7 @@ import { ADJ, FRONT_SLOTS, BACK_SLOTS, isFront, findSlot, type SlotId, type Boar
          ownPhysicalConstructIds,
          eligibleTargets, effectsWouldAffectSomething, actionTargetSpec, twoStepKind,
          permanentEffects, gatherActivated, abilityUsedTag, magicCtx,
-         destroyEntity, applyDamage, applyCombatHit, driveAttack, optionalAttackAbility,
+         destroyEntity, fireSacrificeTriggers, applyDamage, applyCombatHit, driveAttack, optionalAttackAbility,
          attackDamageBonus, resolveActionEffects, armPrompts, armNextArmorChoice,
          applyArmorCounter, applyPreventionOrder, armNextPreventOrder,
          freshActs, uid, computeWillpower, makeNewGame, nextPeek, resolveStartOfTurn,
@@ -1209,7 +1209,7 @@ export const useGameStore = create<GameStoreState>()(
         g = updateEntity(g, targetId, { anchors: (dstLoc.ent.anchors ?? 0) + moved });
         const srcNext = (srcLoc.ent.anchors ?? 0) - moved;
         if (srcNext <= 0) {
-          const d = destroyEntity(g, pa.firstId, deadSink, armorSink); // sacrifice = death (fires triggers)
+          const d = destroyEntity(g, pa.firstId, deadSink, armorSink, 'sacrifice'); // sacrifice = death (fires triggers + on-sacrifice listeners)
           g = d.game;
           msgs.push(`${srcLoc.ent.name} loses its last anchor — sacrificed!`, ...d.msgs);
         }
@@ -1404,7 +1404,7 @@ export const useGameStore = create<GameStoreState>()(
         // Self-sacrifice is an EXIT like any other — destroyEntity moves the card AND
         // its items to the Dead Zone, returns a sworn card, queues the Item Transfer
         // window, and (ruled 2026-07-08: sacrifice IS a death) fires death triggers.
-        const d = destroyEntity(g, entityId, deadSink, armorSink);
+        const d = destroyEntity(g, entityId, deadSink, armorSink, 'sacrifice');
         g = d.game; costMsgs.push(...d.msgs);
         sacrificedSelf = true;
       }
@@ -1418,7 +1418,7 @@ export const useGameStore = create<GameStoreState>()(
       // effect op and the decay rule ("sacrifice when last removed"). Engine default;
       // no shipped card pays this cost yet (flagged to the owner).
       if (left <= 0) {
-        const d = destroyEntity(g, entityId, deadSink, armorSink); // sacrifice = death
+        const d = destroyEntity(g, entityId, deadSink, armorSink, 'sacrifice'); // sacrifice = death
         g = d.game; costMsgs.push(...d.msgs);
       } else {
         g = updateEntity(g, entityId, { anchors: left });
@@ -1478,7 +1478,7 @@ export const useGameStore = create<GameStoreState>()(
     const name = loc.ent.name;
     const deadSink: PendingDeadPick[] = [];
     const armorSink: ArmorChoiceData[] = [];
-    const d = destroyEntity(s.game, entityId, deadSink, armorSink); // sacrifice = death (ruled 2026-07-08)
+    const d = destroyEntity(s.game, entityId, deadSink, armorSink, 'sacrifice'); // sacrifice = death (ruled 2026-07-08)
     const g = armPrompts(d.game, deadSink, armorSink);
     const id = ++toastId;
     setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 3000);
@@ -1701,7 +1701,7 @@ export const useGameStore = create<GameStoreState>()(
     const armorSink: ArmorChoiceData[] = [];
     // Pay the clause cost now (choosing a mode commits the "you may").
     if (pm.cost === 'sacrificeSelf') {
-      const d = destroyEntity(g, pm.sourceId, deadSink, armorSink); // sacrifice = death (fires triggers)
+      const d = destroyEntity(g, pm.sourceId, deadSink, armorSink, 'sacrifice'); // sacrifice = death (fires triggers + on-sacrifice listeners)
       g = d.game;
       msgs.push(`${pm.sourceName} is sacrificed`, ...d.msgs);
     }
@@ -2215,7 +2215,7 @@ export const useGameStore = create<GameStoreState>()(
     } else {
       const next = Math.max(0, cur - pt.n);
       if (next <= 0) {
-        const d = destroyEntity(game, targetId, deadSink, armorSink); // sacrifice = death (fires triggers)
+        const d = destroyEntity(game, targetId, deadSink, armorSink, 'sacrifice'); // sacrifice = death (fires triggers + on-sacrifice listeners)
         game = d.game;
         msg = [`${pt.sourceName} dismantles ${loc.ent.name} — no anchors left, sacrificed!`, ...d.msgs].join(' | ');
       } else {
@@ -2505,7 +2505,7 @@ export const useGameStore = create<GameStoreState>()(
     const deadSink: PendingDeadPick[] = [];
     const armorSink: ArmorChoiceData[] = [];
     // Sacrifice IS a death (ruled 2026-07-08) — destroyEntity fires the triggers.
-    const d = destroyEntity({ ...s.game, pendingCoercion: null }, entityId, deadSink, armorSink);
+    const d = destroyEntity({ ...s.game, pendingCoercion: null }, entityId, deadSink, armorSink, 'sacrifice');
     const g = d.game;
     const msgs = [`${loc.ent.name} is sacrificed (Coercion)`, ...d.msgs];
     const id = ++toastId;
@@ -2544,6 +2544,7 @@ export const useGameStore = create<GameStoreState>()(
     // Cards leaving the board at ready phase used to vanish silently — surface each one.
     const readyNotices: string[] = [];
     const readyTransfers: PendingItemTransfer[] = [];
+    const decayedSacs: BoardEntity[] = []; // decay = sacrifice (canon) -> on-sacrifice listeners (arc 5)
     const whose = nextPlayer === s.localPlayer ? 'Your' : "Opponent's";
 
     const readyPlayer = (ps: PlayerState): PlayerState => {
@@ -2578,6 +2579,7 @@ export const useGameStore = create<GameStoreState>()(
           const newAnchors = skipDecay ? (ent.anchors ?? 0) : (ent.anchors ?? 0) - 1;
           if (newAnchors <= 0) { // last anchor decayed — sacrificed
             bury(ent);
+            decayedSacs.push(ent);
             readyNotices.push(`${whose} ${ent.name} crumbles — its last Anchor decayed.`);
             continue;
           }
@@ -2611,14 +2613,31 @@ export const useGameStore = create<GameStoreState>()(
     };
 
     const readied = readyPlayer(g[nextPlayer]);
+    // Ready-phase decay is a SACRIFICE (canon: "sacrifice when last removed") — fire
+    // on-sacrifice listeners (arc 5, 2026-07-15) on the readied state, BEFORE the
+    // turn draw (Ready precedes Draw). Listeners gather from the PRE-ready board:
+    // the decayed construct's own listener fires (R3), and same-ready sacrifices
+    // hear each other (simultaneous decay — engine reading, flagged to the owner).
+    // NOTE: listener effects needing prompt sinks (dead-picks/armor) would need
+    // sinks threaded here; the shipped listener (draw) needs none.
+    let readiedGame: GameState = { ...g, [nextPlayer]: readied };
+    if (decayedSacs.length) {
+      const preBoard = g[nextPlayer].board;
+      for (const dy of decayedSacs) {
+        const st = fireSacrificeTriggers(readiedGame, dy, nextPlayer, preBoard);
+        readiedGame = st.game;
+        readyNotices.push(...st.msgs);
+      }
+    }
+    const readiedPost = readiedGame[nextPlayer];
     // Draw a card for the next player (with deck-out check)
-    let drawnDeck = readied.deck;
-    let drawnHand = readied.hand;
+    let drawnDeck = readiedPost.deck;
+    let drawnHand = readiedPost.hand;
     let drawToast = '';
     let deckOutLoser = false;
     if (drawnDeck.length > 0) {
       const drawn = drawnDeck[0];
-      drawnHand = [...readied.hand, drawn];
+      drawnHand = [...readiedPost.hand, drawn];
       drawnDeck = drawnDeck.slice(1);
       // Only reveal the drawn card to its owner. endTurn runs on the player ENDING their
       // turn, who draws for the NEXT player — in multiplayer that's the opponent, so naming
@@ -2632,14 +2651,14 @@ export const useGameStore = create<GameStoreState>()(
       drawToast = `💀 ${nextPlayer === s.localPlayer ? 'You have' : 'Opponent has'} no cards to draw — deck out!`;
       deckOutLoser = true;
     }
-    const nextPlayerState = { ...readied, deck: drawnDeck, hand: drawnHand };
+    const nextPlayerState = { ...readiedPost, deck: drawnDeck, hand: drawnHand };
 
     const winnerOnDeckOut: 'p1' | 'p2' | null = deckOutLoser
       ? (nextPlayer === 'p1' ? 'p2' : 'p1')
       : null;
 
     let newGame: GameState = recomputeStatics({
-      ...g,
+      ...readiedGame,
       turn: nextTurn,
       activePlayer: nextPlayer,
       currentPhase: 'draw' as Phase,   // Start at Draw, player advances → CZ → Action

@@ -1030,7 +1030,7 @@
       "keywords": [
         "Guardian"
       ],
-      "text": "GUARDIAN. When this enters, add 2 Anchor counters to each Physical Construct you control. Your Fortification constructs have +1 maximum Anchor counters.",
+      "text": "GUARDIAN. When this enters, add 2 Anchor counters to each Physical Construct you control.",
       "flavor": "He laid the first stone and the last. Between them, everything stood.",
       "createdAt": "2026-05-16T19:02:21.324447Z",
       "updatedAt": "2026-05-16T19:02:21.324449Z",
@@ -1331,11 +1331,13 @@
       "actionPM": "",
       "itemKind": "",
       "keywords": [],
-      "text": "Your Physical Constructs have +1 maximum Anchor counters. When one of your Physical Constructs is sacrificed, draw a card.",
+      "text": "When one of your Physical Constructs is sacrificed, draw a card.",
       "flavor": "",
       "createdAt": "2026-05-16T19:02:21.324587Z",
       "updatedAt": "2026-05-16T19:02:21.324588Z",
-      "effectsFlag": "awaiting engine capability: anchor-cap system + on-sacrifice trigger (owner 2026-07-08)"
+      "effects": [
+        { "trigger": "ownPhysicalConstructSacrificed", "effects": [{ "op": "draw", "count": 1 }] }
+      ]
     },
     {
       "id": "598d3180",

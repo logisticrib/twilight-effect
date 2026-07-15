@@ -6,13 +6,15 @@
 // (combat.ts) is part of the same mutually-recursive group.
 import type { BoardEntity, Card } from '../types/card';
 import { CATALOG } from '../data/catalog';
-import { isFront, type SlotId } from './geometry';
+import { isFront, FRONT_SLOTS, BACK_SLOTS, type Board, type SlotId } from './geometry';
 import type { GameState, PendingItemTransfer, PendingDeadPick, ArmorChoiceData } from './state';
 import { isCharacter, canHoldItem, isPhysicalConstruct } from './stats';
 // Function-level cycle with combat.ts (destroyEntity fires removal triggers; the
-// trigger machinery damages/destroys entities). Safe: hoisted functions, called
-// only at runtime — no module-eval-time cross-references.
+// trigger machinery damages/destroys entities) and interpreter.ts (on-sacrifice
+// listeners resolve card effects). Safe: hoisted functions, called only at
+// runtime — no module-eval-time cross-references.
 import { hasRemovalTrigger, resolveRemovalTriggers } from './combat';
+import { effectsOfCard, resolveActionEffects, conditionMet } from './interpreter';
 
 export function findEntityAnywhere(game: GameState, entityId: string): { player: 'p1' | 'p2'; slot: SlotId; ent: BoardEntity } | null {
   for (const player of ['p1', 'p2'] as const) {
@@ -93,6 +95,39 @@ export function itemProfileOf(card: Card): { isWeapon: boolean; isHeavy: boolean
   return { isWeapon: !!isWeapon, isHeavy: !!card.text?.toLowerCase().includes('heavy') };
 }
 
+/**
+ * Fire "when one of your Physical Constructs is sacrificed" listeners (arc 5,
+ * owner-ratified 2026-07-15) for one sacrifice event. `eventBoard` is the
+ * controller's board AS OF the event (pre-removal), so the sacrificed permanent's
+ * OWN listener fires too (R3) — resolution happens after it left play, which the
+ * queued-trigger canon (2026-07-12) already permits. Listeners resolve in
+ * deterministic slot-scan order; mandatory, no choices (no holds). Only events
+ * canon words as SACRIFICE reach this (destroyEntity threads the cause) — a
+ * Physical Construct destroyed by damage or a non-sacrifice removal never does.
+ */
+export function fireSacrificeTriggers(
+  game: GameState, dying: Pick<BoardEntity, 'id' | 'name' | 'kind' | 'subtype'>,
+  controller: 'p1' | 'p2', eventBoard: Board,
+  sink?: PendingDeadPick[], armorSink?: ArmorChoiceData[],
+): { game: GameState; msgs: string[] } {
+  if (dying.kind !== 'construct' || !isPhysicalConstruct(dying as BoardEntity)) return { game, msgs: [] };
+  let g = game;
+  const msgs: string[] = [];
+  for (const slot of [...FRONT_SLOTS, ...BACK_SLOTS]) {
+    const listener = eventBoard[slot];
+    if (!listener) continue;
+    for (const clause of effectsOfCard(listener.name)) {
+      if (clause.trigger !== 'ownPhysicalConstructSacrificed') continue;
+      if (clause.if && !conditionMet(g, controller, clause.if)) continue;
+      const r = resolveActionEffects(g, controller, listener.name, clause.effects,
+        undefined, listener.id, { subjectId: dying.id }, sink, armorSink);
+      g = r.game;
+      msgs.push(`${listener.name} triggers${r.msgs.length ? `: ${r.msgs.join(' | ')}` : ''}`);
+    }
+  }
+  return { game: g, msgs };
+}
+
 /** Remove a destroyed/sacrificed entity from the board AND move its card (plus its
  *  equipped items') to its owner's Dead Zone; a tucked Oathsworn card returns to its
  *  owner's hand. Every destruction path must use this — bare `removeEntity` loses the
@@ -100,13 +135,18 @@ export function itemProfileOf(card: Card): { isWeapon: boolean; isHeavy: boolean
  *  A departing character with items also QUEUES an Item Transfer window (rules §Items,
  *  ruled 2026-07-08: all exits) — queued here, ARMED later at a resolution boundary
  *  (`armNextItemTransfer` via armPrompts / prompt resolvers), so mid-combat kills
- *  defer the window until the attack completes (owner ruling 2026-07-08). */
-export function destroyEntity(game: GameState, entityId: string, sink?: PendingDeadPick[], armorSink?: ArmorChoiceData[]): { game: GameState; msgs: string[] } {
+ *  defer the window until the attack completes (owner ruling 2026-07-08).
+ *  `cause: 'sacrifice'` (arc 5, 2026-07-15) marks events canon words as sacrifice —
+ *  it additionally fires on-sacrifice listeners; damage deaths pass no cause. */
+export function destroyEntity(game: GameState, entityId: string, sink?: PendingDeadPick[], armorSink?: ArmorChoiceData[], cause?: 'sacrifice'): { game: GameState; msgs: string[] } {
   const loc = findEntityAnywhere(game, entityId);
   if (!loc) return { game, msgs: [] };
   const dead = deadCardsOf(loc.ent);
   const sworn = loc.ent.sworn;
   const transfer = itemTransferOf(loc.ent, loc.player);
+  // On-sacrifice listeners gather from the board AS OF the event (pre-removal) —
+  // the dying permanent's own listener is included (R3, owner 2026-07-15).
+  const eventBoard = cause === 'sacrifice' ? game[loc.player].board : null;
   const removed = removeEntity(game, entityId);
   let g: GameState = { ...removed,
     pendingItemTransferQueue: transfer ? [...removed.pendingItemTransferQueue, transfer] : removed.pendingItemTransferQueue,
@@ -127,6 +167,14 @@ export function destroyEntity(game: GameState, entityId: string, sink?: PendingD
     const rt = resolveRemovalTriggers(g, loc.ent, loc.player, sink, armorSink);
     g = rt.game;
     msgs.push(...rt.msgs);
+  }
+  // On-sacrifice listeners (arc 5, 2026-07-15): only when the caller threaded the
+  // SACRIFICE cause — a damage death never fires them. Engine default: the dying
+  // card's own removal triggers resolve first, then the listeners in slot order.
+  if (eventBoard) {
+    const st = fireSacrificeTriggers(g, loc.ent, loc.player, eventBoard, sink, armorSink);
+    g = st.game;
+    msgs.push(...st.msgs);
   }
   return { game: g, msgs };
 }
