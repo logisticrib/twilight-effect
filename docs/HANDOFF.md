@@ -31,13 +31,12 @@ the rotated card is the record).
   cost never paid (5); opponent-ready readies items (1); payability reads the BEARER (2 — and
   the Kit-Master pin surviving via the deep payability check was part of the prediction);
   statics suppressed while exhausted (1).
-- **⚠ CANON/DATA DISCREPANCY SURFACED — Anchor Stone's "+1 HP":** BOTH 2026-07-15 briefs quote
-  canon as "Equipped character has +1 HP. As a Minor Action, …" but the SHIPPED card text and
-  effects have NO +1 HP sentence/clause (engine machinery for item +HP statics exists —
-  selfItemStat — the card just doesn't use it). Design-chat canon and repo data have diverged.
-  OWNER: should Anchor Stone carry the +1 HP (text + equipped buff clause — one small change),
-  or is the design-chat text stale? The statics-persist pin used a synthetic trinket so the
-  RULE is pinned either way.
+- **~~⚠ CANON/DATA DISCREPANCY — Anchor Stone's "+1 HP"~~ RESOLVED (owner, 2026-07-15
+  micro-session):** the "+1 HP" sentence was INTENTIONALLY REMOVED by the owner — +HP does not
+  fit the game's item nomenclature. The SHIPPED card (activation-only) is CORRECT; the
+  design-chat briefs quoted a stale draft. Stale drafts carrying the +1 HP clause exist in old
+  data snapshots — **do not restore it.** (The statics-persist rule stays pinned via the
+  synthetic trinket — unaffected.)
 - **⚠ DESIGN-GUIDELINE QUESTION (report-only, per the brief):** Glassweaver Adept's printed
   "Once per turn" is exactly the hard-to-track pattern this ruling disfavors. Want a one-line
   Card_Design_Parameters guideline steering future generation toward exhaust-style costs over
@@ -1361,6 +1360,14 @@ owner-ruling flags in OPEN QUESTIONS.
   OWN Physical Constructs (source→dest).
 
 ## Conventions / lessons
+- **CARD-HISTORY NOTE (owner, 2026-07-15) — Anchor Stone has NO "+1 HP":** the former
+  "Equipped character has +1 HP." sentence was intentionally removed (+HP doesn't fit item
+  nomenclature). The shipped activation-only card is correct. Stale drafts with the +1 HP
+  clause survive in old data snapshots and in older design-chat quotes — do not restore it,
+  and diff any brief-quoted card text against the repo data before pinning to it.
+- **DESIGN GUIDELINE (owner-ratified 2026-07-15, in Card_Design_Parameters §13):** prefer
+  exhaust-style costs over "once per turn" wording for future generation/rework — exhaustion
+  is self-tracking; printed "once per turn" cards keep their text.
 - **AUTHORING CHECKLIST (2026-07-15, from the Grudrik audit):** when authoring or rewording ANY
   card's structured effects, verify EVERY sentence of its rules text maps to an op, a declared
   keyword, or reminder text — the prose-completeness gate returns early for any card that has

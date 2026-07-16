@@ -383,12 +383,15 @@ Three distinct trigger conditions:
 
 ### Possible Activated Ability Costs
 - Exhausting the character
+- Exhausting the item itself (item-hosted abilities — "exhaust this trinket")
 - Sacrificing permanents
 - Paying HP
 - Discarding cards
 - Milling cards
 - Returning cards to hand
 - **Compound costs allowed but less common:** "Exhaust this character and sacrifice a companion: Draw 3 cards"
+
+**Prefer exhaust-style costs over "once per turn" (owner-ratified 2026-07-15).** Activated abilities should cost exhaustion (of the character, or of the item itself for item-hosted abilities) rather than be worded "once per turn." Exhaustion is self-tracking in physical play — the rotated card is the record — while once-per-turn limits must be remembered. Existing printed "once per turn" cards keep their text; this guides future generation and rework.
 
 ---
 
