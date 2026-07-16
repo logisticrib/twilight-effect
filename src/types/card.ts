@@ -48,6 +48,12 @@ export interface EquippedItem {
   heavy?: boolean;    // gear: occupies both gear slots
   armor?: number;     // armor X value
   counters?: number;  // current armor counter tally
+  /** Item exhaustion (owner-ratified 2026-07-15 — "exhaust this trinket" costs).
+   *  OPTIONAL and absent/undefined when not exhausted (fixture-hash discipline:
+   *  games that never exhaust an item hash identically to pre-mechanic games).
+   *  Belongs to the ITEM: a Kit-Master move carries it; the controller's Ready
+   *  Phase clears it. Granted statics/keywords are unaffected by it. */
+  exhausted?: boolean;
   text: string;
 }
 

@@ -59,12 +59,15 @@ describe('Anchor Stone — "As a Minor Action, exhaust this trinket" (activation
     expect(gs.getState().pendingActionTarget, 'fresh bearer may take Minor Actions').toBeTruthy();
   });
 
-  it('once per turn enforced; refused with a toast when no Physical Construct exists (universal pre-cost refusal)', () => {
+  it('single use per turn enforced (RE-BASED 2026-07-15: via ITEM EXHAUSTION, not a oncePerTurn marker); refused with a toast when no Physical Construct exists', () => {
+    // Owner ruling 2026-07-15 (item-exhaustion follow-up): "exhaust this trinket" is
+    // a REAL item cost — the second-use refusal names the exhausted item. Full
+    // exhaustion pins (Kit-Master carry, ready-phase refresh) in item_exhaustion.test.ts.
     seed({ f1: bearer(), f2: mkConstruct('bw', 'Reinforced Gate', 2, { subtype: 'Fortification' }) });
     gs.getState().activateAbility('bear', 0);
     gs.getState().resolveActionTarget('bw');
     gs.getState().activateAbility('bear', 0);
-    expect(gs.getState().toasts.at(-1)?.msg, 'second use refused').toContain('already used this turn');
+    expect(gs.getState().toasts.at(-1)?.msg, 'second use refused').toContain('Anchor Stone is exhausted');
 
     seed({ f1: bearer() }); // no construct anywhere
     gs.getState().activateAbility('bear', 0);

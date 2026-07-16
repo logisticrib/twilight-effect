@@ -83,6 +83,8 @@ Each item is always considered attached to a single character. There is no "free
 
 **Rules Note (ruled 2026-07-08):** Item Transfer on Character Exit applies to ALL ways a character leaves the encounter — death/destruction included (as well as fleeing, bounce effects, sacrifice, and any other exit). This supersedes any earlier reading that a destroyed character's items go straight to the Dead Zone with no transfer window.
 
+**Rules Note (2026-07-15) — Item exhaustion.** Items can be exhausted when an effect uses exhausting them as a cost. An exhausted item readies at the start of its controller's turn, with that player's characters. Exhaustion belongs to the item itself: moving an exhausted item to another character does not ready it. An item's granted static bonuses and keywords are unaffected by its exhaustion unless stated otherwise.
+
 **CONSTRUCTS**
 
 Unlike items, constructs are not attached to characters—they occupy COMMAND ZONE slots and degrade over time.

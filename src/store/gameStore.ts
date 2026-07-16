@@ -1343,6 +1343,13 @@ export const useGameStore = create<GameStoreState>()(
     // budget, exhausts the activator). Constructs are not bound by character action
     // economy — their abilities cost only what the card states.
     const actionCost: 'minor' | 'major' = ability.actionCost ?? 'major';
+    // An exhausted hosting item is checked FIRST (2026-07-15): it is the most
+    // specific refusal ("Anchor Stone is exhausted" beats "Minor action already
+    // used" when both hold), and the check is side-effect-free.
+    if (ability.cost?.kind === 'exhaustItem' && ability.itemId) {
+      const host = [loc.ent.loadout?.weapon, ...(loc.ent.loadout?.gear ?? [])].find(it => it?.id === ability.itemId);
+      if (host?.exhausted) return refuse(`${ability.sourceName} is exhausted.`);
+    }
     if (isCharacter(loc.ent)) {
       const isExhausted = loc.ent.tapped === 'major' || loc.ent.exhausted;
       const reason = isSealed(s.game, entityId) ? 'Activation already finished'
@@ -1363,11 +1370,22 @@ export const useGameStore = create<GameStoreState>()(
     // and 'discard' were REMOVED from the Cost schema per owner ruling 2026-07-08 —
     // re-add together with engine support — so any occurrence is legacy/hand-edited
     // data reaching runtime past the mint gate.)
-    if (cost && !['exhaustSelf', 'sacrificeSelf', 'payHP', 'removeAnchor'].includes(cost.kind)) {
+    if (cost && !['exhaustSelf', 'exhaustItem', 'sacrificeSelf', 'payHP', 'removeAnchor'].includes(cost.kind)) {
       return refuse(`Can't activate ${ability.sourceName}: its cost kind ("${(cost as { kind: string }).kind}") is not supported by the engine.`);
     }
     if (cost?.kind === 'exhaustSelf' && (loc.ent.exhausted || loc.ent.tapped === 'major')) {
       return refuse(`Can't activate ${ability.sourceName}: already exhausted — the exhaust cost can't be paid.`);
+    }
+    // exhaustItem (2026-07-15): the cost exhausts the HOSTING item. Item-hosted
+    // clauses only (misauthored data refuses loudly); an already-exhausted item
+    // can't pay again — and exhaustion travels with the item, so a Kit-Master
+    // move never grants a second activation.
+    const hostItem = ability.itemId
+      ? [loc.ent.loadout?.weapon, ...(loc.ent.loadout?.gear ?? [])].find(it => it?.id === ability.itemId)
+      : undefined;
+    if (cost?.kind === 'exhaustItem') {
+      if (!ability.itemId || !hostItem) return refuse(`Can't activate ${ability.sourceName}: an exhaust-item cost requires the ability to live on an equipped item.`);
+      if (hostItem.exhausted) return refuse(`${ability.sourceName} is exhausted.`);
     }
     if (cost?.kind === 'payHP' && loc.ent.hp <= cost.amount) {
       // Never a lethal payment — same rule as Mara's optional on-attack cost.
@@ -1416,6 +1434,12 @@ export const useGameStore = create<GameStoreState>()(
       }
     } else if (cost?.kind === 'exhaustSelf') {
       g = updateEntity(g, entityId, { exhausted: true, tapped: 'major', acts: { ...loc.ent.acts, major: true } });
+    } else if (cost?.kind === 'exhaustItem') {
+      const lo = loc.ent.loadout!;
+      g = updateEntity(g, entityId, { loadout: {
+        weapon: lo.weapon && lo.weapon.id === ability.itemId ? { ...lo.weapon, exhausted: true } : lo.weapon,
+        gear: lo.gear.map(it => it && it.id === ability.itemId ? { ...it, exhausted: true } : it),
+      } });
     } else if (cost?.kind === 'payHP') {
       g = updateEntity(g, entityId, { hp: Math.max(0, loc.ent.hp - cost.amount) });
     } else if (cost?.kind === 'removeAnchor') {
@@ -2638,10 +2662,24 @@ export const useGameStore = create<GameStoreState>()(
         // (PoisonModal → resolvePoison) decides whether it cleanses+readies or stays
         // exhausted, so its tap/exhaust state is left for that check to resolve.
         const poisoned = (ent.poison ?? 0) > 0;
+        // Items ready alongside their controller's characters (Rules Note 2026-07-15).
+        // Hash discipline: only items actually exhausted are touched — the exhausted
+        // key is REMOVED (never written false), so exhaustion-free games keep their
+        // exact loadout shape. (Poison holds the CHARACTER's readying, not the item's.)
+        const lo = ent.loadout;
+        const readyItem = (it: typeof lo extends undefined ? never : NonNullable<typeof lo>['weapon']) => {
+          if (!it?.exhausted) return it;
+          const { exhausted: _spent, ...rest } = it;
+          return rest;
+        };
+        const readiedLoadout = lo && [lo.weapon, ...lo.gear].some(it => it?.exhausted)
+          ? { weapon: readyItem(lo.weapon), gear: lo.gear.map(readyItem) }
+          : lo;
         newBoard[slot as SlotId] = {
           ...ent, fresh: false, acts: freshActs(),
           tapped: poisoned ? ent.tapped : 'none' as TapState,
           exhausted: poisoned ? ent.exhausted : false,
+          ...(readiedLoadout !== lo ? { loadout: readiedLoadout } : {}),
           statuses: ent.statuses.filter(st => st !== HIT_RUN_STATUS && !st.startsWith('ability-used:')),
         };
       }

@@ -60,7 +60,7 @@ export type _ExhaustiveModifiers = AssertNever<Exclude<Modifier, (typeof MODIFIE
 
 // 'sacrifice'/'discard' removed from the schema 2026-07-08 (owner ruling — no engine
 // payment path existed; re-add with engine support). They now fail as unknown kinds.
-const COST_KINDS = ['exhaustSelf', 'sacrificeSelf', 'payHP', 'removeAnchor'] as const satisfies readonly Cost['kind'][];
+const COST_KINDS = ['exhaustSelf', 'exhaustItem', 'sacrificeSelf', 'payHP', 'removeAnchor'] as const satisfies readonly Cost['kind'][];
 export type _ExhaustiveCosts = AssertNever<Exclude<Cost['kind'], (typeof COST_KINDS)[number]>>;
 
 const CONDITION_KINDS = [
@@ -283,11 +283,15 @@ function proseCompletenessProblems(card: Card, p: (msg: string) => void): void {
   }
 }
 
-function validateClause(clause: CardEffect, idx: number, p: (msg: string) => void, keywords: Readonly<Record<string, unknown>>): void {
+function validateClause(clause: CardEffect, idx: number, p: (msg: string) => void, keywords: Readonly<Record<string, unknown>>, cardType?: string): void {
   const path = `effects[${idx}]`;
   if (!has(TRIGGERS, clause.trigger)) p(`${path}: unknown trigger "${String(clause.trigger)}"`);
   if (clause.trigger === 'activated' && !clause.cost && !clause.oncePerTurn) {
     p(`${path}: activated ability needs a cost or oncePerTurn (§11 guard)`);
+  }
+  // exhaustItem (2026-07-15): the cost exhausts the hosting ITEM — Item cards only.
+  if (clause.cost?.kind === 'exhaustItem' && cardType !== 'Item') {
+    p(`${path}: an exhaustItem cost is only valid on an Item card`);
   }
   // actionCost (2026-07-15): character action economy of an activated clause.
   if (clause.actionCost !== undefined) {
@@ -353,7 +357,7 @@ export function validateCards(
       if (!(keywordBase(kw) in keywords)) p(`unknown keyword "${kw}"`);
     }
     proseCompletenessProblems(card, p);
-    (card.effects ?? []).forEach((clause, i) => validateClause(clause, i, p, keywords));
+    (card.effects ?? []).forEach((clause, i) => validateClause(clause, i, p, keywords, card.type));
   }
   return problems;
 }

@@ -183,8 +183,15 @@ function ItemSlot({ item, slotName, owner }: { item: EquippedItem | null; slotNa
             A{item.armor}{item.counters ? `(${item.counters})` : ''}
           </span>
         )}
+        {item.exhausted && (
+          <span style={{ color: TBL.ink4, marginLeft: 6, textTransform: 'uppercase', letterSpacing: '0.1em' }}>exhausted</span>
+        )}
       </span>
       {card ? (
+        // An exhausted item rotates like an exhausted character — self-tracking, the
+        // rotated card IS the record (owner rationale, 2026-07-15).
+        <div style={item.exhausted ? { transform: 'rotate(90deg)', opacity: 0.55, transition: 'transform 160ms' } : undefined}
+          title={item.exhausted ? `${item.name} is exhausted — readies at the start of your turn` : undefined}>
         <CardFace
           data={card}
           scale={ITEM_SCALE}
@@ -193,6 +200,7 @@ function ItemSlot({ item, slotName, owner }: { item: EquippedItem | null; slotNa
           onMouseLeave={() => setHovered(null)}
           onWheel={handlePreviewWheel}
         />
+        </div>
       ) : (
         <div style={{
           width: w, height: h, borderRadius: 8, flexShrink: 0,
@@ -200,6 +208,7 @@ function ItemSlot({ item, slotName, owner }: { item: EquippedItem | null; slotNa
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           color: TBL.ink2, fontFamily: "'Newsreader', serif", fontSize: 10,
           textAlign: 'center', padding: 6,
+          ...(item.exhausted ? { transform: 'rotate(90deg)', opacity: 0.55 } : {}),
         }}>{item.name}</div>
       )}
     </div>
@@ -344,6 +353,7 @@ export function LoadoutPanel() {
     : null;
   const costLabel = (c?: { kind: string; amount?: number; count?: number }) =>
     !c ? '' : c.kind === 'sacrificeSelf' ? 'Sacrifice' : c.kind === 'exhaustSelf' ? 'Exhaust'
+        : c.kind === 'exhaustItem' ? 'Exhaust item'
         : c.kind === 'payHP' ? `Pay ${c.amount} HP` : c.kind === 'removeAnchor' ? `−${c.count} anchor` : '';
   const hasPending = pending?.charId === ent.id;
   const pendingMsg = hasPending
@@ -447,11 +457,17 @@ export function LoadoutPanel() {
                       // Action-economy hint (2026-07-15): a Minor-action activation
                       // reads differently from the default Major (which exhausts).
                       const econ = ab.actionCost === 'minor' ? 'Minor' : 'Major';
-                      const blocked = usedUp || sealed;
+                      // Item exhaustion (2026-07-15): an exhaust-item cost with the
+                      // hosting item spent is visibly unavailable, with the reason.
+                      const hostSpent = ab.cost?.kind === 'exhaustItem' && !!ab.itemId
+                        && [loadout.weapon, ...loadout.gear].some(it => it?.id === ab.itemId && it?.exhausted);
+                      const blocked = usedUp || sealed || hostSpent;
                       return (
                         <ActBtn key={i} icon="✦" label={cl ? `${ab.label} · ${cl}` : ab.label}
                           state={blocked ? 'used' : 'available'}
-                          title={sealed ? 'Activation finished' : usedUp ? 'Already used this turn' : `Activate: ${ab.sourceName} — ${econ} Action${cl ? ` (${cl})` : ''}`}
+                          title={sealed ? 'Activation finished' : usedUp ? 'Already used this turn'
+                            : hostSpent ? `${ab.sourceName} is exhausted`
+                            : `Activate: ${ab.sourceName} — ${econ} Action${cl ? ` (${cl})` : ''}`}
                           onClick={() => activateAbility(ent.id, i)}
                         />
                       );

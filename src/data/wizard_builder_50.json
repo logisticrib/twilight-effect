@@ -1471,7 +1471,7 @@
       "effects": [
         {
           "trigger": "activated",
-          "oncePerTurn": true,
+          "cost": { "kind": "exhaustItem" },
           "actionCost": "minor",
           "effects": [
             {

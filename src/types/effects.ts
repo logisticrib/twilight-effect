@@ -99,6 +99,11 @@ export type Amount = number | { die: number } | { halfDie: number } | { halfDieU
 // re-add together with engine support when a card needs them.
 export type Cost =
   | { kind: 'exhaustSelf' }
+  // Exhaust the ITEM hosting this activated clause (owner-ratified 2026-07-15 —
+  // Anchor Stone: "exhaust this trinket"). Item exhaustion is a real mechanic:
+  // it travels with the item (a Kit-Master move does not refresh it) and readies
+  // at the start of the controller's turn. Item-hosted clauses only.
+  | { kind: 'exhaustItem' }
   | { kind: 'sacrificeSelf' }
   | { kind: 'payHP'; amount: number }
   | { kind: 'removeAnchor'; count: number };

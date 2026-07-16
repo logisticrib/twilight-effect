@@ -2,7 +2,51 @@
 
 Self-contained context for continuing the card-effect engine work in a fresh session.
 
-## Latest session (2026-07-15, bugfix pair) — Anchor Stone activation economy + Animate entry gating FIXED
+## Latest session (2026-07-15, follow-up) — ITEM EXHAUSTION shipped (Anchor Stone cost; closes ef4f0be Q3)
+**Suite: 30 files / 338 tests green; tsc ZERO; validate:decks clean; no fixtures committed (none
+to diverge — folder still empty pending owner re-recording).** Owner ruling: "exhaust this
+trinket" exhausts THE ITEM — item exhaustion is now a real mechanic (self-tracking rationale:
+the rotated card is the record).
+- **Engine:** `EquippedItem.exhausted?: boolean` — OPTIONAL, key REMOVED on ready, never written
+  false (hash discipline: exhaustion-free games serialize identically). New Cost kind
+  **`exhaustItem`** (schema + COST_KINDS + Item-cards-only validator check): payability refuses
+  on an exhausted host — checked FIRST among gates (most specific reason: "Anchor Stone is
+  exhausted" beats "Minor action already used" when both hold; a DUPLICATE payability check
+  deeper in the cost block is deliberately load-bearing for the moved-item case — mutation M3
+  proved it). Payment stamps the hosting item. **Ready Phase readies the active player's items
+  alongside characters** (readyPlayer; only touched when something is exhausted). Kit-Master
+  moves carry the item OBJECT wholesale → exhaustion travels (pinned).
+- **Anchor Stone data:** `oncePerTurn` REPLACED by `cost: {kind:'exhaustItem'}` (the per-bearer
+  marker was WRONG — a Kit-Master move used to grant a second activation). `oncePerTurn` stays
+  in the schema for cards whose TEXT says "once per turn" (Glassweaver Adept — NOT migrated,
+  printed text is its cost). One prior pin RE-BASED dated (activation_economy: refusal message).
+- **UI:** exhausted item chip rotates 90° + dims with an "exhausted" label and a readies-next-
+  turn tooltip; the activation button disables with "Anchor Stone is exhausted". Live-verified
+  end-to-end (fresh server — the HMR second-store gotcha bit again mid-session; restart first).
+- **Tests (`item_exhaustion.test.ts`, 5):** exhausts the ITEM not the bearer + refusal names the
+  item; Kit-Master carry → new bearer still refused; readies at the CONTROLLER's turn start only
+  (opponent's ready does nothing) + usable again; statics persist while exhausted (Rules-Note
+  sentence pinned via a synthetic +1 HP trinket — see the discrepancy below for why synthetic);
+  bearer still attacks after activating. **Mutations — 4, all failure sets predicted EXACTLY:**
+  cost never paid (5); opponent-ready readies items (1); payability reads the BEARER (2 — and
+  the Kit-Master pin surviving via the deep payability check was part of the prediction);
+  statics suppressed while exhausted (1).
+- **⚠ CANON/DATA DISCREPANCY SURFACED — Anchor Stone's "+1 HP":** BOTH 2026-07-15 briefs quote
+  canon as "Equipped character has +1 HP. As a Minor Action, …" but the SHIPPED card text and
+  effects have NO +1 HP sentence/clause (engine machinery for item +HP statics exists —
+  selfItemStat — the card just doesn't use it). Design-chat canon and repo data have diverged.
+  OWNER: should Anchor Stone carry the +1 HP (text + equipped buff clause — one small change),
+  or is the design-chat text stale? The statics-persist pin used a synthetic trinket so the
+  RULE is pinned either way.
+- **⚠ DESIGN-GUIDELINE QUESTION (report-only, per the brief):** Glassweaver Adept's printed
+  "Once per turn" is exactly the hard-to-track pattern this ruling disfavors. Want a one-line
+  Card_Design_Parameters guideline steering future generation toward exhaust-style costs over
+  "once per turn" wording? Not added — needs your yes.
+- **Docs:** GRU §Items gained the Item-exhaustion Rules Note verbatim (parent + snapshot).
+  Owner re-uploads: Game_Rules_Updated.md, HANDOFF.md. Canon-contradiction check for
+  statics-persist: none found (no doc ties item statics to exhaustion).
+
+## Previous session (2026-07-15, bugfix pair) — Anchor Stone activation economy + Animate entry gating FIXED
 **Suite: 29 files / 333 tests green; tsc ZERO; validate:decks clean. ⚠ BOTH FIXTURES RETIRED
 AGAIN (evidence below — the recordings pinned the bugs' own fingerprints; unavoidable under any
 correct fix). RECORDING CAN RESUME immediately after pulling this commit + RESTARTING the dev
