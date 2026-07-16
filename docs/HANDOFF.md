@@ -6,6 +6,14 @@ Self-contained context for continuing the card-effect engine work in a fresh ses
 **Suite: 28 files / 324 tests green; tsc ZERO; validate:decks clean. PRIORITY fix — the owner can
 now RESUME FIXTURE RECORDING** (blocked on this; a recorded game SHOULD include a back-line
 Guardian board so this territory sits inside the new replay net).
+- **FIXTURES RESTORED (owner, same day, committed): two solo games recorded post-fix**
+  (`…6d40fa2-t3…` / `…6d40fa2-t8…`, 3 + 10 attacks) — both replay clean; suite 28 files /
+  **327** tests. Filename stamp shows the server-BOOT commit (`6d40fa2`, pre-fix) because the
+  fix arrived over HMR — known stamp gotcha, cosmetic only: replay against the CURRENT engine
+  is the oracle and both pass. **COVERAGE NOTE: neither game contains ANY Guardian entity**
+  (scanned all snapshots), so the deadlock territory lives only in the unit pins for now —
+  when convenient, record ONE more game featuring a back-line Guardian behind an occupied
+  front line.
 - **Bug:** resolveAttack's Guardian gate filtered on ready ONLY; canon GUARDIAN (verbatim):
   "While this character is ready (not exhausted) and a legal target, opponents must attack it
   before any other character" — the legal-target clause was unimplemented. A ready BACK-line
