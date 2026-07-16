@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { CardFace, BASE_W } from '../../components/CardFace';
 import { useGameStore } from '../../store/gameStore';
-import { canPlayActionCard, currentWillpower } from '../../store/keywords';
+import { canPlayActionCard, specialActionActor, currentWillpower } from '../../store/keywords';
 import { handlePreviewWheel } from './previewScroll';
 import { TBL, Z } from '../../tokens';
 import { btnProps } from '../../lib/a11y';
@@ -71,6 +71,11 @@ export function HandFan() {
             blocked = !gate.ok; blockReason = gate.reason ?? '';
           } else if (playable && card.level > wp) {
             blocked = true; blockReason = `Willpower ${wp} < level ${card.level}`;
+          } else if (card.type === 'Companion' || card.type === 'Construct') {
+            // Special Actions belong to the PC's atomic activation (2026-07-15):
+            // same shared gate the store enforces, so hand UI and store agree.
+            const sp = specialActionActor(game, localPlayer);
+            if (sp.reason) { blocked = true; blockReason = `${sp.reason} (Special Actions are part of the PC's activation)`; }
           }
           const cursor = playable && !blocked ? 'pointer' : 'default';
           const actionBlocked = blocked; // drives the dim styling below

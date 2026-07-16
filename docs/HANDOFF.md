@@ -2,7 +2,42 @@
 
 Self-contained context for continuing the card-effect engine work in a fresh session.
 
-## Latest session (2026-07-15, follow-up) — ITEM EXHAUSTION shipped (Anchor Stone cost; closes ef4f0be Q3)
+## Latest session (2026-07-15, bugfix) — Special Actions escape atomic activation CLOSED
+**Suite: 31 files / 343 tests green; tsc ZERO; validate:decks clean. ✅ ALL-CLEAR FOR FIXTURE
+RECORDING — this legality CONTRACTION is in; record only from a server started at/after commit
+(this session).** The exploit (PC plays companions → they act → PC plays MORE, forbidden by
+CDP §24 atomicity) is closed per the owner ruling: Specials interleave freely WITHIN the PC's
+own activation; any OTHER character acting seals the PC.
+- **Fix at the shared gate:** new `specialActionActor(game, lp)` in stats.ts (keywords) —
+  returns the PC id (the acting character) or the standard 'Activation already finished'
+  refusal; consulted by beginPlay (arming refused, no dangling pendingPlay), placeCard (the
+  authoritative re-check + the ACTIVATION PATCH with the PC — which also seals a companion
+  mid-activation, the standard character-switch rule = symmetry), and HandFan (companion/
+  construct cards dim with the reason) — store and hand UI cannot disagree. Special-cost
+  ACTION cards needed nothing: they already route through canPlayActionCard with the PC as
+  actor (Specials are PC-only) and playAction applies the patch. No-PC-on-board edge (test
+  rigs, setup): gate passes through, nothing to seal.
+- **Tests (`special_action_atomicity.test.ts`, 5):** exploit closed (play → companion moves →
+  second play refused, hand + CZ untouched, arming refused too); Zealous variant (companion
+  attacks) same seal; interleave WITHIN the activation legal (play → PC attacks → play again);
+  symmetry (companion mid-activation sealed by the PC's Special); next-turn reset. **Mutations —
+  3, all failure sets predicted EXACTLY:** both refusal gates removed (3: exploit/Zealous/reset;
+  symmetry survives on the patch); patch removed (4: the PC never registers, so even the gates
+  can't see a switch); PC seals itself on its own placement (interleave only). Live-verified:
+  the exact exploit sequence refuses with the full reason toast in the real app.
+- **OBSERVATION (per the brief — reported, NOT fixed):** intra-activation ordering today:
+  Move-first IS enforced (resolveMove: "Move must be the first action — already acted this
+  turn", Hit & Run excepted); Minor↔Major MUTUAL ordering is NOT enforced (a character can
+  take its Major, then its Minor — markAction/ability charging check budgets, not sequence).
+  Flag if §24's "Move→Minor→Major" numbering is meant to be a strict sequence beyond move-first.
+- **Docs:** CDP §24 gained the Rules Note verbatim (Specials are part of the PC's activation;
+  ordering strictness applies to Move→Minor→Major only), parent + snapshot identical.
+  Owner re-uploads: Card_Design_Parameters.md, HANDOFF.md.
+- **DREAM-RECORDING LIST (updated):** back-line Guardian board; Anchor Stone activation with
+  the exhaustion visible; prior-turn animation attacking; a turn with interleaved Specials +
+  PC attack. (A sealed-PC refusal is NOT needed on tape — refusals aren't state.)
+
+## Previous session (2026-07-15, follow-up) — ITEM EXHAUSTION shipped (Anchor Stone cost; closes ef4f0be Q3)
 **Suite: 30 files / 338 tests green; tsc ZERO; validate:decks clean; no fixtures committed (none
 to diverge — folder still empty pending owner re-recording).** Owner ruling: "exhaust this
 trinket" exhausts THE ITEM — item exhaustion is now a real mechanic (self-tracking rationale:

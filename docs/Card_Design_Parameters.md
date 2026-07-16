@@ -745,6 +745,8 @@ Targeting priority applies only to characters (Player Character and Companions).
 
 Activation is atomic: a character resolves Move/Minor/Major as a unit before any other character is activated.
 
+**Rules Note (2026-07-15) — Special Actions are part of the Player Character's activation.** The PC's Special Actions belong to its atomic activation: they may be taken at any points within it, freely interleaved with its Movement/Minor/Major, but once any other character acts, the PC's activation is finished for the turn and no further actions of any kind — Special Actions included — are available to it. (Clarifies §24's numbering: the strict ordering applies to Movement→Minor→Major; Special Actions are not sequence-restricted within the activation.)
+
 ### Player Character Additionally
 4. **X Special Actions** (where X = Willpower) - Play companion/construct, use Special Action card; flips Class Zone card face-down
 

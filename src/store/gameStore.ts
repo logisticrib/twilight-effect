@@ -7,7 +7,7 @@ import { CATALOG, SORCERER_WARRIOR_CARDS, WIZARD_BUILDER_CARDS } from '../data/c
 import { recomputeStatics, isImmuneToSplash, HIT_RUN_STATUS,
          isPhysicalConstruct, parseEnterTrigger, type EnterTriggerKind,
          isCharacter, firstItemOf, allItemsOf, canHoldItem, effectiveAttack, effectiveKeywords, effectiveMaxHp, wardedLines,
-         canPlayActionCard, actionTypeOf, currentWillpower, parseBanes,
+         canPlayActionCard, specialActionActor, actionTypeOf, currentWillpower, parseBanes,
          POISONED_STATUS, parseAnimateMagic, hasBackLineAttackAura,
          attackRestrictedBy, moveRestrictedBy } from './keywords';
 
@@ -2239,6 +2239,18 @@ export const useGameStore = create<GameStoreState>()(
       setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 3000);
       return { toasts: [...s.toasts, { id, msg: 'Not in the Action Phase — resolve the Class Zone Exchange (or Skip) first.' }] };
     }
+    // Special Action plays (Companion/Construct placement) belong to the PC's
+    // atomic activation (Rules Note 2026-07-15): refuse arming once the PC is
+    // sealed — the same gate placeCard re-checks authoritatively.
+    const armCard = s.game[s.localPlayer].hand.find(c => c.id === cardId);
+    if (armCard && (armCard.type === 'Companion' || armCard.type === 'Construct')) {
+      const sp = specialActionActor(s.game, s.localPlayer);
+      if (sp.reason) {
+        const id = ++toastId;
+        setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 3000);
+        return { toasts: [...s.toasts, { id, msg: `Can't play ${armCard.name}: ${sp.reason} — Special Actions are part of the PC's activation.` }] };
+      }
+    }
     // Capture the selected character as the activating actor before clearing the
     // selection (Action cards charge this character's action economy).
     return {
@@ -2385,6 +2397,19 @@ export const useGameStore = create<GameStoreState>()(
     const card = game[lp].hand.find(c => c.id === pendingPlay.cardId);
     if (!card) return s;
 
+    // Special Actions are part of the PC's ATOMIC ACTIVATION (Rules Note
+    // 2026-07-15, closes the escape: PC plays → companions act → PC plays MORE).
+    // The PC is the acting character: refuse when its activation is sealed, and on
+    // success the activation patch below registers it (sealing any companion that
+    // was mid-activation — the standard character-switch rule). Within the PC's own
+    // activation Specials interleave freely with its Move/Minor/Major (ruling).
+    const sp = specialActionActor(game, lp);
+    if (sp.reason) {
+      const id = ++toastId;
+      setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 3000);
+      return { pendingPlay: null, toasts: [...s.toasts, { id, msg: `Can't play ${card.name}: ${sp.reason} — Special Actions are part of the PC's activation.` }] };
+    }
+
     // Willpower requirement: must have Willpower ≥ the card's Level to play it.
     const wp = currentWillpower(game[lp]);
     if (wp < card.level) {
@@ -2456,6 +2481,9 @@ export const useGameStore = create<GameStoreState>()(
     // trigger (runOnEnter); reactive enter-traps resolve before it.
     const paidGame: GameState = {
       ...game,
+      // The PC is the acting character for this Special Action (2026-07-15):
+      // registers currentActor and seals any companion that was mid-activation.
+      ...(sp.pcId ? activationPatch(game, sp.pcId) : {}),
       [lp]: { ...game[lp], hand: newHand, classZone: newCZ, willpower: newWillpower },
     };
     const paranoia = isCompanion ? gatherParanoia(paidGame, lp) : [];

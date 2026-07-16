@@ -502,6 +502,24 @@ export function classInZone(player: PlayerState, card: Card): boolean {
  * the store (playAction) and the UI (HandFan / LoadoutPanel) so they never disagree.
  * `ent` is the activating character whose budget is spent.
  */
+/**
+ * Gate for a SPECIAL ACTION play — placing a Companion/Construct from hand (Rules
+ * Note 2026-07-15: Special Actions are part of the Player Character's atomic
+ * activation; §24 atomicity is policed across characters, not within the PC's own
+ * activation). Returns the PC's entity id (the acting character — callers apply
+ * the activation patch with it, which also seals a companion mid-activation) plus
+ * a refusal reason when the PC's activation is already sealed. Shared by the store
+ * reducers AND the hand UI so the two can never disagree. Special-cost ACTION
+ * cards need no extra wiring: they route through canPlayActionCard with the PC as
+ * actor (Specials are PC-only) and playAction applies the activation patch.
+ */
+export function specialActionActor(game: GameState, lp: 'p1' | 'p2'): { pcId: string | null; reason?: string } {
+  const pc = (Object.values(game[lp].board) as (BoardEntity | undefined)[]).find(e => e?.kind === 'pc');
+  if (!pc) return { pcId: null }; // no PC on the board (setup edges) — nothing to seal
+  if (game.finishedActors.includes(pc.id)) return { pcId: pc.id, reason: 'Activation already finished' };
+  return { pcId: pc.id };
+}
+
 export function canPlayActionCard(
   game: GameState,
   lp: 'p1' | 'p2',
