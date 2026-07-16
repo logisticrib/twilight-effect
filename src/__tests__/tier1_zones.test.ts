@@ -444,7 +444,12 @@ describe('Animate Magic X: on enter, an own Magical Construct becomes an X/X Man
     expect(ent.subtype).toBe('Manifest');
     expect([ent.atk, ent.hp, ent.maxHp], 'X/X from the keyword parameter').toEqual([2, 2, 2]);
     expect(ent.statuses, 'manifest marker (sacrificed instead of bouncing)').toContain('manifest');
-    expect(ent.fresh, 'summoning sickness as a new companion').toBe(true);
+    // RE-RULED 2026-07-15 (Rules Note: type-changing is not "entering the
+    // encounter"): the conversion PRESERVES the construct's entry time instead of
+    // stamping the Manifest as newly entered. This seeded construct carries no
+    // entry-turn flag (prior-turn permanent) → the Manifest is NOT fresh and may
+    // attack this turn. Same-turn gating pinned in activation_economy.test.ts.
+    expect(ent.fresh, 'entry time preserved — not re-stamped as newly entered').toBe(false);
     expect(ent.anchors, 'anchor counters retained (inert)').toBe(2);
     expect(gs.getState().pendingActionTarget, 'prompt cleared').toBeNull();
   });

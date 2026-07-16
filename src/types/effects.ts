@@ -177,4 +177,12 @@ export interface CardEffect {
   if?: Condition;              // gate the whole clause
   cost?: Cost;                 // required when trigger === 'activated'
   uncounterable?: boolean;     // (on an Action's onPlay clause) cannot be countered
+  /** Action-economy classification of an `activated` clause on a CHARACTER-hosted
+   *  card (bugfix 2026-07-15): 'minor' = the activation is the character's Minor
+   *  Action (45° tap, Minor budget; legal on the entry turn — the first-turn ban
+   *  covers Major Actions only). Omitted = 'major' (the pre-existing engine rule:
+   *  a Major Action that exhausts the activator). Card text is authoritative —
+   *  Anchor Stone: "As a Minor Action, exhaust this trinket: …". Constructs are
+   *  exempt from character action economy either way. */
+  actionCost?: 'minor' | 'major';
 }

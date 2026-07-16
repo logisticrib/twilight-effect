@@ -2,7 +2,70 @@
 
 Self-contained context for continuing the card-effect engine work in a fresh session.
 
-## Latest session (2026-07-15, bugfix) — Guardian ignores "legal target" (targeting deadlock) FIXED
+## Latest session (2026-07-15, bugfix pair) — Anchor Stone activation economy + Animate entry gating FIXED
+**Suite: 29 files / 333 tests green; tsc ZERO; validate:decks clean. ⚠ BOTH FIXTURES RETIRED
+AGAIN (evidence below — the recordings pinned the bugs' own fingerprints; unavoidable under any
+correct fix). RECORDING CAN RESUME immediately after pulling this commit + RESTARTING the dev
+server** (restart also fixes the stale commit stamp; please include a back-line-Guardian board —
+still owed to the replay net — and ideally an Anchor Stone activation + a prior-turn animation).
+- **Bug 1 DIAGNOSIS (hypothesis overturned, evidence in-session):** Anchor Stone was ALWAYS
+  UI-reachable (LoadoutPanel has rendered item-hosted activations since the extraction; proven by
+  driving the real button). The practical unreachability was ACTION-ECONOMY misclassification:
+  every character-hosted activation was hardwired as a MAJOR action — blocked on the bearer's
+  entry turn ("No Major Actions on its entry turn"), blocked after attacking, and paying with
+  FULL EXHAUSTION + 90° tap. Card text (verbatim): "As a Minor Action, exhaust this trinket: …".
+- **Fix (class-level):** new per-clause **`actionCost?: 'minor' | 'major'`** on activated clauses
+  (schema + validator + gatherActivated/ActivatedAbility threading). 'minor' → Minor budget, 45°
+  tap, NO exhaustion, legal on the entry turn (first-turn ban covers Major only); omitted →
+  'major', the pre-existing rule, byte-identical. Anchor Stone data gains actionCost 'minor'.
+  LoadoutPanel button title now names the economy ("— Minor Action"). **Class enumeration (all 5
+  activated cards, ALL UI-reachable):** Anchor Stone (item, Minor — FIXED), Quill of Unmaking
+  (item, "As a Major Action" — default correct), Glassweaver Adept (companion, no action wording
+  — default Major stands), Collapsing Tunnel + Translocation Circle (constructs — economy-exempt).
+- **Bug 2:** the animate op stamped `fresh: true` unconditionally — a prior-turn construct's
+  Manifest was wrongly entry-gated. Fix at the entry-time source of truth: **`fresh` now means
+  "entered the encounter this turn" for EVERY permanent** — placeCard stamps all permanents
+  (constructs included), readyPlayer clears construct fresh at the controller's ready, and
+  animate PRESERVES the target's fresh (type-changing ≠ entering — Rules Note 2026-07-15 in GRU
+  §First-Turn). Prior-turn construct → Manifest attacks this turn; same-turn play+animate →
+  gated like any new companion. Both live-verified through the real UI.
+- **⚠ FIXTURES t3 + t8 RETIRED (2026-07-08 protocol).** Proven, not assumed: t8's recorded
+  animation (The Verdant Still on turn 7 converting constructs played turns 5/6) captured the
+  BUG'S fresh:true on prior-turn Manifests inside per-action hashes — no correct engine can
+  reproduce it; and both games' construct placements hash the old `fresh:false` shape. The
+  brief's "divergence = bug in the fix" premise was checked and does not hold for these
+  recordings. (Bug-1 changes alone were fixture-safe — zero recorded activations.)
+- **Tests (`activation_economy.test.ts`, 9):** Minor economy end-to-end (45°, un-exhausted,
+  Major intact, attack afterward); entry-turn Minor activation legal; once-per-turn + loud
+  no-target refusal (nothing charged); Quill Major-default regression; animate prior-turn
+  attacks / same-turn gated / placeCard-stamps + ready-clears mechanism; PC turn-1 pins (below).
+  THREE existing pins REWRITTEN dated (they leaned on Anchor Stone as the convenient ability or
+  pinned the old animate stamp): tier1_economy Major-charge (→ Quill), tier2_rulings entry-gate +
+  Zealous legs (→ Quill; Minor is entry-legal now), tier1_zones animate fresh (→ preserved).
+  **Mutations — 6, one PREDICTION MISS recorded: M4 (constructs unstamped) was predicted to fail
+  2 pins but the same-turn animate pin seeds its flag directly — only the mechanism pin caught
+  it (coverage composes; miss noted per the lessons rule).** Others exact: actionCost ignored
+  (2); minor-exhausts-anyway (1); animate re-stamp (2); ready-clear removed (1); PC turn-1 gate
+  added (both PC pins).
+- **⚠ VERIFICATION 3 SURFACED — the brief's premise is STALE:** the brief asserted a
+  "first-player Major Action ban (which the engine implements)". IT DOES NOT EXIST: canon (GRU
+  §First-Turn, verbatim) — "The first player may otherwise act normally on Turn 1 — there is no
+  restriction on Major Actions" — the 2026-06-23 FLIPPED RULING, pinned in tier1_economy. Pinned
+  per CANON instead: the PC (not a companion, placed at setup) can declare a turn-1 attack as
+  EITHER player. If the owner wants a first-player turn-1 Major ban back, that is a NEW re-rule
+  (engine + canon + pins), not this fix.
+- **⚠ OWNER QUESTION — "exhaust this trinket" vs `oncePerTurn`:** the two are OBSERVABLY
+  different in one case: oncePerTurn is tracked on the BEARER (`ability-used:` status), so a
+  Kit-Master-moved Anchor Stone could activate AGAIN from its new bearer the same turn; a truly
+  exhausted trinket could not. Item exhaustion doesn't exist as an engine/UI concept today
+  (items never rotate/ready). Kept oncePerTurn per the brief; rule if the Kit-Master case
+  should be legal. RELATED NOTE: Translocation Circle's "As a Minor Action" sits on a CONSTRUCT
+  (economy-exempt, pinned tier2 2026-07-03) — its wording is currently economy-inert; flag if
+  constructs' "As a [X] Action" should ever charge the controller.
+- **Docs:** GRU §First-Turn gained the type-changing Rules Note (parent + snapshot identical).
+  Owner re-uploads: Game_Rules_Updated.md, HANDOFF.md.
+
+## Previous session (2026-07-15, bugfix) — Guardian ignores "legal target" (targeting deadlock) FIXED
 **Suite: 28 files / 324 tests green; tsc ZERO; validate:decks clean. PRIORITY fix — the owner can
 now RESUME FIXTURE RECORDING** (blocked on this; a recorded game SHOULD include a back-line
 Guardian board so this territory sits inside the new replay net).

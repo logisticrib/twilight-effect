@@ -1336,15 +1336,21 @@ export const useGameStore = create<GameStoreState>()(
 
     const player = loc.player;
 
-    // Activating an ability is a Major Action for a character (PC/companion):
-    // gate it on the same budget rules an attack uses. Constructs are not bound by
-    // character action economy — their abilities cost only what the card states.
+    // Activating an ability is the character's action per the clause's actionCost
+    // (bugfix 2026-07-15 — Anchor Stone: "As a Minor Action, exhaust this trinket"):
+    // 'minor' = Minor budget, 45° tap, legal on the entry turn (the first-turn ban
+    // covers Major Actions only); default 'major' = the pre-existing rule (Major
+    // budget, exhausts the activator). Constructs are not bound by character action
+    // economy — their abilities cost only what the card states.
+    const actionCost: 'minor' | 'major' = ability.actionCost ?? 'major';
     if (isCharacter(loc.ent)) {
       const isExhausted = loc.ent.tapped === 'major' || loc.ent.exhausted;
       const reason = isSealed(s.game, entityId) ? 'Activation already finished'
-        : loc.ent.fresh ? 'No Major Actions on its entry turn'
-        : loc.ent.acts.major ? 'Major action already used'
-        : isExhausted ? 'Exhausted' : null;
+        : isExhausted ? 'Exhausted'
+        : actionCost === 'minor'
+          ? (loc.ent.acts.minor ? 'Minor action already used' : null)
+          : loc.ent.fresh ? 'No Major Actions on its entry turn'
+          : loc.ent.acts.major ? 'Major action already used' : null;
       if (reason) return refuse(`Can't activate ${ability.sourceName}: ${reason}.`);
     }
 
@@ -1431,11 +1437,18 @@ export const useGameStore = create<GameStoreState>()(
       if (cur) g = updateEntity(g, entityId, { statuses: [...cur.ent.statuses, abilityUsedTag(ability.sourceName)] });
     }
 
-    // Consume the character's Major Action (exhaust). Skip if the entity was
-    // sacrificed as the cost, if exhaustSelf already did it, or for constructs.
+    // Consume the character's action per the clause's actionCost (2026-07-15):
+    // 'minor' → Minor budget + 45° tap, the character stays un-exhausted (it can
+    // still attack); 'major' (default) → Major budget + exhaust, as before. Skip if
+    // the entity was sacrificed as the cost, if exhaustSelf already did it, or for
+    // constructs.
     if (isCharacter(loc.ent) && !sacrificedSelf && cost?.kind !== 'exhaustSelf') {
       const cur = findEntityAnywhere(g, entityId);
-      if (cur) g = updateEntity(g, entityId, { acts: { ...cur.ent.acts, major: true }, exhausted: true, tapped: 'major' });
+      if (cur) {
+        g = actionCost === 'minor'
+          ? updateEntity(g, entityId, { acts: { ...cur.ent.acts, minor: true }, tapped: cur.ent.tapped === 'none' ? 'minor' : cur.ent.tapped })
+          : updateEntity(g, entityId, { acts: { ...cur.ent.acts, major: true }, exhausted: true, tapped: 'major' });
+      }
     }
 
     // Atomic activation: activating a character's ability seals its activation
@@ -2395,7 +2408,13 @@ export const useGameStore = create<GameStoreState>()(
       subtype: card.subtype,
       text: card.text,
       tapped: 'none', exhausted: false,
-      fresh: isCompanion, // summoning sickness
+      // `fresh` = "entered the encounter this turn" for EVERY permanent (bugfix
+      // 2026-07-15): constructs carry it too, so a type-changing effect (Animate
+      // Magic) can preserve the permanent's true entry time instead of stamping the
+      // Manifest as newly entered. Constructs themselves are never gated by it
+      // (they don't attack; their abilities are economy-exempt); readyPlayer clears
+      // it for all kinds at the controller's next ready.
+      fresh: true,
       acts: freshActs(),
       loadout: isCompanion ? { weapon: null, gear: [] } : undefined,
     };
@@ -2603,6 +2622,7 @@ export const useGameStore = create<GameStoreState>()(
           }
           newBoard[slot as SlotId] = {
             ...ent, anchors: newAnchors, acts: freshActs(), tapped: 'none' as TapState, exhausted: false,
+            fresh: false, // entry turn is over (2026-07-15 — see placeCard)
             statuses: ent.statuses.filter(st => !st.startsWith('ability-used:')),
           };
           continue;

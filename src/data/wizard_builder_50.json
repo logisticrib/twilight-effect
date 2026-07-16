@@ -1472,6 +1472,7 @@
         {
           "trigger": "activated",
           "oncePerTurn": true,
+          "actionCost": "minor",
           "effects": [
             {
               "op": "anchor",

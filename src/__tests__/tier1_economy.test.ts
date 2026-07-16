@@ -147,14 +147,20 @@ describe('item 7: the right action is charged', () => {
     expect(canPlayActionCard(g, 'p1', twoHanded, magicCard).reason).toMatch(/2H/);
   });
 
-  it('an activated ability consumes the character Major', () => {
+  it('a default (Major) activated ability consumes the character Major (RE-SCOPED 2026-07-15)', () => {
+    // REWRITTEN 2026-07-15: this pin originally used Anchor Stone as its convenient
+    // activated ability — but Anchor Stone's text is "As a MINOR Action, exhaust
+    // this trinket", and the owner ruled its activation the bearer's Minor (per-
+    // clause actionCost; see activation_economy.test.ts). The Major DEFAULT this
+    // pin guards is unchanged — exemplified here by Quill of Unmaking ("As a Major
+    // Action, sacrifice this trinket…").
     freshGame();
     const holder = mkComp('h1', compA.name, {
-      loadout: { weapon: null, gear: [mkItem('as', 'Anchor Stone'), null] },
+      loadout: { weapon: null, gear: [mkItem('as', 'Quill of Unmaking'), null] },
     });
     const wall = mkConstruct('wall-1', 'Test Wall', 3, { subtype: 'Fortification' });
     gs.setState(s => ({ game: { ...s.game, p1: { ...s.game.p1, board: { f1: holder, f2: wall } } } }));
-    expect(gatherActivated(holder).length, 'Anchor Stone exposes an activated ability').toBeGreaterThan(0);
+    expect(gatherActivated(holder).length, 'Quill exposes an activated ability').toBeGreaterThan(0);
     gs.getState().activateAbility('h1', 0);
     const ent = gs.getState().game.p1.board.f1!;
     expect(ent.acts.major, 'Major consumed').toBe(true);

@@ -235,6 +235,8 @@ The player who goes first does not draw a card on their first turn. This offsets
 *Companions — willpower check on entry:*
 A companion that has just entered the encounter must pass a willpower check before it can take Major Actions. The check is automatically considered passed at the start of its controller's next turn (alongside the existing willpower check that determines whether the companion flees). In practice this means a companion cannot attack or use activated Major Action abilities on the turn it arrives — only Movement, Minor Actions, and Special Actions are available that turn. This restriction applies to all companions at all times, not just Turn 1 of the game.
 
+- **Rules Note (2026-07-15) — Type-changing effects are not "entering the encounter."** A permanent converted in place (e.g. a construct animated into a companion) does not enter the encounter; its entry time is unchanged. The entry willpower check for such a companion is therefore already satisfied if the permanent was in the encounter at the start of its controller's current turn, and applies as normal if the permanent entered this turn.
+
 The Zealous keyword bypasses this check for attacks specifically; a companion with Zealous may attack on the turn it enters the encounter, but is still gated for non-attack Major Actions until the check passes.
 
 **Inactive Player Restrictions:**

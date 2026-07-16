@@ -289,6 +289,11 @@ function validateClause(clause: CardEffect, idx: number, p: (msg: string) => voi
   if (clause.trigger === 'activated' && !clause.cost && !clause.oncePerTurn) {
     p(`${path}: activated ability needs a cost or oncePerTurn (§11 guard)`);
   }
+  // actionCost (2026-07-15): character action economy of an activated clause.
+  if (clause.actionCost !== undefined) {
+    if (clause.trigger !== 'activated') p(`${path}: actionCost is only valid on an activated clause`);
+    if (clause.actionCost !== 'minor' && clause.actionCost !== 'major') p(`${path}: bad actionCost "${String(clause.actionCost)}"`);
+  }
   // (2026-07-08 owner ruling: 'sacrifice'/'discard' were removed from the Cost schema
   //  entirely — they now fail this shape check as unknown kinds.)
   if (clause.cost !== undefined && !validCost(clause.cost)) p(`${path}: bad cost ${JSON.stringify(clause.cost)}`);

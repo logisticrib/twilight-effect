@@ -444,11 +444,14 @@ export function LoadoutPanel() {
                   ? abilities.map((ab, i) => {
                       const usedUp = !!ab.oncePerTurn && ent.statuses.includes(abilityUsedTag(ab.sourceName));
                       const cl = costLabel(ab.cost);
+                      // Action-economy hint (2026-07-15): a Minor-action activation
+                      // reads differently from the default Major (which exhausts).
+                      const econ = ab.actionCost === 'minor' ? 'Minor' : 'Major';
                       const blocked = usedUp || sealed;
                       return (
                         <ActBtn key={i} icon="✦" label={cl ? `${ab.label} · ${cl}` : ab.label}
                           state={blocked ? 'used' : 'available'}
-                          title={sealed ? 'Activation finished' : usedUp ? 'Already used this turn' : `Activate: ${ab.sourceName}${cl ? ` (${cl})` : ''}`}
+                          title={sealed ? 'Activation finished' : usedUp ? 'Already used this turn' : `Activate: ${ab.sourceName} — ${econ} Action${cl ? ` (${cl})` : ''}`}
                           onClick={() => activateAbility(ent.id, i)}
                         />
                       );

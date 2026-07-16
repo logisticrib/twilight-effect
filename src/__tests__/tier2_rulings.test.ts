@@ -154,11 +154,16 @@ describe('ruling 4: no Initiative, no Exile (data contract)', () => {
 });
 
 describe('ruling 6: companion entry restriction', () => {
-  const withAnchorStone = { weapon: null, gear: [mkItem('as2', 'Anchor Stone'), null] };
+  // REWRITTEN 2026-07-15: this leg originally used Anchor Stone — now ruled a MINOR-
+  // action activation, which the entry restriction does NOT block (canon: the
+  // first-turn check bans Major Actions only; the fresh-bearer-may-activate-Minor
+  // pin lives in activation_economy.test.ts). Quill of Unmaking keeps this pin on a
+  // Major-worded ability, which the entry turn still blocks.
+  const withQuill = { weapon: null, gear: [mkItem('as2', 'Quill of Unmaking'), null] };
 
-  it('a fresh companion can neither attack, play a Major, nor activate an ability', () => {
+  it('a fresh companion can neither attack, play a Major, nor activate a MAJOR ability', () => {
     freshGame();
-    const entering = mkComp('en-1', compCard.name, { fresh: true, loadout: withAnchorStone });
+    const entering = mkComp('en-1', compCard.name, { fresh: true, loadout: withQuill });
     const wall = mkConstruct('en-w', 'Test Wall', 3, { subtype: 'Fortification' });
     gs.setState(s => ({ game: { ...s.game, p1: { ...s.game.p1, board: { f1: entering, f2: wall } } }, pending: null }));
     gs.getState().beginAttack('en-1');
@@ -184,9 +189,10 @@ describe('ruling 6: companion entry restriction', () => {
     expect(gs.getState().pending?.action, 'attack now allowed').toBe('attack');
   });
 
-  it('Zealous exempts ATTACKS only — Major actions and abilities stay gated', () => {
+  it('Zealous exempts ATTACKS only — Major actions and MAJOR abilities stay gated', () => {
+    // (Quill = Major-worded ability; Minor activations are entry-legal — 2026-07-15.)
     freshGame();
-    const zealous = mkComp('en-3', compCard.name, { fresh: true, keywords: ['Zealous'], loadout: withAnchorStone });
+    const zealous = mkComp('en-3', compCard.name, { fresh: true, keywords: ['Zealous'], loadout: withQuill });
     const wall = mkConstruct('en-w2', 'Test Wall', 3, { subtype: 'Fortification' });
     gs.setState(s => ({ game: { ...s.game, p1: { ...s.game.p1, board: { f1: zealous, f2: wall } } }, pending: null }));
     gs.getState().beginAttack('en-3');

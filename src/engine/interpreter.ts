@@ -172,6 +172,7 @@ export interface ActivatedAbility {
   cost?: Cost;
   effects: Effect[];
   oncePerTurn?: boolean;
+  actionCost?: 'minor' | 'major'; // character action economy (default 'major') — 2026-07-15
   label: string;           // short button label
 }
 
@@ -182,7 +183,7 @@ export function gatherActivated(ent: BoardEntity): ActivatedAbility[] {
     const card = CATALOG.find(c => c.name === name);
     for (const ce of card?.effects ?? []) {
       if (ce.trigger !== 'activated') continue;
-      out.push({ sourceName: fromName, itemId, cost: ce.cost, effects: ce.effects, oncePerTurn: ce.oncePerTurn, label: fromName });
+      out.push({ sourceName: fromName, itemId, cost: ce.cost, effects: ce.effects, oncePerTurn: ce.oncePerTurn, actionCost: ce.actionCost, label: fromName });
     }
   };
   push(ent.name, undefined, ent.name);
@@ -443,9 +444,13 @@ export function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceNam
         for (const id of ids) {
           const loc = findEntityAnywhere(g, id);
           if (!loc || loc.ent.kind !== 'construct' || loc.ent.subtype !== 'Incantation') continue;
+          // Type-changing is NOT "entering the encounter" (Rules Note 2026-07-15):
+          // the permanent's entry time is unchanged, so the Manifest keeps the
+          // construct's own `fresh` — in the encounter since a prior turn → it may
+          // attack this turn; played this turn → gated like any new companion.
           g = updateEntity(g, id, {
             kind: 'companion', atk: e.atk, hp: e.hp, maxHp: e.hp, subtype: 'Manifest',
-            fresh: true, statuses: [...loc.ent.statuses, 'manifest'],
+            fresh: loc.ent.fresh ?? false, statuses: [...loc.ent.statuses, 'manifest'],
           });
           msgs.push(`${loc.ent.name} animates as a ${e.atk}/${e.hp} Manifest`);
         }
