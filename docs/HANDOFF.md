@@ -2,7 +2,39 @@
 
 Self-contained context for continuing the card-effect engine work in a fresh session.
 
-## Latest session (2026-07-15, bugfix) — Special Actions escape atomic activation CLOSED
+## Latest session (2026-07-15, bugfix) — STRICT activation order: no Minor after the Major
+**Suite: 32 files / 349 tests green; tsc ZERO; validate:decks clean. Fixtures folder was still
+EMPTY at session start (no recordings to audit). ✅ FRESH ALL-CLEAR TO RECORD — server restarted
+on this commit so the REC chip stamps correctly.** Owner ruling (closes ab8a5b0's observation):
+§24's "During activation, in order" is STRICT — rotation only advances; a character at 90° has
+no 45° state to enter, so Minor-after-Major is untrackable and illegal.
+- **Fix at the shared gate:** new `minorActionReason(ent)` in stats.ts — refuses when
+  acts.major / tapped 'major' / exhausted ("Already fully exhausted — Minor Actions must come
+  before the Major") or when the Minor is spent ("Minor action already used"). Consulted by
+  ALL Minor-cost paths: canPlayActionCard's Minor branch (Action cards + hand UI), the
+  activateAbility minor-actionCost branch (Anchor Stone), and equipItem. Legal direction
+  untouched and re-pinned: Minor (45°) then Major (90°) — Anchor Stone then attack.
+- **⚠ ADJACENT HOLE CLOSED BY THE SAME GATE (flagged, was NOT in the brief): `equipItem` was
+  previously UNGATED on action economy entirely** — it never checked acts.minor, so equipping
+  was effectively FREE after any action (double-Minor and Minor-after-Major alike). The
+  uniform gate closes both; carving equip out of the acts.minor check would have been
+  deliberate work to preserve a bug. Pinned as "FLAGGED CLOSURE"; overrule if double-equip
+  was somehow intended.
+- **Docs:** NO doc change — §24 already says "During activation, in order:" and the prior
+  Rules Note names the ordering strict; the docs were right, the engine was wrong (per brief:
+  HANDOFF record only). Owner re-uploads: HANDOFF.md only.
+- **Tests (`strict_activation_order.test.ts`, 6):** Major→equip refused (companion);
+  Major→Minor ability refused (PC covered); Major→Minor Action card refused (shared
+  canPlayActionCard gate); Minor→Major legal (regression); Movement-first regression
+  ("Move must be the first action"); double-equip refused (the flagged closure).
+  **Mutations — 3, all failure sets predicted EXACTLY:** after-Major branch removed (the 3
+  after-Major pins); equip gate disconnected (equip pin + flagged closure); gate over-refuses
+  everything (the 3 pins asserting LEGAL actions — proves no over-refusal). Live-verified:
+  attack → equip refusal with the exact reason in the real app.
+- **NOTE for the sandbox:** markAction (the manual tracker buttons in the playtest helpers)
+  stays ungated by design — it is the owner's manual override, not a game action.
+
+## Previous session (2026-07-15, bugfix) — Special Actions escape atomic activation CLOSED
 **Suite: 31 files / 343 tests green; tsc ZERO; validate:decks clean. ✅ ALL-CLEAR FOR FIXTURE
 RECORDING — this legality CONTRACTION is in; record only from a server started at/after commit
 (this session).** The exploit (PC plays companions → they act → PC plays MORE, forbidden by

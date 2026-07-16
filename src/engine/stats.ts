@@ -513,6 +513,22 @@ export function classInZone(player: PlayerState, card: Card): boolean {
  * cards need no extra wiring: they route through canPlayActionCard with the PC as
  * actor (Specials are PC-only) and playAction applies the activation patch.
  */
+/**
+ * The single legality gate for a MINOR ACTION (owner-ratified 2026-07-15 —
+ * §24 "During activation, in order" is STRICT): a character that has taken its
+ * Major (or is otherwise at 90°/exhausted) has no 45° state left to enter —
+ * rotation only advances, so a Minor after the Major is untrackable and illegal.
+ * Shared by every Minor-cost path (equip, Minor Action cards, Minor activated
+ * abilities) so no reducer can disagree. Returns the refusal reason or null.
+ */
+export function minorActionReason(ent: BoardEntity): string | null {
+  if (ent.acts.major || ent.tapped === 'major' || ent.exhausted) {
+    return 'Already fully exhausted — Minor Actions must come before the Major';
+  }
+  if (ent.acts.minor) return 'Minor action already used';
+  return null;
+}
+
 export function specialActionActor(game: GameState, lp: 'p1' | 'p2'): { pcId: string | null; reason?: string } {
   const pc = (Object.values(game[lp].board) as (BoardEntity | undefined)[]).find(e => e?.kind === 'pc');
   if (!pc) return { pcId: null }; // no PC on the board (setup edges) — nothing to seal
@@ -553,7 +569,8 @@ export function canPlayActionCard(
     return { ok: true };
   }
   if (cost === 'Minor') {
-    if (ent.acts.minor) return { ok: false, reason: 'Minor action already used' };
+    const reason = minorActionReason(ent); // strict §24 order (2026-07-15): no Minor after the Major
+    if (reason) return { ok: false, reason };
     return { ok: true };
   }
   // Major (default): consumes the character's Major; needs them ready & settled in.

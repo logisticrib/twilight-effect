@@ -7,7 +7,7 @@ import { CATALOG, SORCERER_WARRIOR_CARDS, WIZARD_BUILDER_CARDS } from '../data/c
 import { recomputeStatics, isImmuneToSplash, HIT_RUN_STATUS,
          isPhysicalConstruct, parseEnterTrigger, type EnterTriggerKind,
          isCharacter, firstItemOf, allItemsOf, canHoldItem, effectiveAttack, effectiveKeywords, effectiveMaxHp, wardedLines,
-         canPlayActionCard, specialActionActor, actionTypeOf, currentWillpower, parseBanes,
+         canPlayActionCard, specialActionActor, minorActionReason, actionTypeOf, currentWillpower, parseBanes,
          POISONED_STATUS, parseAnimateMagic, hasBackLineAttackAura,
          attackRestrictedBy, moveRestrictedBy } from './keywords';
 
@@ -1020,6 +1020,17 @@ export const useGameStore = create<GameStoreState>()(
       return { toasts: [...s.toasts, { id, msg: `${loc.ent.name} has already finished its activation this turn.` }] };
     }
 
+    // Equipping is a MINOR ACTION — the shared gate applies (strict §24 order,
+    // 2026-07-15): refused after the Major (rotation only advances), and refused
+    // when the Minor is already spent (equip was previously UNGATED here — the
+    // double-Minor hole closed by the same shared gate; flagged in HANDOFF).
+    const minorReason = minorActionReason(loc.ent);
+    if (minorReason) {
+      const id = ++toastId;
+      setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 3000);
+      return { toasts: [...s.toasts, { id, msg: `Can't equip ${card.name}: ${minorReason}.` }] };
+    }
+
     // Slot capacity: 1 weapon (equipping swaps the old one back to hand) + 2 gear
     // (heavy takes both). Without this gate equipOnto no-ops and the Minor action
     // would be spent for nothing.
@@ -1352,12 +1363,14 @@ export const useGameStore = create<GameStoreState>()(
     }
     if (isCharacter(loc.ent)) {
       const isExhausted = loc.ent.tapped === 'major' || loc.ent.exhausted;
+      // Minor-cost abilities route through the SHARED Minor gate (strict §24 order,
+      // 2026-07-15): no Minor after the Major — rotation only advances.
       const reason = isSealed(s.game, entityId) ? 'Activation already finished'
-        : isExhausted ? 'Exhausted'
         : actionCost === 'minor'
-          ? (loc.ent.acts.minor ? 'Minor action already used' : null)
+          ? minorActionReason(loc.ent)
           : loc.ent.fresh ? 'No Major Actions on its entry turn'
-          : loc.ent.acts.major ? 'Major action already used' : null;
+          : loc.ent.acts.major ? 'Major action already used'
+          : isExhausted ? 'Exhausted' : null;
       if (reason) return refuse(`Can't activate ${ability.sourceName}: ${reason}.`);
     }
 
