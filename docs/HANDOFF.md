@@ -53,9 +53,15 @@ re-record.**
   2026-07-08). The prose-completeness gate is structurally blind to partials
   (validateCards.ts:267 — any card WITH effects returns early), and the 2026-07-08 PARTIAL list
   was human triage that missed him. **Sweep of the other 99 (sentence-vs-op heuristic, 29 hits
-  eyeballed): ONE new Grudrik-shaped partial — `Master of Foundations`: carries only the static
-  preventAnchorDecay clause; "When this enters play, add 3 Anchor counters to target Physical
-  Construct" has NO op and NO flag. ⚠ OWNER QUESTION — not fixed (brief: report only).** The
+  eyeballed): ONE suspected Grudrik-shaped partial — `Master of Foundations` — ⚠ CORRECTED
+  SAME DAY (owner asked to author it; investigation found it was NEVER a partial): its enter
+  sentence is the REINFORCE 3 reminder text, implemented via the KEYWORD path
+  (parseEnterTrigger → pendingTrigger → resolveTrigger, registry `done: true`) — the sweep
+  compared sentences to OPS only and ignored keyword-driven implementations, failing its own
+  checklist (op OR keyword OR reminder). Pinned working end-to-end in
+  `master_of_foundations.test.ts` (prompt arms on enter, own-side eligibility per canon
+  REINFORCE "you control", +3 anchors). NOTE for owner (cosmetic only): the card's reminder
+  sentence omits canon's "you control" — the engine follows canon; tidy the text if desired.** The
   five known 2026-07-08 partials remain open (Embercast Wand, Ashforged Pendant, Captain's
   Belt, Engineer's Toolbelt, Runic Convergence Staff); everything else was a false positive
   (single ops covering multi-sentence prose). **Guard adopted (cheap):** authoring-checklist
@@ -66,8 +72,9 @@ re-record.**
   gained the R1 no-cap Rules Note + the sacrifice-events/triggers Rules Note (R2 restated
   legibly in one place + R3). No residual "maximum Anchor" text anywhere in canon (grep-clean).
   Owner re-uploads: Game_Rules_Updated.md, HANDOFF.md.
-- **Open flags for owner:** (1) ⚠ re-record replay fixtures (coverage empty); (2) Master of
-  Foundations partial (above); (3) simultaneous-decay mutual-hearing reading (above); (4) the
+- **Open flags for owner:** (1) ⚠ re-record replay fixtures (coverage empty); (2) ~~Master of
+  Foundations partial~~ RESOLVED same day — false alarm, see the corrected audit bullet (only a
+  cosmetic "you control" text tidy remains optional); (3) simultaneous-decay mutual-hearing reading (above); (4) the
   owner's standing design note: Crystalline Sentinel's text may be replaced later (recorded
   arc 3); (5) live two-peer MP pass over arcs 1–5 holds (unchanged list; arc 5 added none).
 
