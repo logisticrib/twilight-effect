@@ -60,8 +60,9 @@ re-record.**
   compared sentences to OPS only and ignored keyword-driven implementations, failing its own
   checklist (op OR keyword OR reminder). Pinned working end-to-end in
   `master_of_foundations.test.ts` (prompt arms on enter, own-side eligibility per canon
-  REINFORCE "you control", +3 anchors). NOTE for owner (cosmetic only): the card's reminder
-  sentence omits canon's "you control" — the engine follows canon; tidy the text if desired.** The
+  REINFORCE "you control", +3 anchors). Reminder-text tidy APPLIED (owner-ruled same day):
+  the card's enter sentence now carries canon's "you control" — data-only change, engine
+  behavior was always canonical; verified rendering in the Library.** The
   five known 2026-07-08 partials remain open (Embercast Wand, Ashforged Pendant, Captain's
   Belt, Engineer's Toolbelt, Runic Convergence Staff); everything else was a false positive
   (single ops covering multi-sentence prose). **Guard adopted (cheap):** authoring-checklist

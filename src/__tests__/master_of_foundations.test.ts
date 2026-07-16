@@ -1,6 +1,8 @@
 // Master of Foundations — "REINFORCE 3. When this enters play, add 3 Anchor
-// counters to target Physical Construct. Your Physical Constructs do not lose
-// Anchor counters at the start of your turn."
+// counters to target Physical Construct you control. Your Physical Constructs do
+// not lose Anchor counters at the start of your turn."
+// ("you control" added 2026-07-15, owner-ruled tidy: reminder text now matches the
+// canon REINFORCE wording the engine always followed.)
 // PINNED 2026-07-15 to CORRECT the arc-5 sweep finding: this card is NOT a
 // Grudrik-shaped partial. Its enter sentence is the REINFORCE 3 reminder text —
 // implemented via the KEYWORD path (parseEnterTrigger → pendingTrigger →
