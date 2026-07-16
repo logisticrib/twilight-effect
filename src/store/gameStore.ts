@@ -2032,25 +2032,43 @@ export const useGameStore = create<GameStoreState>()(
 
     // ── Targeting rules (only for characters, not constructs) ──────────────────
     if (target.kind !== 'construct') {
-      // 1. Guardian: any ready, legal Guardian must be attacked first
-      const readyGuardians = (Object.values(oppBoard) as (BoardEntity | undefined)[])
-        .filter((e): e is BoardEntity => !!e && !e.exhausted && effectiveKeywords(e, game).includes('Guardian') && e.kind !== 'construct');
-      if (readyGuardians.length > 0 && !readyGuardians.some(g => g.id === targetEntityId)) {
+      // Front-Line-priority LEGALITY for this attacker, computed FIRST (bugfix
+      // 2026-07-15): a character is a legal target if it stands in the front line,
+      // the front line holds no characters, the attacker has Evasive, or the
+      // defender itself has Ranged. (An id not on the opponent's board is outside
+      // this rule's scope — passes through, matching the old check's behavior.)
+      const hasEvasive = effectiveKeywords(attacker, game).includes('Evasive');
+      const frontLineOccupied = (Object.entries(oppBoard) as [string, BoardEntity | undefined][])
+        .some(([sl, e]) => e && e.kind !== 'construct' && isFront(sl as SlotId));
+      const isLegalTarget = (id: string): boolean => {
+        const sl = findSlot(oppBoard, id);
+        if (!sl) return true;
+        if (isFront(sl as SlotId) || !frontLineOccupied || hasEvasive) return true;
+        const e = oppBoard[sl as SlotId];
+        return !!e && effectiveKeywords(e, game).includes('Ranged');
+      };
+
+      // 1. Guardian — canon (Master_Keyword_List, quoted verbatim): "While this
+      //    character is ready (not exhausted) and a legal target, opponents must
+      //    attack it before any other character." Guardian applies WITHIN the
+      //    legal set (bugfix 2026-07-15 — the old ready-only gate ignored the
+      //    legal-target clause and deadlocked every attack when a back-line
+      //    Guardian stood behind an occupied front line): only ready Guardians
+      //    that THIS attacker can legally target bind it; if none is legal,
+      //    Guardian imposes nothing and normal targeting applies.
+      const bindingGuardians = (Object.values(oppBoard) as (BoardEntity | undefined)[])
+        .filter((e): e is BoardEntity => !!e && !e.exhausted && e.kind !== 'construct'
+          && effectiveKeywords(e, game).includes('Guardian') && isLegalTarget(e.id));
+      if (bindingGuardians.length > 0 && !bindingGuardians.some(g => g.id === targetEntityId)) {
         const t = pushToast('A Guardian must be attacked first!');
         return { pending: null, toasts: [...s.toasts, t] };
       }
 
-      // 2. Front Line priority (applies when no Guardian is forcing the choice)
-      const hasEvasive = effectiveKeywords(attacker, game).includes('Evasive');
-      const targetHasRanged = effectiveKeywords(target, game).includes('Ranged');
-      if (!hasEvasive && !targetHasRanged) {
-        const tgtSlot = findSlot(oppBoard, targetEntityId);
-        const frontLineOccupied = (Object.entries(oppBoard) as [string, BoardEntity | undefined][])
-          .some(([sl, e]) => e && e.kind !== 'construct' && isFront(sl as SlotId));
-        if (frontLineOccupied && tgtSlot && !isFront(tgtSlot as SlotId)) {
-          const t = pushToast('Must target the Front Line first (attacker has no Evasive; target has no Ranged).');
-          return { pending: null, toasts: [...s.toasts, t] };
-        }
+      // 2. Front Line priority for the chosen target (semantics unchanged; a
+      //    Guardian-bound target is legal by construction).
+      if (!isLegalTarget(targetEntityId)) {
+        const t = pushToast('Must target the Front Line first (attacker has no Evasive; target has no Ranged).');
+        return { pending: null, toasts: [...s.toasts, t] };
       }
 
       // 3. Long-Quiet Wall: opposing COMPANIONS cannot attack the defender's

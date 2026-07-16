@@ -716,7 +716,7 @@ Three distinct trigger conditions:
 A character may only initiate an attack if it is in the Front Line, **unless it has the Ranged keyword**. A character with Ranged may initiate an attack from either the Front Line or the Back Line.
 
 ### Targeting Priority (Attacks Only)
-1. **Guardian Check:** If the opponent has any ready Guardian characters, the attacker must target a Guardian first
+1. **Guardian Check:** If the opponent has any Guardian characters that are ready and a legal target for the attacking character, the attacker must target such a Guardian first (Rules Note 2026-07-15: legality per the targeting rules — Front Line priority, Evasive, Ranged; an unreachable Guardian imposes nothing. The keyword's printed text always carried the legal-target clause; this summary previously omitted it and was corrected on this date.)
 2. **Front Line Priority:** Among non-Guardian targets, the attacker must target a Front Line character if any exist
 3. **Back Line targets become legal** only when the opposing Front Line is empty, when the attacker has Evasive, or when the defender has Ranged
 4. **Choose Specific Target:** From legal targets, the attacking player chooses

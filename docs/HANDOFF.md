@@ -2,7 +2,40 @@
 
 Self-contained context for continuing the card-effect engine work in a fresh session.
 
-## Latest session (2026-07-15, latest) — Capability arc 5 (FINAL): on-sacrifice triggers (Siegeworks) + rewordings — PROGRAM CLOSED
+## Latest session (2026-07-15, bugfix) — Guardian ignores "legal target" (targeting deadlock) FIXED
+**Suite: 28 files / 324 tests green; tsc ZERO; validate:decks clean. PRIORITY fix — the owner can
+now RESUME FIXTURE RECORDING** (blocked on this; a recorded game SHOULD include a back-line
+Guardian board so this territory sits inside the new replay net).
+- **Bug:** resolveAttack's Guardian gate filtered on ready ONLY; canon GUARDIAN (verbatim):
+  "While this character is ready (not exhausted) and a legal target, opponents must attack it
+  before any other character" — the legal-target clause was unimplemented. A ready BACK-line
+  Guardian behind an occupied front line deadlocked every attack for a normal attacker
+  (anything else → "Guardian first!"; the Guardian → Front Line priority refusal).
+- **Fix (structural reordering, no special case):** Front-Line-priority legality (`isLegalTarget`:
+  front slot / empty front / attacker Evasive / defender Ranged) is computed FIRST; Guardian
+  binds WITHIN the legal set (`bindingGuardians`); check 2 then applies the same predicate to
+  the chosen target (semantics unchanged — off-board ids still pass through as before). The
+  "Guardian must be attacked first" toast now fires only when a Guardian is genuinely legally
+  attackable. Verified live on the exact reported board (front grunt attackable, no deadlock).
+- **Pins (`guardian_legality.test.ts`, 7):** (1) no deadlock + the unreachable Guardian itself
+  stays front-line-protected; (2) EVASIVE attacker IS bound by the back Guardian (reach ≠
+  bypass — canon EVASIVE "Still subject to Guardian targeting requirement"); (3) RANGED back
+  Guardian binds everyone; (4) front Guardian regression; (5) exhausted binds nobody; (6) two
+  Guardians — only the legal one binds; (7) legality recomputed per declaration (dead Guardian
+  → free targeting, R2 2026-07-15). Interop CONFIRMED: Long-Quiet Wall ward + Crystalline
+  Sentinel restriction pins untouched and green (ward check unchanged downstream of the gate).
+- **Non-vacuity — 6 mutations. HONEST MISS RECORDED: M5 (chosen-target legality disconnected)
+  was predicted to fail pin 6 and failed NOTHING — the Guardian gate shields that assertion, so
+  no pin watched check 2 at all. The mutation exposed the coverage hole; pin 1 was STRENGTHENED
+  (unreachable Guardian must itself be refused by Front Line priority) and M5 re-run now fails
+  pin 1 exactly.** Others as predicted: ready-only revert → pin 1; Evasive-bypasses → pin 2;
+  Ranged-ignored → pin 3; ready-check dropped → pin 5; gate disconnected → pins 2/3/4/6.
+- **Docs (2026-07-15, parent + snapshots word-identical):** Targeting-Rules step-1 summary line
+  CORRECTED in Game_Rules_Updated §Targeting Rules (+ full Rules Note: the summary was in
+  error, not the keyword) and Card_Design_Parameters §23 Targeting Priority (inline note).
+  Owner re-uploads: Game_Rules_Updated.md, Card_Design_Parameters.md, HANDOFF.md.
+
+## Previous session (2026-07-15) — Capability arc 5 (FINAL): on-sacrifice triggers (Siegeworks) + rewordings — PROGRAM CLOSED
 **Suite: 26 files / 316 tests green; tsc ZERO; validate:decks clean. FLAGGED GAPS 1 → 0 — the
 2026-07-08 engine-capability program is COMPLETE** (tier4 pin now asserts the flag list is EMPTY
 and guards the convention itself). ⚠ **BOTH REPLAY FIXTURES RETIRED — see below; owner must

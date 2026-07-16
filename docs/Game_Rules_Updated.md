@@ -213,7 +213,8 @@ Companions whose Level exceeds your current Willpower flee at the start of your 
 A character may only initiate an attack if it is in the Front Line, unless it has the Ranged keyword. A character with Ranged may initiate an attack from either the Front Line or the Back Line.
 
 **Targeting Rules (for attacks):**
-1. **Guardian:** If the opponent has any Guardian characters that are ready, the attacker must target a Guardian first
+1. **Guardian:** If the opponent has any Guardian characters that are ready and a legal target for the attacking character, the attacker must target such a Guardian first
+   - **Rules Note (2026-07-15) — Guardian requires target legality.** Guardian obligates attackers only while the Guardian is ready AND a legal target for the attacking character under the targeting rules (Front Line priority, Evasive, Ranged). A Guardian that a given attacker cannot legally target imposes no restriction on that attacker. This has always been the keyword's printed text ("While this character is ready (not exhausted) and a legal target, opponents must attack it before any other character"); this summary line previously omitted the legal-target clause and was corrected on this date — the summary was in error, not the keyword.
 2. **Front Line priority:** Among non-Guardian targets, the attacker must target a Front Line character if any exist; Back Line characters can only be targeted if the Front Line is empty, the attacker has Evasive, or the defender has Ranged
 3. **Player Choice:** Among legal targets, the attacking player chooses the specific target
 
