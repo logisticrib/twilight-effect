@@ -48,14 +48,28 @@ describe('strict §24 order: no Minor Action after the Major (rotation only adva
     expect(gs.getState().game.p1.board.f1?.loadout?.gear[0], 'nothing equipped').toBeNull();
   });
 
-  it('Major then Minor-cost ABILITY (Anchor Stone) → refused; and the PC is covered too', () => {
-    seed([], { f2: mkPc('pc-1', { atk: 2, loadout: { weapon: null, gear: [{ ...stoneItem }, null] } }),
-               f1: mkConstruct('bw-host', 'Reinforced Gate', 2, { subtype: 'Fortification' }) },
-      { f1: mkComp('tgt', compCard.name, { hp: 9 }) });
-    attackWith('pc-1', 'tgt');
-    gs.getState().activateAbility('pc-1', 0);
-    expect(gs.getState().toasts.at(-1)?.msg).toContain(REASON);
-    expect(gs.getState().pendingActionTarget, 'no targeting armed').toBeNull();
+  it('Major then Minor-cost ABILITY → refused (synthetic body ability; PC covered). RE-BASED 2026-07-16: Anchor Stone left this rule — item taps are window-model, legal after the Major', () => {
+    // Supersession note: this pin originally used Anchor Stone as the Minor-cost
+    // exemplar. The 2026-07-16 window model makes item taps NOT character actions
+    // (usable after the Major — see activation_economy + item window pins), so the
+    // Minor-after-Major rule is pinned with a synthetic BODY-hosted Minor ability.
+    CATALOG.push({ id: 'syn-minor-body', name: 'Focus Probe', level: 1, type: 'Companion', subtype: '',
+      rarity: 'Common', class1: 'Builder', class2: '', attack: 1, hp: 1, anchor: null, actionSub: '',
+      actionPM: '', itemKind: '', keywords: [], text: '', flavor: '',
+      effects: [{ trigger: 'activated', oncePerTurn: true, actionCost: 'minor', effects: [{ op: 'anchor', delta: 1, target: 'physicalConstruct' }] }],
+    } as unknown as Card);
+    try {
+      seed([], { f2: mkPc('pc-1', { atk: 2 }), f3: mkComp('probe', 'Focus Probe', { fresh: false }),
+                 f1: mkConstruct('bw-host', 'Reinforced Gate', 2, { subtype: 'Fortification' }) },
+        { f1: mkComp('tgt', compCard.name, { hp: 9 }) });
+      attackWith('probe', 'tgt');
+      gs.getState().activateAbility('probe', 0);
+      expect(gs.getState().toasts.at(-1)?.msg).toContain(REASON);
+      expect(gs.getState().pendingActionTarget, 'no targeting armed').toBeNull();
+    } finally {
+      const i = CATALOG.findIndex(c => c.id === 'syn-minor-body');
+      if (i >= 0) CATALOG.splice(i, 1);
+    }
   });
 
   it('Major then Minor-cost ACTION CARD → refused via the shared canPlayActionCard gate', () => {
@@ -69,7 +83,7 @@ describe('strict §24 order: no Minor Action after the Major (rotation only adva
     expect(gs.getState().game.p1.deck.length, 'card never resolved').toBe(deckBefore);
   });
 
-  it('REGRESSION: the legal direction stands — Anchor Stone (Minor, 45°) then attack (Major, 90°)', () => {
+  it('REGRESSION: the legal direction stands — Anchor Stone tap (window model, no rotation — 2026-07-16) then attack (Major, 90°)', () => {
     seed([], { f2: mkPc('pc-1', { atk: 2, loadout: { weapon: null, gear: [{ ...stoneItem }, null] } }),
                f1: mkConstruct('bw-host', 'Reinforced Gate', 2, { subtype: 'Fortification' }) },
       { f1: mkComp('tgt', compCard.name, { hp: 9 }) });

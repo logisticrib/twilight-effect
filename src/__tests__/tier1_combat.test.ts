@@ -343,8 +343,15 @@ describe('batch 2026-07-08: attacking exhausts the attacker — PC included (rul
 
     gs.getState().beginAttack('px-pc');
     expect(gs.getState().pending, 'second attack refused').toBeNull();
-    gs.getState().activateAbility('px-pc', 0); // Anchor Stone's activated ability
-    expect(gs.getState().pendingActionTarget, 'activated ability refused while exhausted').toBeNull();
+    // RE-RULED 2026-07-16 (item-ability window model): an ITEM ability (Anchor
+    // Stone) is NOT a character action — a 90°/exhausted bearer can still tap it
+    // while its activation window is open ("rotation spends actions, not the
+    // window"). The old assertion (refused while exhausted) pinned the superseded
+    // Minor-spend model. The tap now ARMS targeting even on the exhausted PC.
+    gs.getState().activateAbility('px-pc', 0); // Anchor Stone — window-model tap
+    expect(gs.getState().pendingActionTarget, 'item tap legal at 90° (window open)').toBeTruthy();
+    gs.getState().resolveActionTarget('px-wall');
+    expect(gs.getState().game.p1.board.f2?.anchors, 'tap resolved').toBe(3);
 
     // Readying at the start of the controller's next turn lifts it.
     gs.getState().endTurn(); // p1 → p2

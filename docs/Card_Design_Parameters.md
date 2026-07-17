@@ -393,6 +393,8 @@ Three distinct trigger conditions:
 
 **Prefer exhaust-style costs over "once per turn" (owner-ratified 2026-07-15).** Activated abilities should cost exhaustion (of the character, or of the item itself for item-hosted abilities) rather than be worded "once per turn." Exhaustion is self-tracking in physical play — the rotated card is the record — while once-per-turn limits must be remembered. Existing printed "once per turn" cards keep their text; this guides future generation and rework.
 
+**Item-hosted activated abilities — canonical template (owner-ratified 2026-07-16):** "Exhaust this [item]: [effect]." — no "As a Minor Action" prefix. Timing: the ability is used during the equipped character's activation window, at any point within it; it is not a character action and the character does not rotate (see the Item Activated Abilities Rules Note in Game_Rules_Updated). Printed per-turn limits on TRIGGERED riders and passives keep their wording — game events are their tracker; this template governs activated abilities.
+
 ---
 
 ## 14. TRIGGERED ABILITY TIMING & DESIGN CONSTRAINTS

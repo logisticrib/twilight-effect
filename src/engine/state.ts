@@ -224,6 +224,12 @@ export interface PendingPeek {
   cards: Card[];                // the looked-at cards (top first)
   dests: ('hand' | 'top' | 'bottom')[];
   maxHand?: number;
+  /** "Any deck" choice phase (2026-07-16): the controller picks WHICH deck before
+   *  it is sliced (cards is empty until then; `look` carries the slice size).
+   *  OPTIONAL fields — absent for ordinary peeks, so pre-mechanic games hash
+   *  identically. resolvePeekDeck completes the phase. */
+  chooseDeck?: true;
+  look?: number;
 }
 
 /** A queued start-of-turn peek (deck not yet sliced — re-sliced when it becomes
@@ -235,6 +241,7 @@ export interface PeekRequest {
   look: number;
   dests: ('hand' | 'top' | 'bottom')[];
   maxHand?: number;
+  deck?: 'any';   // "any deck" (2026-07-16): controller chooses the side at resolution
 }
 
 /** Coercion (on-enter keyword): the opponent of the entering companion must discard

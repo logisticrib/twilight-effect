@@ -162,8 +162,21 @@ export function magicCtx(game: GameState, lp: 'p1' | 'p2', card?: Card): EffectC
 
 /** A permanent's structured effects for a given trigger (looked up from CATALOG by name). */
 export function permanentEffects(ent: BoardEntity, trigger: Trigger): Effect[] {
-  const card = CATALOG.find(c => c.name === ent.name);
-  return (card?.effects ?? []).filter(c => c.trigger === trigger).flatMap(c => c.effects);
+  // The entity's own card AND its equipped items' clauses (2026-07-16 — Lens of
+  // Foretelling's start-of-turn peek lived on an EQUIPPED item and was silently
+  // dead: this helper only read the body card). Matches combatTriggerEffects'
+  // long-standing card+items discipline.
+  const lists = [CATALOG.find(c => c.name === ent.name)?.effects];
+  const lo = ent.loadout;
+  if (lo) {
+    const seen = new Set<string>();
+    for (const it of [lo.weapon, ...lo.gear]) {
+      if (!it || seen.has(it.id)) continue;
+      seen.add(it.id);
+      lists.push(CATALOG.find(c => c.name === it.name)?.effects);
+    }
+  }
+  return lists.flatMap(effs => (effs ?? []).filter(c => c.trigger === trigger).flatMap(c => c.effects));
 }
 
 export interface ActivatedAbility {

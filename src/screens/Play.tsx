@@ -185,6 +185,21 @@ function PeekModal() {
   }, [pk]);
 
   if (!pk || !owned) return null;
+
+  // "Any deck" choice phase (2026-07-16 — Lens of Foretelling / Runic Convergence
+  // Staff): the controller picks WHOSE deck before it is sliced.
+  if (pk.chooseDeck) {
+    return (
+      <ModalShell glyph="☾" eyebrow={pk.source} title="Look at the top of which deck?"
+        width="min(420px, 92vw)">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <button style={md.btn('primary')} onClick={() => useGameStore.getState().resolvePeekDeck(localPlayer)}>Your deck</button>
+          <button style={md.btn('primary')} onClick={() => useGameStore.getState().resolvePeekDeck(localPlayer === 'p1' ? 'p2' : 'p1')}>Opponent's deck</button>
+        </div>
+      </ModalShell>
+    );
+  }
+
   const handCount = assign.filter(a => a === 'hand').length;
   const overHand = pk.maxHand != null && handCount > pk.maxHand;
   const DEST_LABEL: Record<string, string> = { hand: 'Hand', top: 'Top', bottom: 'Bottom' };

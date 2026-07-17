@@ -2,7 +2,62 @@
 
 Self-contained context for continuing the card-effect engine work in a fresh session.
 
-## Latest session (2026-07-15, bugfix) — STRICT activation order: no Minor after the Major
+## Latest session (2026-07-16) — Partial-gaps CLOSEOUT + item-ability window model — DEBT #3 RESOLVED
+**Suite: 34 files / 361 tests green; tsc ZERO; validate:decks clean; fixtures folder was EMPTY
+at start (the brief's fixture warning was moot). ✅ FRESH ALL-CLEAR TO RECORD after server
+restart on this commit. FULL-CATALOG SWEEP: 100 cards, ZERO unexplained clauses, ZERO
+effectsFlags — every sentence maps to ops, parsed keywords, or reminder text.**
+- **P1 — ITEM-ABILITY WINDOW MODEL (owner 2026-07-16, supersedes bb0acbc/867652a's Minor-spend
+  for Anchor Stone):** an item-hosted activated clause with NO printed action prefix is NOT a
+  character action — `windowModel` in activateAbility: cost = the item's exhaustion only, no
+  budget spent, no bearer rotation, usable at any point in the bearer's window (before Movement,
+  at 90°, fully exhausted); tapping OPENS/CONTINUES the activation (activationPatch — seals
+  others); sealed bearer → refusal "<name>'s activation is finished"; controller's-turn-only
+  (GRU inactive-player restriction, cited). Quill of Unmaking keeps its printed "As a Major
+  Action" via an explicit `actionCost: 'major'`. SUPERSESSION HYGIENE: 3 pins retired+rewritten
+  dated (tier1_combat 90°-tap now LEGAL; activation_economy tap costs nothing; strict-order's
+  Minor-after-Major ability pin re-based onto a synthetic body ability — Anchor Stone left that
+  rule). Item taps = the SECOND member of Special Actions' category.
+- **P2 — REWORDINGS (owner 2026-07-16, both verbatim):** Anchor Stone → "Exhaust this trinket:
+  add 1 Anchor counter to target Physical Construct."; Runic Convergence Staff → "Equipped
+  character has +2 attack. Exhaust this staff: look at the top card of any deck." (activated
+  peek clause authored; look-only = dests ['top'] — a single destination grants no choice).
+  **ANY-DECK PEEK MACHINERY:** PendingPeek gained an OPTIONAL chooseDeck phase (hash-neutral;
+  buildPeek arms it for `deck:'any'` requests; new `resolvePeekDeck(side)`; PeekModal renders
+  the two-deck choice; existing pendingPeek hold covers MP).
+- **P3 — PARTIAL GAPS, ALL CLOSED:** (1) Embercast Wand rider authored (new Trigger
+  `onEquippedPlaysMagicAction`, fired in playAction ON THE PLAY — ⚠ ENGINE READING, flagged:
+  a COUNTERED Magic Action still triggers the rider ("plays" is the event, 2026-07-15
+  definition); per-wand once-per-turn via ability-used: status). (2) Ashforged Pendant authored
+  (new op `firstMagicUncounterable` + per-actor first-Magic tag; PINNED ×Ward of Silence:
+  first resolves, second countered, resets next turn). (3) Lens of Foretelling — **FINDING:
+  its start-of-turn peek was ENTIRELY dead, not merely missing the deck choice: permanentEffects
+  read only the body card, never equipped items. Extended to card+items (combatTriggerEffects
+  discipline; 2 call sites audited: startOfTurn gather + ward scan).** Deck-any choice added
+  per printed text. (4) Belts: Kit-Master was enter-wired only — the belts' on-equip clause was
+  genuinely dead; equipItem now arms the same pendingKit machinery when the equipped item
+  declares Kit-Master (fizzle-toast when no move exists). (5) Master of Foundations: ALREADY
+  verified+pinned (master_of_foundations.test.ts, the arc-5 correction) — cited, nothing done.
+  (6) **Untamed: NO card in the shipped 100 carries the keyword or per-card Untamed text**
+  (only the card NAME "Wrath of the Untamed Sky") — nothing to implement; the keyword stays
+  registered-unimplemented in the registry (visible, not silent).
+- **Tests:** item_window.test.ts (5 — window model per the brief's pin list) +
+  partial_gaps_closeout.test.ts (6 — wand/pendant/staff both decks/lens/belts) + 3 supersession
+  rewrites. **Mutations — 5. M1 (window disconnected) HONEST IMPRECISION: predicted 8, failed
+  9 — right files, 3 wrong itemizations (two over-predictions drive attacks via forced
+  `pending`, bypassing beginAttack's exhaust gate; two economy asserts missed). M2 (no
+  activation-open) / M3 (rider ignores once-per-turn) / M4 (pendant protects all) / M5
+  (permanentEffects items reverted → Lens only) — all EXACT.**
+- **Docs (parent + snapshots word-identical):** GRU §Items gained the Item Activated Abilities
+  Rules Note (2026-07-16, verbatim); CDP §13 gained the canonical item-ability template
+  ("Exhaust this [item]: [effect]." — no action prefix; window timing; printed trigger limits
+  keep their wording). Owner re-uploads: Game_Rules_Updated.md, Card_Design_Parameters.md,
+  HANDOFF.md.
+- **PROJECT_STATE debt #3: RESOLVED** (Grudrik 2026-07-15; the five partials + Lens this
+  session; Untamed = no card). Remaining engine-side wants: interpreter `move` op (arc-1 flag,
+  must consult movement restrictions when built); MP live pass over all holds.
+
+## Previous session (2026-07-15, bugfix) — STRICT activation order: no Minor after the Major
 **Suite: 32 files / 349 tests green; tsc ZERO; validate:decks clean. Fixtures folder was still
 EMPTY at session start (no recordings to audit). ✅ FRESH ALL-CLEAR TO RECORD — server restarted
 on this commit so the REC chip stamps correctly.** Owner ruling (closes ab8a5b0's observation):

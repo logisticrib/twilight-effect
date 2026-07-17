@@ -85,6 +85,8 @@ Each item is always considered attached to a single character. There is no "free
 
 **Rules Note (2026-07-15) — Item exhaustion.** Items can be exhausted when an effect uses exhausting them as a cost. An exhausted item readies at the start of its controller's turn, with that player's characters. Exhaustion belongs to the item itself: moving an exhausted item to another character does not ready it. An item's granted static bonuses and keywords are unaffected by its exhaustion unless stated otherwise.
 
+**Rules Note (2026-07-16) — Item activated abilities.** An item's activated ability is used during the equipped character's activation, at any point within it, and costs exhausting the item — no character action is spent and the character does not rotate. Using an item's ability opens or continues the bearer's activation like any other act of that character; once the bearer's activation has ended (another character has acted), their items' abilities are unavailable for the turn. Exhausted items ready at the start of their controller's turn. Item abilities are used only on their controller's turn.
+
 **CONSTRUCTS**
 
 Unlike items, constructs are not attached to characters—they occupy COMMAND ZONE slots and degrade over time.

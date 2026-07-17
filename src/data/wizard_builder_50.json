@@ -355,14 +355,7 @@
         {
           "trigger": "startOfTurn",
           "effects": [
-            {
-              "op": "deckPeek",
-              "look": 1,
-              "dests": [
-                "top",
-                "bottom"
-              ]
-            }
+            { "op": "deckPeek", "look": 1, "dests": ["top", "bottom"], "deck": "any" }
           ]
         }
       ]
@@ -576,7 +569,7 @@
       "actionPM": "",
       "itemKind": "Weapon",
       "keywords": [],
-      "text": "Equipped character has +2 attack. Once per turn, the equipped character may look at the top card of any deck.",
+      "text": "Equipped character has +2 attack. Exhaust this staff: look at the top card of any deck.",
       "flavor": "",
       "createdAt": "2026-05-16T19:02:21.324271Z",
       "updatedAt": "2026-05-16T19:02:21.324273Z",
@@ -591,6 +584,14 @@
               "scope": "self",
               "duration": "while"
             }
+          ]
+        }
+      ,
+        {
+          "trigger": "activated",
+          "cost": { "kind": "exhaustItem" },
+          "effects": [
+            { "op": "deckPeek", "look": 1, "dests": ["top"], "deck": "any" }
           ]
         }
       ]
@@ -685,6 +686,7 @@
         },
         {
           "trigger": "activated",
+          "actionCost": "major",
           "cost": {
             "kind": "sacrificeSelf"
           },
@@ -1464,7 +1466,7 @@
       "actionPM": "",
       "itemKind": "Trinket",
       "keywords": [],
-      "text": "As a Minor Action, exhaust this trinket: add 1 Anchor counter to target Physical Construct.",
+      "text": "Exhaust this trinket: add 1 Anchor counter to target Physical Construct.",
       "flavor": "",
       "createdAt": "2026-05-16T19:02:21.324615Z",
       "updatedAt": "2026-05-16T19:02:21.324617Z",
@@ -1472,7 +1474,6 @@
         {
           "trigger": "activated",
           "cost": { "kind": "exhaustItem" },
-          "actionCost": "minor",
           "effects": [
             {
               "op": "anchor",

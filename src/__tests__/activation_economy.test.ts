@@ -34,15 +34,18 @@ function seed(p1Board: Record<string, ReturnType<typeof mkComp>>) {
 const b = () => gs.getState().game.p1.board;
 
 describe('Anchor Stone — "As a Minor Action, exhaust this trinket" (activation economy bugfix)', () => {
-  it('activates as the bearer\'s MINOR action: 45° tap, NOT exhausted, Major still available; adds the anchor via targeting', () => {
+  it('RE-RULED 2026-07-16 (window model): the tap costs the ITEM only — no Minor spent, NO bearer rotation; adds the anchor via targeting', () => {
+    // Supersedes the 2026-07-15 Minor-spend pins: an item-hosted ability is not a
+    // character action. The bearer spends nothing and does not rotate; the item's
+    // exhaustion (item_exhaustion.test.ts) is the whole cost.
     seed({ f1: bearer(), f2: mkConstruct('bw', 'Reinforced Gate', 2, { subtype: 'Fortification' }) });
     gs.getState().activateAbility('bear', 0);
     let ent = b().f1!;
     expect(gs.getState().pendingActionTarget?.eligibleIds, 'targeting armed').toEqual(['bw']);
-    expect(ent.acts.minor, 'Minor budget consumed').toBe(true);
+    expect(ent.acts.minor, 'NO Minor spent (re-rule 2026-07-16)').toBe(false);
     expect(ent.acts.major, 'Major budget INTACT').toBe(false);
-    expect(ent.tapped, '45° tap, not 90°').toBe('minor');
-    expect(ent.exhausted, 'NOT exhausted — the old Major default wrecked the bearer').toBe(false);
+    expect(ent.tapped, 'bearer does NOT rotate').toBe('none');
+    expect(ent.exhausted, 'NOT exhausted').toBe(false);
     gs.getState().resolveActionTarget('bw');
     expect(b().f2?.anchors, '+1 anchor on the target').toBe(3);
     ent = b().f1!;

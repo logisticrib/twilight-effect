@@ -30,7 +30,7 @@ import { ADJ, FRONT_SLOTS, BACK_SLOTS, isFront, findSlot, type SlotId, type Boar
          destroyEntity, fireSacrificeTriggers, applyDamage, applyCombatHit, driveAttack, optionalAttackAbility,
          attackDamageBonus, resolveActionEffects, armPrompts, armNextArmorChoice,
          applyArmorCounter, applyPreventionOrder, armNextPreventOrder,
-         freshActs, uid, computeWillpower, makeNewGame, nextPeek, resolveStartOfTurn,
+         freshActs, uid, computeWillpower, makeNewGame, nextPeek, buildPeek, resolveStartOfTurn,
          controlsPreventAnchorDecay, equipOnto, kitDests } from '../engine';
 
 export type PlayPhase = 'lobby' | 'setup' | 'game';
@@ -795,6 +795,9 @@ interface GameStoreState {
 
   // Deck-peek (scry) resolution
   resolvePeek: (assignments: ('hand' | 'top' | 'bottom')[]) => void;
+  /** "Any deck" peek (2026-07-16): the controller picks whose deck; slices it and
+   *  advances the peek to its normal card-placement phase. */
+  resolvePeekDeck: (side: 'p1' | 'p2') => void;
   cancelPeek: () => void;
   /** Dead-Zone recovery: take the dead card at `idx` (in the dead array) to hand. */
   resolveDeadPick: (idx: number) => void;
@@ -1045,7 +1048,30 @@ export const useGameStore = create<GameStoreState>()(
     // Equipping as a turn action spends the equipper's Minor action.
     const e2 = findEntityAnywhere(g, entityId);
     if (e2) g = updateEntity(g, entityId, { acts: { ...e2.ent.acts, minor: true }, tapped: e2.ent.acts.major ? 'major' : 'minor' });
-    return { game: { ...g, ...activationPatch(s.game, entityId) } };
+
+    // Kit-Master on EQUIP (2026-07-16, partial-gaps closeout — Captain's Belt /
+    // Engineer's Toolbelt: "When this becomes equipped, you may move target item
+    // from one character you control to another…"). The belts declare the
+    // Kit-Master KEYWORD with equip timing; the engine only wired the companion
+    // on-enter variant, so the belt clause was dead. Same prompt machinery
+    // (pendingKit), same eligibility, optional ("you may" — cancel skips).
+    let beltKit: PendingKit | null = null;
+    if (card.keywords.includes('Kit-Master')) {
+      const chars = (Object.values(g[lp].board) as (BoardEntity | undefined)[])
+        .filter((e): e is BoardEntity => !!e && isCharacter(e));
+      const sources = chars.filter(e =>
+        allItemsOf(e).some(it => kitDests(g, lp, e.id, it.isWeapon, !!it.item.heavy).length > 0)
+      ).map(e => e.id);
+      if (sources.length > 0) {
+        beltKit = { sourceName: card.name, step: 'source', eligibleIds: sources };
+      } else {
+        const id = ++toastId;
+        setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 3000);
+        return { game: { ...g, ...activationPatch(s.game, entityId) },
+          toasts: [...s.toasts, { id, msg: `${card.name} equipped — no item to move (Kit-Master).` }] };
+      }
+    }
+    return { game: { ...g, ...activationPatch(s.game, entityId) }, ...(beltKit ? { pendingKit: beltKit } : {}) };
   }),
 
   // ── Play Action card ───────────────────────────────────────────────────────
@@ -1096,11 +1122,54 @@ export const useGameStore = create<GameStoreState>()(
       g0 = { ...g0, [lp]: { ...g0[lp], classZone: newCZ, willpower: computeWillpower(newCZ) } };
     }
 
+    // ── Magic-Action riders + first-Magic tracking (2026-07-16, partial-gaps
+    //    closeout). "Plays" is the event (2026-07-15 definition) — riders fire on
+    //    the play itself, before any counter resolves (a countered action was
+    //    still PLAYED). Trackers are 'ability-used:'-prefixed statuses on the
+    //    actor, cleared at its controller's ready like every per-turn marker.
+    const riderMsgs: string[] = [];
+    let actorWasFirstMagic = false;
+    if (card.subtype === 'Magic') {
+      const MAGIC_TAG = 'ability-used:played-magic-this-turn';
+      const a0 = findEntityAnywhere(g0, actLoc.ent.id)?.ent;
+      actorWasFirstMagic = !!a0 && !a0.statuses.includes(MAGIC_TAG);
+      if (a0 && actorWasFirstMagic) g0 = updateEntity(g0, a0.id, { statuses: [...a0.statuses, MAGIC_TAG] });
+      // Embercast Wand: "Once per turn, when equipped character plays a Magic
+      // Action, draw a card." — per-ITEM once-per-turn (printed limit; the 2026-07-15
+      // guideline governs ACTIVATED abilities, not triggers).
+      const bearer0 = findEntityAnywhere(g0, actLoc.ent.id)?.ent;
+      const rlo = bearer0?.loadout;
+      if (bearer0 && rlo) for (const it of [rlo.weapon, ...rlo.gear]) {
+        if (!it) continue;
+        const itemCard = CATALOG.find(c => c.name === it.name);
+        for (const ce of itemCard?.effects ?? []) {
+          if (ce.trigger !== 'onEquippedPlaysMagicAction') continue;
+          const tag = `ability-used:magic-rider:${it.id}`;
+          const cur = findEntityAnywhere(g0, bearer0.id)?.ent;
+          if (!cur || (ce.oncePerTurn && cur.statuses.includes(tag))) continue;
+          const rr = resolveActionEffects(g0, lp, it.name, ce.effects, undefined, bearer0.id);
+          g0 = rr.game;
+          riderMsgs.push(`${it.name}: ${rr.msgs.join(' | ') || 'triggers'}`);
+          if (ce.oncePerTurn) {
+            const c2 = findEntityAnywhere(g0, bearer0.id)?.ent;
+            if (c2) g0 = updateEntity(g0, bearer0.id, { statuses: [...c2.statuses, tag] });
+          }
+        }
+      }
+    }
+
     // ── Counter check ──────────────────────────────────────────────────────────
     // If the opponent controls a counter ward and this action isn't uncounterable,
     // sacrifice the ward and send the action to the Dead Zone without resolving.
     const opp: 'p1' | 'p2' = lp === 'p1' ? 'p2' : 'p1';
-    const uncounterable = (card.effects ?? []).some(c => c.uncounterable);
+    // Ashforged Pendant (2026-07-16): "The first Magic Action equipped character
+    // plays each turn cannot be countered." — the count resets each turn (the
+    // tracker tag clears at ready).
+    const pendantProtects = card.subtype === 'Magic' && actorWasFirstMagic
+      && (() => { const b2 = findEntityAnywhere(g0, actLoc.ent.id)?.ent; const l2 = b2?.loadout;
+           return !!l2 && [l2.weapon, ...l2.gear].some(it => it && (CATALOG.find(c => c.name === it.name)?.effects ?? [])
+             .some(ce => ce.trigger === 'equipped' && ce.effects.some(e => e.op === 'firstMagicUncounterable'))); })();
+    const uncounterable = (card.effects ?? []).some(c => c.uncounterable) || pendantProtects;
     if (!uncounterable) {
       const wardEntry = (Object.entries(g0[opp].board) as [SlotId, BoardEntity | undefined][])
         .find(([, e]) => e && permanentEffects(e, 'onOpponentAction').some(ef => ef.op === 'counterAction'));
@@ -1110,7 +1179,7 @@ export const useGameStore = create<GameStoreState>()(
         const wardCard = CATALOG.find(c => c.name === ward.name);
         if (wardCard) g = { ...g, [opp]: { ...g[opp], dead: [...g[opp].dead, wardCard] } };
         g = { ...g, [lp]: { ...g[lp], hand: g[lp].hand.filter(c => c.id !== handCardId), dead: [...g[lp].dead, card] } };
-        return { game: g, pendingPlay: null, toasts: [...s.toasts, mkToast(`${card.name} is countered by ${ward.name}!`)] };
+        return { game: g, pendingPlay: null, toasts: [...s.toasts, ...mkToasts(riderMsgs), mkToast(`${card.name} is countered by ${ward.name}!`)] };
       }
     }
 
@@ -1122,12 +1191,13 @@ export const useGameStore = create<GameStoreState>()(
       const eligibleIds = charsOf(g0, lp);
       const newHand = g0[lp].hand.filter(c => c.id !== handCardId);
       if (eligibleIds.length === 0) {
-        return { game: { ...g0, [lp]: { ...g0[lp], hand: newHand, dead: [...g0[lp].dead, card] } }, pendingPlay: null, toasts: [...s.toasts, mkToast(`${card.name} fizzles — no character to act.`)] };
+        return { game: { ...g0, [lp]: { ...g0[lp], hand: newHand, dead: [...g0[lp].dead, card] } }, pendingPlay: null, toasts: [...s.toasts, ...mkToasts(riderMsgs), mkToast(`${card.name} fizzles — no character to act.`)] };
       }
       return {
         game: { ...g0, [lp]: { ...g0[lp], hand: newHand } },
         pendingPlay: null,
         pendingActionTarget: { source: 'action', sourceName: card.name, lp, effects: onPlay, eligibleIds, card, twoStep: ts },
+        toasts: [...s.toasts, ...mkToasts(riderMsgs)],
       };
     }
 
@@ -1137,12 +1207,13 @@ export const useGameStore = create<GameStoreState>()(
       const cards = g0[lp].deck.slice(0, peek.look);
       const newHand = g0[lp].hand.filter(c => c.id !== handCardId);
       if (cards.length === 0) {
-        return { game: { ...g0, [lp]: { ...g0[lp], hand: newHand, dead: [...g0[lp].dead, card] } }, pendingPlay: null, toasts: [...s.toasts, mkToast(`${card.name} — deck is empty.`)] };
+        return { game: { ...g0, [lp]: { ...g0[lp], hand: newHand, dead: [...g0[lp].dead, card] } }, pendingPlay: null, toasts: [...s.toasts, ...mkToasts(riderMsgs), mkToast(`${card.name} — deck is empty.`)] };
       }
       return {
         game: { ...g0, [lp]: { ...g0[lp], hand: newHand, dead: [...g0[lp].dead, card] },
           pendingPeek: { source: card.name, lp, deckSide: lp, cards, dests: peek.dests, maxHand: peek.maxHand } },
         pendingPlay: null,
+        toasts: [...s.toasts, ...mkToasts(riderMsgs)],
       };
     }
 
@@ -1156,7 +1227,7 @@ export const useGameStore = create<GameStoreState>()(
         return {
           game: { ...g0, [lp]: { ...g0[lp], hand: newHand, dead: [...g0[lp].dead, card] } },
           pendingPlay: null,
-          toasts: [...s.toasts, mkToast(`${card.name} fizzles — no legal target.`)],
+          toasts: [...s.toasts, ...mkToasts(riderMsgs), mkToast(`${card.name} fizzles — no legal target.`)],
         };
       }
       // Card goes on the "stack" (out of hand); resolves when a target is clicked.
@@ -1166,6 +1237,7 @@ export const useGameStore = create<GameStoreState>()(
         game: { ...g0, [lp]: { ...g0[lp], hand: newHand } },
         pendingPlay: null,
         pendingActionTarget: { source: 'action', sourceName: card.name, lp, effects: onPlay, eligibleIds, card, sourceId: actLoc.ent.id },
+        toasts: [...s.toasts, ...mkToasts(riderMsgs)],
       };
     }
 
@@ -1178,7 +1250,7 @@ export const useGameStore = create<GameStoreState>()(
     return {
       game: armPrompts(finalG, deadSink, armorSink),
       pendingPlay: null,
-      toasts: [...s.toasts, mkToast(msgs.length ? `${card.name}: ${msgs.join(' | ')}` : `Played: ${card.name}`)],
+      toasts: [...s.toasts, ...mkToasts(riderMsgs), mkToast(msgs.length ? `${card.name}: ${msgs.join(' | ')}` : `Played: ${card.name}`)],
     };
   }),
 
@@ -1353,15 +1425,38 @@ export const useGameStore = create<GameStoreState>()(
     // covers Major Actions only); default 'major' = the pre-existing rule (Major
     // budget, exhausts the activator). Constructs are not bound by character action
     // economy — their abilities cost only what the card states.
-    const actionCost: 'minor' | 'major' = ability.actionCost ?? 'major';
+    // THE WINDOW MODEL (owner-ratified 2026-07-16, supersedes the 2026-07-15
+    // Minor-spend): an item-hosted ability with NO printed action prefix is NOT a
+    // character action — it belongs to the bearer's ACTIVATION WINDOW. Cost is the
+    // item's exhaustion only; no character action is spent and the bearer does not
+    // rotate; usable at any point within the window (before Movement, at 90°, fully
+    // exhausted — rotation spends actions, not the window); tapping OPENS or
+    // CONTINUES the bearer's activation (the activation patch below seals any other
+    // character mid-activation, like every character switch). An item ability whose
+    // card DOES print an action prefix (Quill of Unmaking: "As a Major Action…")
+    // carries an explicit actionCost and stays a character action.
+    const isItemAbility = !!ability.itemId;
+    const windowModel = isItemAbility && ability.actionCost === undefined;
+    const actionCost: 'minor' | 'major' | null = windowModel ? null : (ability.actionCost ?? 'major');
     // An exhausted hosting item is checked FIRST (2026-07-15): it is the most
-    // specific refusal ("Anchor Stone is exhausted" beats "Minor action already
-    // used" when both hold), and the check is side-effect-free.
+    // specific refusal, and the check is side-effect-free.
     if (ability.cost?.kind === 'exhaustItem' && ability.itemId) {
       const host = [loc.ent.loadout?.weapon, ...(loc.ent.loadout?.gear ?? [])].find(it => it?.id === ability.itemId);
       if (host?.exhausted) return refuse(`${ability.sourceName} is exhausted.`);
     }
-    if (isCharacter(loc.ent)) {
+    if (windowModel) {
+      // Existing inactive-player restriction (GRU §Inactive Player, cited not
+      // re-ruled): "Item abilities are used only on their controller's turn."
+      if (loc.player !== s.game.activePlayer) {
+        return refuse(`${ability.sourceName}: item abilities are used on their controller's turn.`);
+      }
+      // Sealed with the character (2026-07-16): once another character acted, the
+      // bearer's items are untappable for the rest of the turn.
+      if (isSealed(s.game, entityId)) {
+        return refuse(`${loc.ent.name}'s activation is finished.`);
+      }
+      // Deliberately NO fresh/rotation/budget checks: the window is the only gate.
+    } else if (isCharacter(loc.ent)) {
       const isExhausted = loc.ent.tapped === 'major' || loc.ent.exhausted;
       // Minor-cost abilities route through the SHARED Minor gate (strict §24 order,
       // 2026-07-15): no Minor after the Major — rotation only advances.
@@ -1474,12 +1569,13 @@ export const useGameStore = create<GameStoreState>()(
       if (cur) g = updateEntity(g, entityId, { statuses: [...cur.ent.statuses, abilityUsedTag(ability.sourceName)] });
     }
 
-    // Consume the character's action per the clause's actionCost (2026-07-15):
-    // 'minor' → Minor budget + 45° tap, the character stays un-exhausted (it can
-    // still attack); 'major' (default) → Major budget + exhaust, as before. Skip if
-    // the entity was sacrificed as the cost, if exhaustSelf already did it, or for
+    // Consume the character's action per the clause's actionCost: 'minor' → Minor
+    // budget + 45° tap; 'major' (default for body-hosted) → Major budget + exhaust.
+    // WINDOW-MODEL item taps (actionCost null, 2026-07-16) spend NOTHING — the item's
+    // exhaustion is the whole cost and the bearer does not rotate. Skip if the
+    // entity was sacrificed as the cost, if exhaustSelf already did it, or for
     // constructs.
-    if (isCharacter(loc.ent) && !sacrificedSelf && cost?.kind !== 'exhaustSelf') {
+    if (isCharacter(loc.ent) && actionCost !== null && !sacrificedSelf && cost?.kind !== 'exhaustSelf') {
       const cur = findEntityAnywhere(g, entityId);
       if (cur) {
         g = actionCost === 'minor'
@@ -1494,6 +1590,19 @@ export const useGameStore = create<GameStoreState>()(
 
     // The source may have left play paying its cost (sacrificeSelf, last-anchor pay).
     const selfId = findEntityAnywhere(g, entityId) ? entityId : undefined;
+
+    // Deck-peek ability (Runic Convergence Staff, 2026-07-16): deckPeek is
+    // modal-driven, not an inline interpreter op — arm the scry (with the
+    // "any deck" choice phase when the card grants it), playAction's pattern.
+    const peekEff = ability.effects.find(e => e.op === 'deckPeek');
+    if (peekEff && peekEff.op === 'deckPeek') {
+      const built = buildPeek(g, { source: ability.sourceName, lp: player, deckSide: player,
+        look: peekEff.look, dests: peekEff.dests, maxHand: peekEff.maxHand, deck: peekEff.deck });
+      if (!built) {
+        return { game: armPrompts(g, deadSink, armorSink), toasts: [...s.toasts, toast(`${ability.sourceName} — the deck is empty.`)] };
+      }
+      return { game: armPrompts({ ...g, pendingPeek: built }, deadSink, armorSink) };
+    }
 
     // ── Resolve the effect (target or immediate) ─────────────────────────────
     if (spec) {
@@ -1580,6 +1689,26 @@ export const useGameStore = create<GameStoreState>()(
     if (top.kind === 'ownEnter' && s.conn.mode !== 'solo' && top.controller !== s.localPlayer) return s;
     const r = runStack(s.game, s);
     return { ...r.local, game: r.game, toasts: [...s.toasts, ...mkToasts(r.toastMsgs)] };
+  }),
+
+  // ── "Any deck" peek: the controller picks whose deck (2026-07-16) ──────────
+  resolvePeekDeck: (side) => set(s => {
+    if (gameIsOver(s.game)) return s;
+    const pk = s.game.pendingPeek;
+    if (!pk?.chooseDeck) return s;
+    if (s.conn.mode !== 'solo' && pk.lp !== s.localPlayer) return s; // controller-only
+    const cards = s.game[side].deck.slice(0, pk.look ?? 1);
+    if (cards.length === 0) {
+      // The chosen deck is empty — surface it and drain to any queued peek.
+      const { peek, rest } = nextPeek(s.game, s.game.pendingPeekQueue);
+      const id = ++toastId;
+      setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 3000);
+      return { game: { ...s.game, pendingPeek: peek, pendingPeekQueue: rest },
+        toasts: [...s.toasts, { id, msg: `${pk.source} — that deck is empty.` }] };
+    }
+    // Advance to the normal placement phase against the chosen deck.
+    return { game: { ...s.game, pendingPeek: {
+      source: pk.source, lp: pk.lp, deckSide: side, cards, dests: pk.dests, maxHand: pk.maxHand } } };
   }),
 
   // ── Deck-peek (scry): apply the player's per-card destinations ─────────────

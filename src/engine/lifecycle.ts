@@ -46,6 +46,13 @@ export function uid(prefix: string): string { return `${prefix}-${Math.floor(rng
 /** Slice a peek request against the current deck into a live PendingPeek (or null
  *  if that deck is now empty). Re-sliced at arm time so a prior reorder can't stale it. */
 export function buildPeek(game: GameState, req: PeekRequest): PendingPeek | null {
+  // "Any deck" (2026-07-16 — Lens of Foretelling / Runic Convergence Staff): the
+  // deck is not sliced yet — the modal first asks the CONTROLLER which deck, then
+  // resolvePeekDeck slices it. Skipped only when BOTH decks are empty.
+  if (req.deck === 'any') {
+    if (game.p1.deck.length === 0 && game.p2.deck.length === 0) return null;
+    return { source: req.source, lp: req.lp, deckSide: req.lp, cards: [], dests: req.dests, maxHand: req.maxHand, chooseDeck: true, look: req.look };
+  }
   const cards = game[req.deckSide].deck.slice(0, req.look);
   if (cards.length === 0) return null;
   return { source: req.source, lp: req.lp, deckSide: req.deckSide, cards, dests: req.dests, maxHand: req.maxHand };
@@ -108,7 +115,7 @@ export function resolveStartOfTurn(game: GameState, side: 'p1' | 'p2'): { game: 
     }
     // Defer deck-peeks to the interactive modal (own deck for now; "any deck" choice deferred).
     for (const e of allEffs)
-      if (e.op === 'deckPeek') peeks.push({ source: loc.ent.name, lp: side, deckSide: side, look: e.look, dests: e.dests, maxHand: e.maxHand });
+      if (e.op === 'deckPeek') peeks.push({ source: loc.ent.name, lp: side, deckSide: side, look: e.look, dests: e.dests, maxHand: e.maxHand, deck: e.deck });
     // Defer Dead-Zone recovery (Library of Memory) to a picker; `postEffects` (e.g.
     // exhaustSelf) run only if a card is actually taken.
     const rfdIdx = allEffs.findIndex(e => e.op === 'returnFromDead');

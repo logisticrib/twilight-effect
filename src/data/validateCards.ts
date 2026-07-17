@@ -30,7 +30,7 @@ const TRIGGERS = [
   'onOpponentAction', 'activated',
   // Reactive trap windows (trigger-stack arc, owner-ratified 2026-07-12).
   'oppCompanionEnters', 'oppCompanionMovesToFront', 'oppCompanionAttacksCompanion',
-  'ownPlaysMagicalConstruct', 'ownPhysicalConstructSacrificed',
+  'ownPlaysMagicalConstruct', 'ownPhysicalConstructSacrificed', 'onEquippedPlaysMagicAction',
 ] as const satisfies readonly Trigger[];
 export type _ExhaustiveTriggers = AssertNever<Exclude<Trigger, (typeof TRIGGERS)[number]>>;
 
@@ -51,7 +51,7 @@ const OPS = [
   'anchor', 'sacrifice', 'sacrificeItem', 'equipFromHand', 'animate', 'dieCheck',
   'attackDisarm', 'moveAnchor', 'attackBonus', 'magicDamageBonus', 'preventAnchorDecay',
   'lineWard', 'exhaustSelf', 'exhaust', 'modal', 'gainControl', 'suppressKeywords', 'counterAction',
-  'grantKeywords', 'backLineAttack', 'preventDamage', 'restrictAttack', 'restrictMove',
+  'grantKeywords', 'backLineAttack', 'preventDamage', 'firstMagicUncounterable', 'restrictAttack', 'restrictMove',
 ] as const satisfies readonly Effect['op'][];
 export type _ExhaustiveOps = AssertNever<Exclude<Effect['op'], (typeof OPS)[number]>>;
 
@@ -207,7 +207,7 @@ function validateEffect(e: Effect, path: string, p: (msg: string) => void, keywo
       for (const g of e.keywords ?? []) if (!(keywordBase(g) in keywords)) p(`${path}(grantKeywords): grants unknown keyword "${g}"`);
       if (e.where?.line !== undefined && e.where.line !== 'front' && e.where.line !== 'back') p(`${path}(grantKeywords): bad where.line`);
       break;
-    case 'backLineAttack':
+    case 'backLineAttack': case 'firstMagicUncounterable':
       break; // no parameters
     case 'preventDamage':
       // Engine-supported scopes only — the contract must not advertise coverage the

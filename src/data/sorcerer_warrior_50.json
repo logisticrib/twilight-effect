@@ -507,7 +507,15 @@
           }
         ]
       }
-    ]
+    ,
+        {
+          "trigger": "onEquippedPlaysMagicAction",
+          "oncePerTurn": true,
+          "effects": [
+            { "op": "draw", "count": 1 }
+          ]
+        }
+      ]
   },
   {
     "id": "55cf25ec",
@@ -591,7 +599,14 @@
           }
         ]
       }
-    ]
+    ,
+        {
+          "trigger": "equipped",
+          "effects": [
+            { "op": "firstMagicUncounterable" }
+          ]
+        }
+      ]
   },
   {
     "id": "7a0b3177",

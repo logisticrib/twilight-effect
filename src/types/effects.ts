@@ -54,9 +54,14 @@ export type Trigger =
   // through destroyEntity, not inferred from death generally). R3: the sacrificed
   // permanent's OWN listener fires too — gathered at event time (pre-removal),
   // resolved after it leaves (2026-07-12 queued-trigger canon).
-  | 'ownPhysicalConstructSacrificed'; // one of YOUR (the listener's controller's)
+  | 'ownPhysicalConstructSacrificed'  // one of YOUR (the listener's controller's)
                                       // Physical (Trap/Fortification) Constructs is
                                       // sacrificed (Siegeworks)
+  // Item-hosted play rider (2026-07-16, partial-gaps closeout): fires when the
+  // EQUIPPED character plays a Magic Action — on the PLAY itself (a countered
+  // action was still played). Printed per-turn limits stay on triggers (the
+  // exhaust-cost guideline governs activated abilities only).
+  | 'onEquippedPlaysMagicAction';     // Embercast Wand
 
 // ─── WHO/WHAT an effect targets ────────────────────────────────────────────────
 // Interactive specs require a board selection step (reuses the pendingTrigger layer).
@@ -121,7 +126,7 @@ export type Effect =
   | { op: 'discard'; count: number; target: TargetSpec; random?: boolean }
   | { op: 'mill'; count: number; target: TargetSpec }
   | { op: 'shuffleHandRedraw'; offset?: number }  // opponent shuffles hand into deck, redraws (handSize + offset); Convergence Sigil uses offset -1
-  | { op: 'deckPeek'; look: number; dests: ('hand' | 'top' | 'bottom')[]; maxHand?: number }  // scry/select
+  | { op: 'deckPeek'; look: number; dests: ('hand' | 'top' | 'bottom')[]; maxHand?: number; deck?: 'any' }  // scry/select; deck 'any' = controller chooses whose (2026-07-16)
   | { op: 'returnFromDead'; cardType?: string; to: 'hand' | 'encounter' }
   | { op: 'search'; cardType: string }
   // board manipulation
@@ -157,6 +162,7 @@ export type Effect =
   | { op: 'gainControl'; target: TargetSpec; duration: 'while' }
   | { op: 'suppressKeywords'; scope: TargetSpec; where?: { line?: 'front' | 'back' } }  // static aura: affected lose all keywords
   | { op: 'grantKeywords'; keywords: string[]; scope: TargetSpec; where?: { line?: 'front' | 'back' } }  // static aura: affected GAIN keywords (Bastion Wall)
+  | { op: 'firstMagicUncounterable' } // (equipped) the bearer's FIRST Magic Action each turn cannot be countered (Ashforged Pendant, 2026-07-16)
   | { op: 'backLineAttack' }  // static: your back-line COMPANIONS may attack as if they had Ranged — attack eligibility ONLY, no defensive Ranged targetability (Watchtower)
   // (static) standing-restriction auras (arc 3, owner-ratified 2026-07-15). "Cannot"
   // beats "can" (R1): legality gates consult these AFTER permissions, so a restriction
