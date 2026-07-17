@@ -454,9 +454,11 @@ export function LoadoutPanel() {
                   ? abilities.map((ab, i) => {
                       const usedUp = !!ab.oncePerTurn && ent.statuses.includes(abilityUsedTag(ab.sourceName));
                       const cl = costLabel(ab.cost);
-                      // Action-economy hint (2026-07-15): a Minor-action activation
-                      // reads differently from the default Major (which exhausts).
-                      const econ = ab.actionCost === 'minor' ? 'Minor' : 'Major';
+                      // Action-economy hint: window-model item taps (2026-07-16) are
+                      // NOT character actions; body abilities show their Minor/Major.
+                      const econ = ab.itemId && ab.actionCost === undefined
+                        ? 'no character action'
+                        : ab.actionCost === 'minor' ? 'Minor Action' : 'Major Action';
                       // Item exhaustion (2026-07-15): an exhaust-item cost with the
                       // hosting item spent is visibly unavailable, with the reason.
                       const hostSpent = ab.cost?.kind === 'exhaustItem' && !!ab.itemId
@@ -467,7 +469,7 @@ export function LoadoutPanel() {
                           state={blocked ? 'used' : 'available'}
                           title={sealed ? 'Activation finished' : usedUp ? 'Already used this turn'
                             : hostSpent ? `${ab.sourceName} is exhausted`
-                            : `Activate: ${ab.sourceName} — ${econ} Action${cl ? ` (${cl})` : ''}`}
+                            : `Activate: ${ab.sourceName} — ${econ}${cl ? ` (${cl})` : ''}`}
                           onClick={() => activateAbility(ent.id, i)}
                         />
                       );
