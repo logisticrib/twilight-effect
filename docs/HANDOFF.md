@@ -2,7 +2,40 @@
 
 Self-contained context for continuing the card-effect engine work in a fresh session.
 
-## Latest session (2026-07-17) — Fabricated rule EXCISED: defender-Ranged targetability (owner ruling 2026-07-16)
+## Latest session (2026-07-17, later) — Snapshot regeneration: PROJECT_STATE + CODE_BUNDLE + Rules_Taxonomy gloss
+**Suite: 35 files / 364 tests green; tsc ZERO; validate:decks clean. LOCAL housekeeping session —
+no engine changes.** Both design-chat snapshots regenerated against main @ `e139ca2`:
+- **tasks/PROJECT_STATE.md REWRITTEN** (supersedes the 2026-07-09 version; established
+  structure kept): capability program CLOSED (six arcs + carve-outs, flags 0, 100/100 cards
+  explained); the July mechanics/rulings ledger (trigger stack, play=from-hand, prevention
+  family, restriction auras, on-play/on-sacrifice, no anchor maximum + rewordings, item
+  exhaustion, window model, strict Move→Minor→Major, Special-Action atomicity, Guardian
+  legal-target, fresh=entered-this-turn, Ranged excision, no turn-1 Major ban); debts updated
+  honestly (#1/#3 RESOLVED; #2 half — decay-trigger wiring landed, endTurn extraction open;
+  fixtures EMPTY by owner decision, do-not-nag; MP live pass over post-arc-1 holds listed;
+  interpreter move op); design-revisit list (Sentinel rework, Grudrik clause option, Ranged
+  re-costing, simultaneous-decay UNRULED, Embercast timing flagged, Untamed reserved,
+  Glassweaver wording, Translocation Circle); roadmap re-sequenced (playtest/re-record → dev
+  deck → inverted pipeline); doc-location fact corrected (root = masters since 2026-07-13).
+- **twilight-app/CODE_BUNDLE.md REGENERATED** (was 2026-07-10 — predated arcs 2–5 and every
+  fix since; a stale bundle caused the Anchor Stone +1 HP misquote). 100 sections (was 85),
+  same format (script kept the old layout: sorted src/ walk, tsx/json/css fences, fixtures
+  excluded). PROOF: both embedded deck JSONs byte-identical to src/data; all four reworded
+  cards (Anchor Stone, Runic Convergence Staff, Siegeworks, Grudrik) verified verbatim.
+- **Rules_Taxonomy §15 gloss tightened** (parent + snapshot hash-identical): "a ranged
+  attacker reaches the back" → "a ranged character attacks from the back", + dated Note
+  (2026-07-17) stating RANGED grants no reach INTO the opposing back line and no targetability
+  (closes the report-only flag from the excision session).
+- **⚠ TASK 4 (Embercast rider timing) NOT APPLIED — STOP-AND-SURFACE:** the brief made it
+  conditional on "whichever the owner ruled in the design chat", but no ruling is stated in
+  the brief or recorded anywhere in the repo. Current encoding stands unchanged (fires ON THE
+  PLAY; a countered Magic Action still triggers — the flagged 2026-07-16 engine reading).
+  NOTHING was written as "confirmed". Owner: state the ruling and the next session applies it
+  (confirm = one HANDOFF line; re-rule = engine + pin rewrite per the brief).
+- **Owner re-uploads to the design Project:** tasks/PROJECT_STATE.md, twilight-app/CODE_BUNDLE.md,
+  Rules_Taxonomy.md, HANDOFF.md.
+
+## Previous session (2026-07-17) — Fabricated rule EXCISED: defender-Ranged targetability (owner ruling 2026-07-16)
 **Suite: 35 files / 364 tests green; tsc ZERO; validate:decks clean. LOCAL session. Fixtures
 folder EMPTY by owner decision (recording paused during the correction wave) — no fixture work,
 no recording all-clear needed.** The rules docs' targeting rules granted Ranged a DEFENSIVE

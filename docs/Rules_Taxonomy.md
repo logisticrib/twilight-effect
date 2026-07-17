@@ -150,7 +150,9 @@ Derives from #13 (loadout) and Tier 2 #6 (classic fantasy worldbuilding). The ch
 
 #### 15. Combat resolves through Front/Back targeting with Guardian, Ranged, and Evasive as exceptions
 
-Derives from #4 (Front/Back battlefield). Once you have spatial position, you need targeting rules. The choice: Front Line must be targeted before Back Line, with three exception keywords carving out the canonical fantasy-combat patterns (a guardian protects the line; a ranged attacker reaches the back; an evasive attacker bypasses defenders). Alternatives existed — open targeting, position-based attack/defense modifiers — and the must-target-Front-first rule was chosen.
+Derives from #4 (Front/Back battlefield). Once you have spatial position, you need targeting rules. The choice: Front Line must be targeted before Back Line, with three exception keywords carving out the canonical fantasy-combat patterns (a guardian protects the line; a ranged character attacks from the back; an evasive attacker bypasses defenders). Alternatives existed — open targeting, position-based attack/defense modifiers — and the must-target-Front-first rule was chosen.
+
+> **Note (2026-07-17):** Gloss tightened. RANGED is offensive only — canon: "This character can attack from the Back Line" — so it lets its bearer attack FROM the Back Line; it grants no reach INTO the opponent's Back Line and no targetability on its bearer (the defender-side reading that briefly appeared in the rules docs was excised as a documentation error on 2026-07-16).
 
 #### 16. Damage is cumulative on companions; companions don't heal at end of turn
 
