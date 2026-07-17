@@ -51,14 +51,20 @@ describe('Guardian requires target legality (canon clause, previously unimplemen
     expect(hpOf('b1'), 'the Guardian itself is attackable').toBe(3);
   });
 
-  it('pin 3 — back-line Guardian WITH Ranged is a legal target for everyone → binds a normal attacker', () => {
+  it('pin 3 (RETIRED + REWRITTEN 2026-07-16) — a back-line Guardian WITH Ranged behind an occupied front line is NOT targetable by a normal attacker and binds NOBODY it cannot be reached by, exactly like any back-line Guardian', () => {
+    // The original pin asserted the Ranged Guardian was "a legal target for
+    // everyone" and bound a normal attacker — built on the docs' erroneous
+    // "…or the defender has Ranged" targeting clause, removed 2026-07-16 as a
+    // documentation error (owner ruling): canon RANGED is offensive only ("This
+    // character can attack from the Back Line") and grants no targetability.
+    // The defender's keywords play no role in its targetability.
     arm(attacker(), { f1: grunt('ft-1'), b1: guardian('gd-1', { keywords: ['Guardian', 'Ranged'] }) });
-    gs.getState().resolveAttack('ft-1');
-    expect(hpOf('f1'), 'refused — the Ranged Guardian is legal, so it binds').toBe(5);
-    expect(lastToast()).toContain('Guardian must be attacked first');
-    gs.setState({ pending: { action: 'attack', charId: 'atk-1' } });
     gs.getState().resolveAttack('gd-1');
-    expect(hpOf('b1'), 'the Ranged back-line Guardian takes the hit').toBe(3);
+    expect(hpOf('b1'), 'the Ranged back-line Guardian is untargetable for a normal attacker').toBe(5);
+    expect(lastToast()).toContain('Must target the Front Line first');
+    gs.setState({ pending: { action: 'attack', charId: 'atk-1' } });
+    gs.getState().resolveAttack('ft-1');
+    expect(hpOf('f1'), 'front grunt takes the hit — the unreachable Ranged Guardian binds nothing').toBe(3);
   });
 
   it('pin 4 (regression) — front-line ready Guardian binds exactly as before', () => {

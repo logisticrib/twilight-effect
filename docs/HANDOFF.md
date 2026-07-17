@@ -2,7 +2,65 @@
 
 Self-contained context for continuing the card-effect engine work in a fresh session.
 
-## Latest session (2026-07-16) — Partial-gaps CLOSEOUT + item-ability window model — DEBT #3 RESOLVED
+## Latest session (2026-07-17) — Fabricated rule EXCISED: defender-Ranged targetability (owner ruling 2026-07-16)
+**Suite: 35 files / 364 tests green; tsc ZERO; validate:decks clean. LOCAL session. Fixtures
+folder EMPTY by owner decision (recording paused during the correction wave) — no fixture work,
+no recording all-clear needed.** The rules docs' targeting rules granted Ranged a DEFENSIVE
+effect its keyword never had ("Back Line targets become legal … or when the defender has
+Ranged") — owner-ruled a FABRICATION that crept into the docs (never designed,
+flavor-incoherent, contradicts canon RANGED: "This character can attack from the Back Line",
+one sentence, purely offensive). Removed everywhere. **Corrected rule: back-line characters
+are legal attack targets only when the opposing front line is empty of characters OR the
+attacker has Evasive; the defender's keywords play NO role in its targetability.** (Guardian
+still applies within the legal set per the 2026-07-15 fix — gate structure untouched.)
+- **Engine:** the defender-Ranged branch removed from `isLegalTarget` (gameStore.ts
+  resolveAttack — the Guardian-fix-era legality gate); the Front-Line-priority refusal toast
+  no longer offers "target has no Ranged" ("Must target the Front Line first (attacker has no
+  Evasive)."). Ranged's ATTACKER-side eligibility in beginAttack is untouched (and pinned).
+- **Full sweep (every phrasing of defender-side Ranged targetability):** parent
+  Card_Design_Parameters §23 (step 3 clause REMOVED + verbatim Rules Note 2026-07-16; step 1
+  Guardian-note legality list amended — "Front Line priority, Evasive"); parent
+  Game_Rules_Updated (Command-Zone back-line protection line + Targeting Rules step 2, both
+  clauses REMOVED + the same Rules Note at each site; the 2026-07-15 Guardian Rules Note's
+  legality list amended); both docs/ snapshots re-mirrored HASH-IDENTICAL to parents; CDP §27
+  Ranged-costing note REFRAMED (pure upside — offense at zero defensive cost — STRENGTHENS
+  the re-costing flag; still a playtest-data flag, design content unchanged);
+  tasks/PROJECT_STATE.md Watchtower line rationale corrected. Historical records (HANDOFF
+  session logs, tasks/todo.md reviews) left as written by convention. Archive untouched
+  (stale by design — May-era docs still carry the old clause + an old extended RANGED
+  definition; do not consult archive for canon).
+- **⚠ WATCHTOWER — ruling stands, RATIONALE corrected (do NOT re-learn the old premise):**
+  Watchtower stays eligibility-only, NOT a Ranged grant — but the reason is TEXTUAL FIDELITY
+  (cards do what they say; its text grants attack permission, not the keyword). The previously
+  recorded rationale ("full Ranged would make companions targetable in the back line") cited
+  the fabricated clause and is FALSE — Ranged has no defensive effect at all. Comments
+  corrected in stats.ts (hasBackLineAttackAura), types/effects.ts (backLineAttack op),
+  rulings_batch2.test.ts, PROJECT_STATE.md.
+- **Guardian pins audited (all 7):** ONLY pin 3 relied on the fabrication ("Ranged back-line
+  Guardian binds everyone") — RETIRED + REWRITTEN dated: a back-line Guardian with Ranged
+  behind an occupied front line is NOT targetable by a normal attacker (absent Evasive) and
+  binds nobody it can't be reached by, exactly like any back-line Guardian. Pins 1/2/4–7
+  carry no reliance, untouched.
+- **Tests (`ranged_targetability.test.ts`, 3 + the rewritten Guardian pin):** back-line Ranged
+  behind an occupied front NOT legal for a normal attacker; IS legal for an Evasive attacker
+  (Evasive unchanged); back-line Ranged can still ATTACK (offensive-effect regression).
+  **Mutations — 4, every failure set predicted EXACTLY and restores grep-verified:** M1
+  defender-Ranged branch re-added (2: new pin 1 + Guardian pin 3); M2 Evasive dropped from
+  legality (2: new Evasive pin + Guardian pin 2); M3 Guardian binds regardless of legality
+  (2: Guardian pins 1 + 3); M4 Ranged dropped from beginAttack eligibility (4: the regression
+  pin + 3 restriction_auras pins that arm back-line Ranged attackers).
+- **Live-verified (real app, Vite module import — no store hook needed):** exact board (front
+  grunt + back-line Ranged defender): attack on the back-liner refused with the corrected
+  toast, HP untouched; front-liner takes the hit.
+- **REPORT-ONLY observation (not changed, no defender-side claim):** Rules_Taxonomy §15's
+  gloss "a ranged attacker reaches the back" is loose — under canon, Ranged attacks FROM the
+  back line, it does not reach INTO one. Rationale-doc phrasing only; flag if you want it
+  tightened.
+- **Docs (parent + snapshots word-identical, hash-verified):** owner re-uploads:
+  Game_Rules_Updated.md, Card_Design_Parameters.md, HANDOFF.md. (Master_Keyword_List
+  unchanged — its RANGED entry was always the clean canonical sentence.)
+
+## Previous session (2026-07-16) — Partial-gaps CLOSEOUT + item-ability window model — DEBT #3 RESOLVED
 **Suite: 34 files / 361 tests green; tsc ZERO; validate:decks clean; fixtures folder was EMPTY
 at start (the brief's fixture warning was moot). ✅ FRESH ALL-CLEAR TO RECORD after server
 restart on this commit. FULL-CATALOG SWEEP: 100 cards, ZERO unexplained clauses, ZERO

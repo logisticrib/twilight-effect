@@ -4,7 +4,7 @@
 //  OQ3 — universal pre-cost refusal: an ability that would affect NOTHING cannot be
 //        activated (non-interactive recipients checked up front too).
 //  Carve-outs: Bastion Wall (grantKeywords aura), Watchtower (backLineAttack — attack
-//  eligibility ONLY, no defensive Ranged), Pyre of the Unbound (startOfTurn modal).
+//  eligibility ONLY, not a keyword grant), Pyre of the Unbound (startOfTurn modal).
 import { describe, it, expect } from 'vitest';
 import { gs, freshGame, mkComp, mkConstruct, mkPc, mkItem } from './helpers';
 import { effectiveKeywords } from '../store/keywords';
@@ -104,8 +104,11 @@ describe('carve-out: Watchtower — back-line attack permission (NOT a Ranged gr
     } }));
     gs.getState().beginAttack('wt-comp');
     expect(gs.getState().pending?.action, 'tower → attack arms from the back line').toBe('attack');
-    // Deliberately NOT a Ranged grant: full Ranged would also make the companion
-    // TARGETABLE in the back line (targeting rule "…or the defender has Ranged").
+    // Deliberately NOT a Ranged grant: cards do what they say — Watchtower's text
+    // grants attack permission, not the keyword itself. (Rationale corrected
+    // 2026-07-16: the old comment cited a defender-Ranged targetability downside;
+    // that targeting clause was a documentation error removed on this date —
+    // canon RANGED is offensive only. The ruling stands on textual fidelity.)
     const g = gs.getState().game;
     expect(effectiveKeywords(g.p1.board.b1!, g)).not.toContain('Ranged');
   });

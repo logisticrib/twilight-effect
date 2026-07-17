@@ -721,9 +721,10 @@ Three distinct trigger conditions:
 A character may only initiate an attack if it is in the Front Line, **unless it has the Ranged keyword**. A character with Ranged may initiate an attack from either the Front Line or the Back Line.
 
 ### Targeting Priority (Attacks Only)
-1. **Guardian Check:** If the opponent has any Guardian characters that are ready and a legal target for the attacking character, the attacker must target such a Guardian first (Rules Note 2026-07-15: legality per the targeting rules — Front Line priority, Evasive, Ranged; an unreachable Guardian imposes nothing. The keyword's printed text always carried the legal-target clause; this summary previously omitted it and was corrected on this date.)
+1. **Guardian Check:** If the opponent has any Guardian characters that are ready and a legal target for the attacking character, the attacker must target such a Guardian first (Rules Note 2026-07-15: legality per the targeting rules — Front Line priority, Evasive; an unreachable Guardian imposes nothing. The keyword's printed text always carried the legal-target clause; this summary previously omitted it and was corrected on this date. Amended 2026-07-16: the legality list previously also named defender-side Ranged — removed as a documentation error; see the Rules Note under step 3.)
 2. **Front Line Priority:** Among non-Guardian targets, the attacker must target a Front Line character if any exist
-3. **Back Line targets become legal** only when the opposing Front Line is empty, when the attacker has Evasive, or when the defender has Ranged
+3. **Back Line targets become legal** only when the opposing Front Line is empty or when the attacker has Evasive
+   - **Rules Note (2026-07-16) — Correction, not a rules change.** An erroneous clause previously stated that a Back Line character with Ranged was a legal attack target. This was never a designed rule: RANGED's canonical text is offensive only ("This character can attack from the Back Line") and grants no targetability. The clause is removed as a documentation error. Back Line characters are legal targets only when the Front Line is empty or the attacker has Evasive.
 4. **Choose Specific Target:** From legal targets, the attacking player chooses
 
 Targeting priority applies only to characters (Player Character and Companions). Constructs cannot be attacked and do not satisfy or interfere with Front Line priority.
@@ -860,7 +861,7 @@ All companions start with base stats equal to their level (Level 2 = 2/2, Level 
 - **Guardian:** Costs 1-2 choices (strong defensive ability)
 - **Hit & Run:** Costs 1-2 choices (extra action is powerful)
 - **Ranged, Scavenger, Kit-Master:** Cost 1 choice (standard keywords)
-- **NOTE:** Exact ability costs will be refined through class-specific guidelines. Ranged in particular may warrant re-costing in light of the attack-eligibility rule (see Section 23) — under the current rule, Ranged is the only way for a Back Line character to attack at all, which makes the keyword more impactful than it was when Back Line characters could attack freely. Worth revisiting after playtest data.
+- **NOTE (updated 2026-07-16):** Exact ability costs will be refined through class-specific guidelines. Ranged in particular may warrant re-costing in light of the attack-eligibility rule (see Section 23) — Ranged is the only way for a Back Line character to attack at all, and it is pure upside: offense from the protected line at zero defensive cost, since a character's own keywords play no role in its targetability (an erroneous defender-Ranged targetability clause was removed 2026-07-16 as a documentation error, which strengthens this observation). Worth revisiting after playtest data.
 
 ### Examples
 

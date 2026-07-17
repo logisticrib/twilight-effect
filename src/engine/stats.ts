@@ -279,8 +279,12 @@ export function effectiveKeywords(ent: BoardEntity, game: GameState): string[] {
 
 /** Watchtower — "Your back-line companions may attack as if they had Ranged": a
  *  static permission for ATTACK ELIGIBILITY only. Deliberately NOT a Ranged grant —
- *  full Ranged would also make the companions targetable in the back line (targeting
- *  rule: "…or the defender has Ranged"), a defensive downside the text doesn't carry. */
+ *  cards do what they say, and Watchtower's text grants attack permission, not the
+ *  keyword itself (textual fidelity). RATIONALE CORRECTED 2026-07-16: the ruling
+ *  stands, but the old comment justified it via a defender-Ranged targetability
+ *  downside — that targeting clause was a documentation error removed on this
+ *  date (canon RANGED is offensive only; a defender's keywords never affect its
+ *  targetability). Eligibility-only remains correct on textual grounds alone. */
 export function hasBackLineAttackAura(game: GameState, side: 'p1' | 'p2'): boolean {
   return Object.values(game[side].board).some(src => !!src
     && (effectsOf(src.name) ?? []).some(ce => ce.trigger === 'static'

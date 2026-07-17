@@ -163,7 +163,7 @@ export type Effect =
   | { op: 'suppressKeywords'; scope: TargetSpec; where?: { line?: 'front' | 'back' } }  // static aura: affected lose all keywords
   | { op: 'grantKeywords'; keywords: string[]; scope: TargetSpec; where?: { line?: 'front' | 'back' } }  // static aura: affected GAIN keywords (Bastion Wall)
   | { op: 'firstMagicUncounterable' } // (equipped) the bearer's FIRST Magic Action each turn cannot be countered (Ashforged Pendant, 2026-07-16)
-  | { op: 'backLineAttack' }  // static: your back-line COMPANIONS may attack as if they had Ranged — attack eligibility ONLY, no defensive Ranged targetability (Watchtower)
+  | { op: 'backLineAttack' }  // static: your back-line COMPANIONS may attack as if they had Ranged — attack eligibility ONLY, not a keyword grant (Watchtower; cards do what they say. Rationale corrected 2026-07-16: Ranged has no defensive targetability — that clause was a doc error)
   // (static) standing-restriction auras (arc 3, owner-ratified 2026-07-15). "Cannot"
   // beats "can" (R1): legality gates consult these AFTER permissions, so a restriction
   // always has the final word. Checked when the action is attempted (R2) — never

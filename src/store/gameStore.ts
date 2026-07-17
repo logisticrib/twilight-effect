@@ -2213,18 +2213,20 @@ export const useGameStore = create<GameStoreState>()(
     if (target.kind !== 'construct') {
       // Front-Line-priority LEGALITY for this attacker, computed FIRST (bugfix
       // 2026-07-15): a character is a legal target if it stands in the front line,
-      // the front line holds no characters, the attacker has Evasive, or the
-      // defender itself has Ranged. (An id not on the opponent's board is outside
-      // this rule's scope — passes through, matching the old check's behavior.)
+      // the front line holds no characters, or the attacker has Evasive. The
+      // defender's own keywords play NO role in its targetability — a defender-
+      // Ranged branch was removed 2026-07-16 (owner ruling: the docs' "…or the
+      // defender has Ranged" clause was a documentation error, never a designed
+      // rule; canon RANGED is offensive only: "This character can attack from
+      // the Back Line"). (An id not on the opponent's board is outside this
+      // rule's scope — passes through, matching the old check's behavior.)
       const hasEvasive = effectiveKeywords(attacker, game).includes('Evasive');
       const frontLineOccupied = (Object.entries(oppBoard) as [string, BoardEntity | undefined][])
         .some(([sl, e]) => e && e.kind !== 'construct' && isFront(sl as SlotId));
       const isLegalTarget = (id: string): boolean => {
         const sl = findSlot(oppBoard, id);
         if (!sl) return true;
-        if (isFront(sl as SlotId) || !frontLineOccupied || hasEvasive) return true;
-        const e = oppBoard[sl as SlotId];
-        return !!e && effectiveKeywords(e, game).includes('Ranged');
+        return isFront(sl as SlotId) || !frontLineOccupied || hasEvasive;
       };
 
       // 1. Guardian — canon (Master_Keyword_List, quoted verbatim): "While this
@@ -2246,7 +2248,7 @@ export const useGameStore = create<GameStoreState>()(
       // 2. Front Line priority for the chosen target (semantics unchanged; a
       //    Guardian-bound target is legal by construction).
       if (!isLegalTarget(targetEntityId)) {
-        const t = pushToast('Must target the Front Line first (attacker has no Evasive; target has no Ranged).');
+        const t = pushToast('Must target the Front Line first (attacker has no Evasive).');
         return { pending: null, toasts: [...s.toasts, t] };
       }
 
