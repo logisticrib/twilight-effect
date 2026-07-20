@@ -258,13 +258,22 @@ describe('Poison: a character damaged by a Poison attacker is exhausted + counte
     expect(def.exhausted, 'not exhausted').toBe(false);
   });
 
-  it('constructs are not characters — damaged, never poisoned', () => {
+  it('constructs are not characters — cannot be attacked at all, so never combat-damaged or poisoned (re-based 2026-07-20)', () => {
+    // RETIRED + REWRITTEN 2026-07-20: the old pin drove damage into a construct
+    // via a direct resolveAttack and asserted it "takes the damage" — that
+    // vehicle was the targeting fall-through closed on this date. Canon (GRU
+    // §Targeting Rules, verbatim): "Constructs cannot be attacked and do not
+    // satisfy or interfere with Front Line priority." With the direct path
+    // refused here and Cleave splash skipping constructs (batch-2026-07-08
+    // pin), no combat damage can reach a construct — the poison-scope rule is
+    // structurally guaranteed for combat.
     freshGame();
     arm(venom(), { f1: mkConstruct('po-con', 'Watch Post', 2) });
     gs.getState().resolveAttack('po-con');
     const con = gs.getState().game.p2.board.f1!;
-    expect(con.hp, 'construct takes the damage').toBe(1);
+    expect(con.hp, 'construct untouched — the attack is refused').toBe(3);
     expect(con.poison ?? 0, 'no counter').toBe(0);
+    expect(gs.getState().toasts.at(-1)?.msg ?? '').toContain('Constructs cannot be attacked');
   });
 
   it('the PC can be poisoned', () => {

@@ -291,6 +291,73 @@ export function hasBackLineAttackAura(game: GameState, side: 'p1' | 'p2'): boole
       && ce.effects.some(e => e.op === 'backLineAttack')));
 }
 
+// ─── Attack targeting: the single shared gate (bugfix, owner-reported 2026-07-20) ──
+// CommandZone shipped (initial commit) with its OWN copies of attack-position
+// eligibility and target legality; the store's rules then evolved (Watchtower
+// 2026-07-08, Guardian legality 2026-07-15, Ranged excision 2026-07-16) and the
+// copies did not — a Watchtower-granted back-line attacker armed a targeting
+// prompt with ZERO highlights. These helpers are now the ONE source of truth:
+// beginAttack / resolveAttack and the UI highlight computation all consult them,
+// so the prompt and the reducer cannot disagree (ab8a5b0 single-gate discipline).
+
+/** Position eligibility to INITIATE an attack: Front Line, Ranged (canon:
+ *  "This character can attack from the Back Line"), or a Watchtower-style aura
+ *  covering the controller's back-line COMPANIONS. Uses effectiveKeywords —
+ *  item-granted Ranged counts, suppressed Ranged doesn't. */
+export function canAttackFromPosition(game: GameState, ent: BoardEntity, controller: 'p1' | 'p2', slot: SlotId): boolean {
+  return isFront(slot) || effectiveKeywords(ent, game).includes('Ranged')
+    || (ent.kind === 'companion' && hasBackLineAttackAura(game, controller));
+}
+
+/** Front-Line-priority legality of ONE target id for `attacker` (corrected rule
+ *  2026-07-16): legal iff the target stands in the front line, the front line
+ *  holds no characters, or the attacker has Evasive — the defender's keywords
+ *  play no role in its targetability. An id not on the opposing board passes
+ *  through (outside this rule's scope), matching the gate's prior behavior. */
+export function isLegalAttackTarget(game: GameState, attacker: BoardEntity, attackerSide: 'p1' | 'p2', targetId: string): boolean {
+  const oppBoard = game[attackerSide === 'p1' ? 'p2' : 'p1'].board;
+  const entries = Object.entries(oppBoard) as [SlotId, BoardEntity | undefined][];
+  const sl = entries.find(([, e]) => e?.id === targetId)?.[0];
+  if (!sl) return true;
+  if (isFront(sl)) return true;
+  const frontLineOccupied = entries.some(([s, e]) => e && e.kind !== 'construct' && isFront(s));
+  return !frontLineOccupied || effectiveKeywords(attacker, game).includes('Evasive');
+}
+
+/** Ready opposing Guardians that BIND `attacker` — canon GUARDIAN (quoted
+ *  verbatim): "While this character is ready (not exhausted) and a legal
+ *  target, opponents must attack it before any other character." Guardian
+ *  applies WITHIN the legal set (05b31af). */
+export function bindingGuardianIds(game: GameState, attacker: BoardEntity, attackerSide: 'p1' | 'p2'): string[] {
+  const oppBoard = game[attackerSide === 'p1' ? 'p2' : 'p1'].board;
+  return (Object.values(oppBoard) as (BoardEntity | undefined)[])
+    .filter((e): e is BoardEntity => !!e && !e.exhausted && e.kind !== 'construct'
+      && effectiveKeywords(e, game).includes('Guardian')
+      && isLegalAttackTarget(game, attacker, attackerSide, e.id))
+    .map(e => e.id);
+}
+
+/** The COMPLETE legal-target set for `attacker` right now. Characters only —
+ *  canon (GRU §Targeting Rules, verbatim): "Constructs cannot be attacked and
+ *  do not satisfy or interfere with Front Line priority." Composes the same
+ *  primitives resolveAttack refuses with: Front-Line-priority legality,
+ *  Guardian binding within the legal set, and the Fortification ward filter
+ *  (companion attackers only). The UI highlights exactly this set. */
+export function legalAttackTargetIds(game: GameState, attacker: BoardEntity, attackerSide: 'p1' | 'p2'): Set<string> {
+  const oppBoard = game[attackerSide === 'p1' ? 'p2' : 'p1'].board;
+  const binding = bindingGuardianIds(game, attacker, attackerSide);
+  const warded = attacker.kind === 'companion' ? wardedLines(oppBoard) : new Set<'front' | 'back'>();
+  const ids = new Set<string>();
+  for (const [slot, e] of Object.entries(oppBoard) as [SlotId, BoardEntity | undefined][]) {
+    if (!e || e.kind === 'construct') continue;
+    if (!isLegalAttackTarget(game, attacker, attackerSide, e.id)) continue;
+    if (binding.length > 0 && !binding.includes(e.id)) continue;
+    if (warded.has(isFront(slot) ? 'front' : 'back')) continue;
+    ids.add(e.id);
+  }
+  return ids;
+}
+
 // ─── Standing-restriction auras (arc 3, owner-ratified 2026-07-15) ─────────────
 // "Cannot" beats "can" (R1): the legality gates call these AFTER every permission
 // (Ranged, Watchtower coverage, Zealous, …), so a restriction always has the final

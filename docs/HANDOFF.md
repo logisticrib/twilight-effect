@@ -2,7 +2,75 @@
 
 Self-contained context for continuing the card-effect engine work in a fresh session.
 
-## Latest session (2026-07-17, later) — Snapshot regeneration: PROJECT_STATE + CODE_BUNDLE + Rules_Taxonomy gloss
+## Latest session (2026-07-20) — Bugfix: opposing PC not offered as attack target — UI/store targeting UNIFIED at one gate
+**Suite: 36 files / 374 tests green (incl. 2 NEW committed replay fixtures); tsc ZERO;
+validate:decks clean. LOCAL session.** Owner-reported: Watchtower-granted back-line Scholar
+armed the attack prompt but NOTHING highlighted (opposing PC stood alone in the front line).
+- **DIAGNOSIS (brief's option 2 — Watchtower-path divergence; NOT a July regression):**
+  CommandZone.tsx carried its OWN copies of attack eligibility (`attackerInFrontLine ||
+  attackerHasRanged`) and target legality (`legalAttackTargets`) — both from the INITIAL
+  COMMIT (547a0a0), never touched since. The store's rules evolved (Watchtower d4d3311
+  2026-07-08, Guardian legality 05b31af 2026-07-15, Ranged excision e139ca2 2026-07-16); the
+  copies did not. **The Watchtower highlight path never worked in its life** — the UI copy
+  never learned the aura, so eligibility computed false and the highlight branch was dead.
+  The UI enumeration DID include PCs (options 1/3 ruled out); resolveAttack would have
+  ACCEPTED the PC — highlight-only bug, but the class is UI/store divergence. LATENT
+  divergences found in the same copies, all fixed by unification: UI bound ALL ready
+  Guardians (unreachable ones included — the 05b31af fix never reached the UI); UI ignored
+  attacker Evasive entirely; LoadoutPanel read PRINTED keywords for position eligibility
+  (an item-granted Ranged, e.g. Pikestaff, wrongly disabled the Attack button).
+- **FIX (single-gate discipline, ab8a5b0 precedent):** engine/stats.ts now owns attack
+  targeting: `canAttackFromPosition` (front / Ranged via effectiveKeywords / Watchtower
+  aura), `isLegalAttackTarget` (front-line-priority legality, post-excision), and
+  `bindingGuardianIds` — plus `legalAttackTargetIds` composing them (characters only,
+  legality, Guardian-within-legal-set, ward filter). beginAttack, resolveAttack,
+  CommandZone highlighting, and LoadoutPanel's button ALL consult these; the UI highlights
+  exactly the set the reducer accepts, by construction.
+- **NO DEAD PROMPTS (per the brief):** beginAttack now refuses loudly when opposing
+  characters exist but the targeting rules leave nothing legal (e.g. every legal line
+  ward-shielded), instead of arming a highlight-less picker. Empty-of-characters opposing
+  boards (test rigs/sandbox only) keep the old pass-through.
+- **⚠ ADJACENT HOLE CLOSED (flagged, was NOT in the brief):** resolveAttack SKIPPED the
+  targeting rules for construct targets and fell through to commitAttack — the UI never
+  offered one, but a direct call ATTACKED the construct, against canon (GRU §Targeting
+  Rules, verbatim): "Constructs cannot be attacked and do not satisfy or interfere with
+  Front Line priority." Now refused loudly. One tier1 poison pin had used that fall-through
+  as its damage VEHICLE ("construct takes the damage") — RETIRED + REWRITTEN dated (the
+  poison-scope rule is now structurally guaranteed: no combat damage can reach a construct).
+  Overrule if direct construct attacks were somehow intended.
+- **FIXTURES — recording has RESUMED (owner recorded 3 games on `5a9a72c`):** t3 + t7
+  replay CLEAN under the fixed engine → **COMMITTED (replay coverage restored, 2 fixtures)**;
+  t3 contains a Watchtower-granted arming (proven load-bearing by mutation M1). **t9 RETIRED
+  pre-commit (deleted per the 2026-07-08 protocol)** — it diverges at step 112 `beginAttack`:
+  the recorded board (opposing back-line Long-Quiet Wall warding the front, PC the only
+  character) had ZERO legal targets — the zero highlights on THAT board were CORRECT (ward),
+  but the old engine armed a dead prompt and the recording captured the ARMED pending
+  (pending is hashed); the fix intentionally turns it into a refusal. A wrong refusal is not
+  state, but an armed prompt is. **Owner: please re-record the t9-style game from a server
+  on THIS commit or later.** NOTE: the brief's reported board (Scholar vs front-line PC) and
+  the t9 board are DIFFERENT zero-highlight turns — the first was the bug, the second was
+  correct-but-silent; both are now loud and correct.
+- **Pins (`attack_target_gate.test.ts`, 7):** PC offered+attackable via front-line AND
+  Watchtower paths (1a/1b, 1b = the reported board); back-liners unoffered+refused behind
+  occupied front (regression); EMPTY-front branch (companion + back-placed PC legal —
+  previously unpinned, hole closed); constructs never in candidate sets + direct attack
+  refused + don't occupy the front line; Guardian interop both ways (legal Guardian is the
+  whole set; unreachable binds nothing); no-dead-prompt refusal. The set function IS the
+  UI highlight computation, so these pin the UI directly.
+- **Mutations — 6. M2/M4/M5/M6 EXACT. Two HONEST IMPRECISIONS, both inspected clean:**
+  M1 (aura term dropped) predicted 3, failed 4 — the extra was t3's fixture replay
+  (Watchtower arming recorded in-game; consistent, and welcome fixture coverage). M3
+  (empty-front branch dropped) predicted 2, failed 6 — the 4 extras (gameplay PC-kill,
+  t3, t7, tier4 PC-bypasses-ward) are all genuine empty-front reliances: the branch was
+  live engine behavior that simply had NO dedicated pin until now (pin 3 closes that).
+  No contamination; restores grep-verified.
+- **Live-verified through the REAL rendered UI** (fresh server, real click): the reported
+  board seeded, beginAttack armed, exactly ONE 'Attack ⚔' badge (the opposing PC's slot),
+  clicking it resolved — PC 20→18, Scholar exhausted, back-liners untouched.
+- **Docs: NO rules-doc change** — no rule changed; the engine now enforces existing canon
+  and the UX is loud. Owner re-uploads: HANDOFF.md only (+ CODE_BUNDLE if refreshing).
+
+## Previous session (2026-07-17, later) — Snapshot regeneration: PROJECT_STATE + CODE_BUNDLE + Rules_Taxonomy gloss
 **Suite: 35 files / 364 tests green; tsc ZERO; validate:decks clean. LOCAL housekeeping session —
 no engine changes.** Both design-chat snapshots regenerated against main @ `e139ca2`:
 - **tasks/PROJECT_STATE.md REWRITTEN** (supersedes the 2026-07-09 version; established

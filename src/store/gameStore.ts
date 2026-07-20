@@ -9,7 +9,8 @@ import { recomputeStatics, isImmuneToSplash, HIT_RUN_STATUS,
          isCharacter, firstItemOf, allItemsOf, canHoldItem, effectiveAttack, effectiveKeywords, effectiveMaxHp, wardedLines,
          canPlayActionCard, specialActionActor, minorActionReason, actionTypeOf, currentWillpower, parseBanes,
          POISONED_STATUS, parseAnimateMagic, hasBackLineAttackAura,
-         attackRestrictedBy, moveRestrictedBy } from './keywords';
+         attackRestrictedBy, moveRestrictedBy,
+         canAttackFromPosition, isLegalAttackTarget, bindingGuardianIds, legalAttackTargetIds } from './keywords';
 
 // Everything relocated to the headless engine stays importable from this module —
 // external import sites don't churn during the extraction (see src/engine/index.ts).
@@ -2163,17 +2164,27 @@ export const useGameStore = create<GameStoreState>()(
 
     // Attack eligibility: must be in Front Line unless Ranged — or covered by a
     // Watchtower-style aura (back-line COMPANIONS may attack as if Ranged).
-    const hasRanged = effectiveKeywords(ent, s.game).includes('Ranged');
-    const towerCovered = ent.kind === 'companion' && hasBackLineAttackAura(s.game, attLoc.player);
-    if (!hasRanged && !towerCovered && !isFront(attLoc.slot)) {
+    // SHARED gate (canAttackFromPosition, 2026-07-20): the UI's Attack button and
+    // the board highlight computation consult the same helper by construction.
+    if (!canAttackFromPosition(s.game, ent, attLoc.player, attLoc.slot)) {
       return { ...toast('Must be in the Front Line to attack (no Ranged).') };
     }
 
-    // Standing restrictions LAST — "cannot" beats "can" (R1, owner 2026-07-15): an
+    // Standing restrictions — "cannot" beats "can" (R1, owner 2026-07-15): an
     // opposing restriction aura overrides Ranged and Watchtower coverage alike.
     const restricted = attackRestrictedBy(s.game, ent, attLoc.player, attLoc.slot);
     if (restricted) {
       return { ...toast(`${ent.name} cannot attack — ${restricted} (opposing aura).`) };
+    }
+
+    // No dead prompts (2026-07-20): if opposing characters exist but the targeting
+    // rules leave NOTHING legal (e.g. every legal line is warded), refuse loudly
+    // now instead of arming a highlight-less picker. (An opponent with no
+    // characters at all — sandbox/test rigs only — keeps the old pass-through.)
+    const oppHasChars = Object.values(s.game[attLoc.player === 'p1' ? 'p2' : 'p1'].board)
+      .some(e => e && e.kind !== 'construct');
+    if (oppHasChars && legalAttackTargetIds(s.game, ent, attLoc.player).size === 0) {
+      return { ...toast(`No legal attack target for ${ent.name} right now — every attackable character is protected.`) };
     }
 
     return { pending: { action: 'attack', charId } };
@@ -2209,45 +2220,35 @@ export const useGameStore = create<GameStoreState>()(
       return { pending: null, toasts: [...s.toasts, pushToast(`${attacker.name} cannot attack — ${restricted} (opposing aura).`)] };
     }
 
-    // ── Targeting rules (only for characters, not constructs) ──────────────────
-    if (target.kind !== 'construct') {
-      // Front-Line-priority LEGALITY for this attacker, computed FIRST (bugfix
-      // 2026-07-15): a character is a legal target if it stands in the front line,
-      // the front line holds no characters, or the attacker has Evasive. The
-      // defender's own keywords play NO role in its targetability — a defender-
-      // Ranged branch was removed 2026-07-16 (owner ruling: the docs' "…or the
-      // defender has Ranged" clause was a documentation error, never a designed
-      // rule; canon RANGED is offensive only: "This character can attack from
-      // the Back Line"). (An id not on the opponent's board is outside this
-      // rule's scope — passes through, matching the old check's behavior.)
-      const hasEvasive = effectiveKeywords(attacker, game).includes('Evasive');
-      const frontLineOccupied = (Object.entries(oppBoard) as [string, BoardEntity | undefined][])
-        .some(([sl, e]) => e && e.kind !== 'construct' && isFront(sl as SlotId));
-      const isLegalTarget = (id: string): boolean => {
-        const sl = findSlot(oppBoard, id);
-        if (!sl) return true;
-        return isFront(sl as SlotId) || !frontLineOccupied || hasEvasive;
-      };
-
+    // ── Targeting rules — the SHARED gate (engine/stats.ts) computes legality;
+    //    the UI highlights exactly legalAttackTargetIds, built from the same
+    //    primitives consulted here, so prompt and reducer cannot disagree
+    //    (bugfix 2026-07-20; ab8a5b0 single-gate discipline). ──────────────────
+    // 0. Constructs are not attack targets — canon (GRU §Targeting Rules,
+    //    verbatim): "Constructs cannot be attacked and do not satisfy or
+    //    interfere with Front Line priority." ADJACENT HOLE CLOSED (flagged,
+    //    2026-07-20): this branch previously SKIPPED the targeting rules for
+    //    construct targets and fell through to commitAttack — the UI never
+    //    offered one, but a direct call would have attacked it.
+    if (target.kind === 'construct') {
+      const t = pushToast('Constructs cannot be attacked — attacks target characters.');
+      return { pending: null, toasts: [...s.toasts, t] };
+    }
+    {
       // 1. Guardian — canon (Master_Keyword_List, quoted verbatim): "While this
       //    character is ready (not exhausted) and a legal target, opponents must
       //    attack it before any other character." Guardian applies WITHIN the
-      //    legal set (bugfix 2026-07-15 — the old ready-only gate ignored the
-      //    legal-target clause and deadlocked every attack when a back-line
-      //    Guardian stood behind an occupied front line): only ready Guardians
-      //    that THIS attacker can legally target bind it; if none is legal,
-      //    Guardian imposes nothing and normal targeting applies.
-      const bindingGuardians = (Object.values(oppBoard) as (BoardEntity | undefined)[])
-        .filter((e): e is BoardEntity => !!e && !e.exhausted && e.kind !== 'construct'
-          && effectiveKeywords(e, game).includes('Guardian') && isLegalTarget(e.id));
-      if (bindingGuardians.length > 0 && !bindingGuardians.some(g => g.id === targetEntityId)) {
+      //    legal set (bugfix 2026-07-15).
+      const binding = bindingGuardianIds(game, attacker, attLoc.player);
+      if (binding.length > 0 && !binding.includes(targetEntityId)) {
         const t = pushToast('A Guardian must be attacked first!');
         return { pending: null, toasts: [...s.toasts, t] };
       }
 
-      // 2. Front Line priority for the chosen target (semantics unchanged; a
-      //    Guardian-bound target is legal by construction).
-      if (!isLegalTarget(targetEntityId)) {
+      // 2. Front-Line-priority legality for the chosen target (corrected rule
+      //    2026-07-16: front slot, empty front line, or attacker Evasive — the
+      //    defender's keywords play no role in its targetability).
+      if (!isLegalAttackTarget(game, attacker, attLoc.player, targetEntityId)) {
         const t = pushToast('Must target the Front Line first (attacker has no Evasive).');
         return { pending: null, toasts: [...s.toasts, t] };
       }

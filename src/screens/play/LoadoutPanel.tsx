@@ -4,7 +4,7 @@ import { CATALOG } from '../../data/catalog';
 import { TBL, CLASSCLR, GLYPH } from '../../tokens';
 import { btnProps } from '../../lib/a11y';
 import { useGameStore, gatherActivated, abilityUsedTag, type GameState } from '../../store/gameStore';
-import { canPlayActionCard, hasBackLineAttackAura, attackRestrictedBy } from '../../store/keywords';
+import { canPlayActionCard, canAttackFromPosition, attackRestrictedBy } from '../../store/keywords';
 import { handlePreviewWheel } from './previewScroll';
 import type { BoardEntity, EquippedItem } from '../../types/card';
 
@@ -84,13 +84,14 @@ function computeActions(
   const hasWeapon = !!(loadout?.weapon);
   const hasTwoHanded = loadout?.weapon?.hands === 2;
 
-  const inFrontLine = entSlot ? ['f1', 'f2', 'f3'].includes(entSlot) : false;
-  const hasRanged = keywords.includes('Ranged');
-  // Watchtower-style aura: back-line companions may attack as if Ranged (mirrors the
-  // beginAttack gate — the entity's side is whichever board it sits on).
+  // Position eligibility — the SHARED attack gate (engine/stats.ts, 2026-07-20):
+  // Front Line, Ranged (effectiveKeywords — item-granted counts), or a
+  // Watchtower-style aura. Same helper as beginAttack and the board highlights,
+  // so the button and the store cannot disagree. (The old local mirror also read
+  // PRINTED keywords only — an item-granted Ranged wrongly disabled the button.)
   const side: 'p1' | 'p2' = Object.values(game.p1.board).some(e => e?.id === ent.id) ? 'p1' : 'p2';
-  const towerCovered = ent.kind === 'companion' && hasBackLineAttackAura(game, side);
-  const canAttackFromPosition = inFrontLine || hasRanged || towerCovered;
+  const canAttackFromPos = !!entSlot
+    && canAttackFromPosition(game, ent, side, entSlot as Parameters<typeof canAttackFromPosition>[3]);
 
   // Atomic activation: once you've activated another character, this one is sealed.
   const sealed = game.finishedActors.includes(ent.id);
@@ -105,10 +106,10 @@ function computeActions(
   const attackRestricted = entSlot ? attackRestrictedBy(game, ent, side, entSlot as Parameters<typeof attackRestrictedBy>[3]) : null;
 
   // Zealous bypasses the entry-turn ("fresh") restriction for attacks (only).
-  const attackOk = !sealed && !acts.major && !isExhausted && (!fresh || zealous) && (!isPC || hasWeapon) && canAttackFromPosition && !attackRestricted;
+  const attackOk = !sealed && !acts.major && !isExhausted && (!fresh || zealous) && (!isPC || hasWeapon) && canAttackFromPos && !attackRestricted;
   const attackReason = sealed ? 'Activation finished' :
     attackRestricted ? `Cannot attack — ${attackRestricted} (opposing aura)` :
-    !canAttackFromPosition ? 'Must be in Front Line (or have Ranged)' :
+    !canAttackFromPos ? 'Must be in Front Line (or have Ranged)' :
     isPC && !hasWeapon ? 'Needs a weapon' :
     fresh && !zealous ? 'Cannot attack on its entry turn' :
     acts.major ? 'Major used' : 'Exhausted';

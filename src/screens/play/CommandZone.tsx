@@ -2,8 +2,8 @@ import type { CSSProperties } from 'react';
 import { CardFace, BASE_W, BASE_H } from '../../components/CardFace';
 import { TBL } from '../../tokens';
 import { btnProps } from '../../lib/a11y';
-import { useGameStore, ADJ, type SlotId, type PlayerState, type Board, type GameState } from '../../store/gameStore';
-import { effectiveKeywords, wardedLines, moveRestrictedBy } from '../../store/keywords';
+import { useGameStore, ADJ, type SlotId, type PlayerState } from '../../store/gameStore';
+import { moveRestrictedBy, canAttackFromPosition, legalAttackTargetIds } from '../../store/keywords';
 import { handlePreviewWheel } from './previewScroll';
 import type { BoardEntity } from '../../types/card';
 
@@ -53,39 +53,13 @@ const actorBadge = (color: string): CSSProperties => ({
   letterSpacing: '0.08em', pointerEvents: 'none', zIndex: 6, whiteSpace: 'nowrap',
 });
 
-/** Determine legal attack targets given targeting rules. */
-function legalAttackTargets(oppBoard: Board, game: GameState, attacker?: BoardEntity | null): Set<string> {
-  const entities = Object.values(oppBoard).filter((e): e is BoardEntity => !!e);
-  const chars = entities.filter(e => e.kind === 'companion' || e.kind === 'pc');
-  if (chars.length === 0) return new Set();
-
-  // 1. Guardian takes priority
-  const guardians = chars.filter(e => effectiveKeywords(e, game).includes('Guardian') && !e.exhausted);
-  let result: Set<string>;
-  if (guardians.length > 0) {
-    result = new Set(guardians.map(e => e.id));
-  } else {
-    // 2. Front Line takes priority (companions only, not constructs)
-    const frontLineIds = new Set(
-      Object.entries(oppBoard)
-        .filter(([slot, e]) => e && ['f1','f2','f3'].includes(slot) && (e.kind === 'companion' || e.kind === 'pc'))
-        .map(([, e]) => e!.id)
-    );
-    // 3. Back Line / all legal chars
-    result = frontLineIds.size > 0 ? frontLineIds : new Set(chars.map(e => e.id));
-  }
-
-  // 4. Long-Quiet Wall: a companion attacker can't hit a warded (opposite) line.
-  if (attacker?.kind === 'companion') {
-    const warded = wardedLines(oppBoard);
-    if (warded.size > 0) {
-      for (const [slot, e] of Object.entries(oppBoard)) {
-        if (e && warded.has(slot[0] === 'f' ? 'front' : 'back')) result.delete(e.id);
-      }
-    }
-  }
-  return result;
-}
+// Attack targeting NOTE (bugfix 2026-07-20): this file used to carry its OWN
+// legalAttackTargets() + attacker-eligibility copies. They predated Watchtower
+// (2026-07-08), the Guardian-legality fix (2026-07-15) and Evasive handling, so
+// the highlights could disagree with the store — a Watchtower-granted back-line
+// attacker armed a targeting prompt with ZERO highlights. Highlighting now
+// consults the SAME shared gate the reducers refuse with (engine/stats.ts:
+// canAttackFromPosition / legalAttackTargetIds) — they cannot diverge again.
 
 interface CommandZoneProps {
   player: PlayerState;
@@ -137,15 +111,14 @@ export function CommandZone({ player, owner, flip, boardScale = DEFAULT_BOARD_SC
     ? findEntityById(game[localPlayer].board, pending.charId)
     : null;
 
-  // Legal attack targets (enforces Guardian + Front Line priority + Fortification wards)
-  const legalTargets = pending?.action === 'attack'
-    ? legalAttackTargets(game[oppPlayer].board, game, attackerEnt)
+  // Legal attack targets — the exact set resolveAttack accepts (shared gate:
+  // Front Line priority, Evasive, Guardian-within-legal-set, Fortification wards).
+  const legalTargets = pending?.action === 'attack' && attackerEnt
+    ? legalAttackTargetIds(game, attackerEnt, localPlayer)
     : new Set<string>();
-  const attackerInFrontLine = attackerEnt
-    ? ['f1','f2','f3'].includes(findEntitySlot(game[localPlayer].board, attackerEnt.id) ?? '')
-    : false;
-  const attackerHasRanged = attackerEnt ? effectiveKeywords(attackerEnt, game).includes('Ranged') : false;
-  const attackerCanAttack = attackerInFrontLine || attackerHasRanged;
+  const attackerEntSlot = attackerEnt ? findEntitySlot(game[localPlayer].board, attackerEnt.id) : null;
+  const attackerCanAttack = !!attackerEnt && !!attackerEntSlot
+    && canAttackFromPosition(game, attackerEnt, localPlayer, attackerEntSlot);
 
   // Pending play: companions → back line only; constructs → any; items/actions don't go on board
   const pendingCard = pendingPlay
