@@ -2,7 +2,16 @@
 
 Self-contained context for continuing the card-effect engine work in a fresh session.
 
-## Latest session (2026-07-20) — Bugfix: opposing PC not offered as attack target — UI/store targeting UNIFIED at one gate
+## Latest session (2026-07-21) — t9 replacement fixture committed + Embercast timing CONFIRMED
+- **Fixture `twilight-solo-2634154-t9-mrupjvd2` COMMITTED** (owner-recorded on the fix commit,
+  correct stamp, format 3, 293 entries, demotions [] — replays clean; suite 36 files / 374
+  green). Replay coverage now: t3 + t7 + t9, the re-recording owed from 2026-07-20 delivered.
+- **EMBERCAST WAND TIMING CONFIRMED (owner, ruled 2026-07-16, recorded 2026-07-21): the rider
+  fires ON THE PLAY of the Magic Action as encoded — a countered Magic Action still triggers
+  it ("plays" is the event, per the universal 2026-07-15 "play = from hand" definition). The
+  2026-07-16 flagged engine reading is now an owner-ratified ruling; no code change.**
+
+## Previous session (2026-07-20) — Bugfix: opposing PC not offered as attack target — UI/store targeting UNIFIED at one gate
 **Suite: 36 files / 374 tests green (incl. 2 NEW committed replay fixtures); tsc ZERO;
 validate:decks clean. LOCAL session.** Owner-reported: Watchtower-granted back-line Scholar
 armed the attack prompt but NOTHING highlighted (opposing PC stood alone in the front line).
