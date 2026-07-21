@@ -2,7 +2,16 @@
 
 Self-contained context for continuing the card-effect engine work in a fresh session.
 
-## Latest session (2026-07-21, final) — RE-RULE: Fleeing is a SACRIFICE (owner 2026-07-20)
+## Latest session (2026-07-21, addendum) — replacement fixtures COMMITTED, nothing owed
+- **`3c8ee3f`: owner recorded t8 (269 entries) + t9 (362 entries) on `988e5d3`** — correct
+  stamps, format 3, demotions [], both replay clean; suite 40 files-worth / 393 tests green.
+  Both games run Convergence Sigil / Library of Memory / Siegeworks / Memory Stone boards,
+  so the last-gasp + ready-phase-sacrifice territory now sits INSIDE the replay net (no
+  Manifest boards yet — an animated-Manifest game remains a dream-recording item, not a
+  debt). **Replay coverage: t3 + t8 + t9. The last-gasp session's two owed re-recordings
+  are SETTLED; nothing owed.**
+
+## Previous session (2026-07-21, final) — RE-RULE: Fleeing is a SACRIFICE (owner 2026-07-20)
 **Suite: 39 files / 389 tests green; tsc ZERO; validate:decks clean. LOCAL session, behavior
 change.** A fleeing companion (Level > current Willpower at turn start) is SACRIFICED — it
 dies with everything death means. SUPERSEDES the arc-5 audit's non-sacrifice classification
