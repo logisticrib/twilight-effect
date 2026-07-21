@@ -2,7 +2,58 @@
 
 Self-contained context for continuing the card-effect engine work in a fresh session.
 
-## Latest session (2026-07-21, later) — LAST GASP ruling encoded + Ready Phase EXTRACTED (debt #2 CLOSED)
+## Latest session (2026-07-21, latest) — Anchor decay keys on COUNTERS: Manifests are mortal (owner 2026-07-20)
+**Suite: 38 files / 384 tests green; tsc ZERO; validate:decks clean. LOCAL session, behavior
+change.** Canon ANIMATE MAGIC's "retains its text and Anchor counters" means the counters
+remain the permanent's LIFESPAN — an animated Manifest keeps decaying and dies at zero.
+- **Docs (parent + snapshots hash-identical):** GRU Ready Phase step 3 REWORDED per the
+  owner's verbatim text ("each permanent that has Anchor counters…"; the brief's FROM-quote
+  predated the 2026-07-21 flee addendum — addendum preserved, diff noted) + the verbatim
+  Rules Note (2026-07-20, decay keys on counters). SWEEP: GRU §Constructs universal-decay
+  line + CDP §construct-cluster "Degradation" line each gained a dated alignment note; the
+  2026-07-08 prompt-order note AMENDED dated ("decayed Constructs carry no items" is no
+  longer exhaustive — a decayed MANIFEST can carry items and opens a transfer window).
+  Rules_Taxonomy: no decay-scoped gloss (swept, nothing to align).
+- **Engine:** ONE predicate `hasAnchorCounters` (stats.ts — `anchors != null`) consulted by
+  the readyPhase decay AND the UI pips. Decay branch keys on it; a decay-SURVIVING Manifest
+  still faces the flee check (pre-existing, see flag below). Decayed permanents with death
+  triggers now fire them in the ready loop (destroyEntity's order: own removal triggers,
+  then on-sacrifice listeners) — byte-neutral for constructs (none carry one), live for a
+  Memory-Stone-bearing Manifest (recovery pick arms via the dead-pick sink).
+- **ANCHOR-CARRIER AUDIT (brief item 4 — nothing unexpected):** carriers are constructs
+  (placeCard `card.anchor`; every shipped construct has a numeric anchor) and Manifests
+  (animate retains). Companions/PCs get `undefined` (`card.anchor ?? undefined`, companion
+  anchor is null); items aren't entities. Nothing surfaced.
+- **Pins (`anchor_decay_counters.test.ts`, 7):** Manifest decays 1/turn; dies by SACRIFICE
+  at zero (Dead Zone + Memory Stone onDestroy fires + transfer window); LAST GASP composes
+  (animated Echoing Glyph draws then crumbles); MoF does NOT protect it; Siegeworks does NOT
+  draw for it (texts quoted verbatim in the file); ordinary construct decay regression;
+  combat-killed Manifest pre-decay leaves once (no double handling).
+- **Mutations — 5. M1 predicate-revert (5 EXACT); M2 MoF-widened (2 EXACT); M3
+  death-triggers-dropped (1 EXACT); M4 isPhysicalConstruct-includes-Manifest predicted 2
+  failed 1 — INSPECTED: fireSacrificeTriggers double-guards (`kind !== 'construct'`
+  short-circuits before isPhysicalConstruct), so M4's true footprint is the MoF path only;
+  M5 listener-guard-removed added to cover pin 5 (2 EXACT). Restores grep-verified.**
+- **FIXTURE VERDICT — t3 STANDS (proven at entry level, not inferred):** t3 DOES contain a
+  Manifest (p2's animated Echoing Glyph, 3 anchors, visible at the turn-2 snapshot) but it
+  was destroyed in combat before p2's next Ready Phase (absent from the turn-3 snapshot;
+  step-74 ready replays clean) — it never survived to its controller's ready, so no decay
+  was ever due. Replay clean end-to-end; nothing retired, nothing newly owed (the two
+  re-recordings owed from the last-gasp session still stand).
+- **UI (before/after):** BEFORE — pips rendered only in the construct footer; a Manifest
+  showed nothing (the display gap that surfaced the ruling). AFTER — any counter-carrying
+  companion renders "Anchors N/M" + pips via the SAME hasAnchorCounters predicate
+  (live-verified: Manifest shows "Anchors 2/3", plain companion shows none). LoadoutPanel's
+  ⚓ chip already keyed on anchors-present (worked for Manifests unchanged). The animate
+  toast now says "— N Anchors remain, and it keeps decaying".
+- **⚠ PRE-EXISTING UNRULED EDGE (flagged, NOT changed):** a decay-SURVIVING Manifest still
+  faces the companion FLEE check (Level > Willpower, Manifests keep the construct card's
+  level) — and fleeing is a non-sacrifice exit, vs the Manifest's "if it would leave the
+  encounter, sacrifice it instead". Whether flee applies to Manifests at all, and whether
+  it converts to a sacrifice, is UNRULED — surfaced for the owner, engine left as-is.
+- **Owner re-uploads:** Game_Rules_Updated.md, Card_Design_Parameters.md, HANDOFF.md.
+
+## Previous session (2026-07-21, later) — LAST GASP ruling encoded + Ready Phase EXTRACTED (debt #2 CLOSED)
 **Suite: 37 files / 377 tests green; tsc ZERO; validate:decks clean. LOCAL session, two commits
 IN ORDER per the brief: `5d31aca` (the ruling — behavior change) then `82b9133` (the extraction —
 behaviorally invisible, fixture-proven).**

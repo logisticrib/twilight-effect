@@ -79,6 +79,14 @@ export function isPhysicalConstruct(ent: BoardEntity): boolean {
   return ent.kind === 'construct' && (ent.subtype === 'Trap' || ent.subtype === 'Fortification');
 }
 
+/** ONE definition of "carries Anchor counters" (Rules Note 2026-07-20 — decay keys
+ *  on COUNTERS, not card type): the Ready Phase decay predicate and the UI pip
+ *  display both consult this. Constructs always carry counters; an animated
+ *  Manifest RETAINS its counters as its remaining lifespan. */
+export function hasAnchorCounters(ent: BoardEntity): boolean {
+  return ent.anchors != null;
+}
+
 /**
  * An on-enter keyword that needs a target chosen from the board. Parsed from the
  * keyword string ("Reinforce 2", "Dismantle 3") so card data stays declarative.

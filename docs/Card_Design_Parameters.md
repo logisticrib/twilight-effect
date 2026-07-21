@@ -71,6 +71,7 @@
 - **Entry:** Played directly to any empty Command Zone slot (Front or Back Line). The active player chooses the slot. If no empty slot exists in the Command Zone, the play is illegal and the Construct stays in hand.
 - **Anchor counters:** All constructs enter with Anchor counters (amount specified on card)
 - **Degradation:** Remove 1 Anchor counter at start of each turn; sacrifice when last removed
+  - *Rules Note (2026-07-20): degradation keys on the COUNTERS, not the card type — an animated Manifest retains its Anchor counters and keeps decaying on the same schedule (see Game_Rules_Updated §Turn Structure, Ready Phase).*
 
 ---
 

@@ -2,7 +2,7 @@ import type { CSSProperties, Ref, WheelEvent } from 'react';
 import type { BoardEntity, Card, TapState } from '../types/card';
 import { TBL, CLASSCLR, CLASSDARK, GLYPH } from '../tokens';
 import { useGameStore } from '../store/gameStore';
-import { effectiveAttack, effectiveMaxHp, actionTypeOf } from '../store/keywords';
+import { effectiveAttack, effectiveMaxHp, actionTypeOf, hasAnchorCounters } from '../store/keywords';
 import type { ActionCost } from '../store/keywords';
 
 // ─── Fixed card canvas ───────────────────────────────────────────────────────
@@ -399,6 +399,28 @@ export function CardFace({
                 {hp}<span style={s.statSmall}>/{maxHp}</span>
               </div>
             </div>
+          )}
+
+          {/* Anchor pips on any counter-carrying COMPANION — i.e. an animated
+              Manifest (Rules Note 2026-07-20: decay keys on counters, not card
+              type; the counters are its remaining lifespan). Same predicate as
+              the engine's decay (hasAnchorCounters) — the missing pips here were
+              the display gap that surfaced the ruling. */}
+          {isCompanion && 'anchors' in data && hasAnchorCounters(data as BoardEntity) && (
+            <>
+              <div style={{
+                ...s.typeLine(cls),
+                margin: '0 7px 4px', borderLeft: 'none',
+                background: 'transparent', justifyContent: 'center', color: TBL.ink3,
+              }}>
+                Anchors {anchorsVal}/{Math.max(anchorsMax, anchorsVal)}
+              </div>
+              <div style={s.anchorWrap}>
+                {Array.from({ length: Math.max(anchorsMax, anchorsVal) }).map((_, i) => (
+                  <div key={i} style={s.anchorPip(i < anchorsVal)} />
+                ))}
+              </div>
+            </>
           )}
 
           {/* Footer — constructs */}

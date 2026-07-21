@@ -465,7 +465,10 @@ export function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceNam
             kind: 'companion', atk: e.atk, hp: e.hp, maxHp: e.hp, subtype: 'Manifest',
             fresh: loc.ent.fresh ?? false, statuses: [...loc.ent.statuses, 'manifest'],
           });
-          msgs.push(`${loc.ent.name} animates as a ${e.atk}/${e.hp} Manifest`);
+          // The retained counters are the Manifest's remaining lifespan (Rules Note
+          // 2026-07-20 — decay keys on counters, not card type): say so out loud.
+          msgs.push(`${loc.ent.name} animates as a ${e.atk}/${e.hp} Manifest${
+            loc.ent.anchors != null ? ` — ${loc.ent.anchors} Anchor${loc.ent.anchors === 1 ? '' : 's'} remain, and it keeps decaying` : ''}`);
         }
         break;
       }

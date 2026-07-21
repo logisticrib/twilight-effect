@@ -12,8 +12,9 @@ import type { BoardEntity, Card, TapState } from '../types/card';
 import type { GameState, PlayerState, PendingItemTransfer, PendingDeadPick,
               PendingModalChoice, PeekRequest, ArmorChoiceData } from './state';
 import type { Board, SlotId } from './geometry';
-import { HIT_RUN_STATUS, currentWillpower, isPhysicalConstruct, recomputeStatics } from './stats';
+import { HIT_RUN_STATUS, currentWillpower, isPhysicalConstruct, hasAnchorCounters, recomputeStatics } from './stats';
 import { deadCardsOf, itemTransferOf, fireSacrificeTriggers } from './entities';
+import { hasRemovalTrigger, resolveRemovalTriggers } from './combat';
 import { freshActs, computeWillpower, controlsPreventAnchorDecay, resolveStartOfTurn } from './lifecycle';
 
 /** Step 1 — ready all permanents + flip the Class Zone (no removals here). */
@@ -99,7 +100,13 @@ export function applyReadyRemovals(game: GameState, side: 'p1' | 'p2', whose: st
   };
   for (const [slot, ent] of Object.entries(ps.board)) {
     if (!ent) continue;
-    if (ent.kind === 'construct') {
+    // Decay keys on ANCHOR COUNTERS, not card type (Rules Note 2026-07-20): every
+    // permanent carrying counters decays — an animated Manifest "retains its …
+    // Anchor counters" and they remain its LIFESPAN. The Master-of-Foundations
+    // exemption stays Physical-Construct-scoped (owner-confirmed 2026-07-20: it
+    // does NOT protect Manifests — its text names Physical Constructs).
+    let cur = ent;
+    if (hasAnchorCounters(ent)) {
       const skipDecay = noPhysicalDecay && isPhysicalConstruct(ent);
       const newAnchors = skipDecay ? (ent.anchors ?? 0) : (ent.anchors ?? 0) - 1;
       if (newAnchors <= 0) { // last anchor decayed — sacrificed (it already ticked)
@@ -108,16 +115,18 @@ export function applyReadyRemovals(game: GameState, side: 'p1' | 'p2', whose: st
         notices.push(`${whose} ${ent.name} crumbles — its last Anchor decayed.`);
         continue;
       }
-      newBoard[slot as SlotId] = { ...ent, anchors: newAnchors };
+      cur = { ...ent, anchors: newAnchors };
+    }
+    // Companion fleeing: level > effective willpower (it already fired its trigger).
+    // A decay-SURVIVING Manifest is still a companion and still faces this check —
+    // pre-existing behavior, unchanged by the 2026-07-20 ruling (flagged in HANDOFF
+    // as an unruled edge: flee-vs-leave-as-sacrifice for Manifests).
+    if (cur.kind === 'companion' && cur.level > effWP) {
+      bury(cur);
+      notices.push(`${whose} ${cur.name} flees — Level ${cur.level} exceeds Willpower ${effWP}.`);
       continue;
     }
-    // Companion fleeing: level > effective willpower (it already fired its trigger)
-    if (ent.kind === 'companion' && ent.level > effWP) {
-      bury(ent);
-      notices.push(`${whose} ${ent.name} flees — Level ${ent.level} exceeds Willpower ${effWP}.`);
-      continue;
-    }
-    newBoard[slot as SlotId] = ent;
+    newBoard[slot as SlotId] = cur;
   }
   return { game: { ...game, [side]: { ...ps, board: newBoard,
     dead: buried.length ? [...ps.dead, ...buried] : ps.dead,
@@ -155,6 +164,17 @@ export function runReadyPhase(game: GameState, side: 'p1' | 'p2', whose: string)
   g = rem.game;
   const notices = [...rem.notices];
   for (const dy of rem.decayedSacs) {
+    // Death/destroy triggers fire on a decay sacrifice like any other death
+    // (RULED 2026-07-08: sacrifice IS a death). No shipped CONSTRUCT carries one
+    // (byte-neutral there — the fixture oracle holds), but a decayed MANIFEST can:
+    // Memory Stone on the animated body arms its recovery pick via the dead-pick
+    // sink. Order mirrors destroyEntity's engine default: the dying permanent's
+    // own removal triggers first, then the on-sacrifice listeners.
+    if (hasRemovalTrigger(dy)) {
+      const rt = resolveRemovalTriggers(g, dy, side, sot.deadPicks, sot.armorChoices);
+      g = rt.game;
+      notices.push(...rt.msgs);
+    }
     const st = fireSacrificeTriggers(g, dy, side, preRemovalBoard);
     g = st.game;
     notices.push(...st.msgs);
