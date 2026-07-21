@@ -2,7 +2,62 @@
 
 Self-contained context for continuing the card-effect engine work in a fresh session.
 
-## Latest session (2026-07-21) — t9 replacement fixture committed + Embercast timing CONFIRMED
+## Latest session (2026-07-21, later) — LAST GASP ruling encoded + Ready Phase EXTRACTED (debt #2 CLOSED)
+**Suite: 37 files / 377 tests green; tsc ZERO; validate:decks clean. LOCAL session, two commits
+IN ORDER per the brief: `5d31aca` (the ruling — behavior change) then `82b9133` (the extraction —
+behaviorally invisible, fixture-proven).**
+- **PART 1 VERDICT: the engine did REMOVALS-FIRST.** Code path: endTurn's old `readyPlayer`
+  closure applied anchor decay + flee inline during the ready pass; `resolveStartOfTurn` ran
+  ~70 lines later — after removals AND after the turn draw. A last-counter construct never
+  ticked; a fleeing companion never fired. The ruling was a real behavior change.
+- **Encoding (owner LAST GASP, 2026-07-20):** endTurn restructured to the ruled order:
+  readyAndFlip (no removals) → end-of-turn buff expiry (acted board — commutes with the flip,
+  state-identical) → **start-of-turn triggers fire** (statics recomputed around the window: a
+  trigger that removes a Dismay source is honored by the flee check) → decay/flee removals →
+  arc-5 on-sacrifice listeners (event-time pre-removal board — R3 + simultaneity preserved) →
+  turn draw (Ready precedes Draw, arc-5 pin) → prompt arming (Poison-first note unchanged).
+  ENCODED CONSEQUENCE (ruling-consistent, noted): a dying Library-of-Memory-style dead-pick
+  snapshots its options BEFORE this turn's removals bury cards — the trigger fired pre-removal,
+  so same-ready exits aren't in its choice set.
+- **⚠ FIXTURES t7 + t9 RETIRED (both diverge for EXACTLY the ruled reason — proven by
+  step-level diagnosis, not assumed):** t7 diverges at its step-155 endTurn with an RNG
+  underrun — **Convergence Sigil at 1 anchor** ("At the start of your turn, draw a card") now
+  ticks before crumbling, and the interpreter's per-resolution d6 accompanies it (a draw the
+  recording never made). t9 diverges at its step-153 endTurn — **Library of Memory at 1
+  anchor** now arms its Dead-Zone pick before crumbling (pendingDeadPick is hashed). t3
+  contains no last-gasp event and REPLAYS CLEAN — kept. **Owner: two re-recordings owed,
+  from a server on `82b9133`+ (restarted, stamp verified). Wizard-deck games hit last-gasp
+  boards naturally (Library/Sigil at 1 anchor) — any normal game will do.**
+- **Pins (`last_gasp.test.ts`, 5):** Sigil last tick (real card); decay-still-applies-after-
+  trigger regression (2-anchor Sigil → 1); Library dead-pick arming (the retired-t9 board);
+  fleeing companion fires first (synthetic startOfTurn companion — both exits, one rule);
+  Siegeworks interop (last-counter physical construct TICKS + on-sacrifice draw + turn draw).
+- **willpower_current flee test RE-BASED dated:** it hand-seeded `dismayed: true` with no
+  Dismay source — underivable state the Ready Phase's statics recompute now (correctly)
+  clears. Re-based onto a real synthetic Dismay-keyword entity so the derivation path is
+  exercised end-to-end; the pinned ruling (Dismay pressure causes fleeing) is unchanged.
+- **Mutations — 3.** M1 order-revert: 4 EXACT (pin 2 predicted-survives — a surviving
+  construct ticks either way). M3 statics-recompute-removed: 1 EXACT. M2 decay-removed:
+  predicted 8, failed 10 — HONEST IMPRECISION, both extras genuine decay reliances
+  (the t3 fixture — every recorded ready phase decays — and tier2's Translocation re-arm
+  pin); inspected, no contamination, restores grep-verified.
+- **PART 2 — EXTRACTION (`82b9133`): `src/engine/readyPhase.ts`** — readyAndFlip,
+  applyReadyRemovals (decay + MoF exemption + flee + bury/Dead-Zone routing + item-transfer
+  collection), runReadyPhase (composes the ruled order incl. triggers + sacrifice listeners).
+  endTurn is orchestration: **123 lines (was ~230)** — gates, buff expiry, runReadyPhase,
+  draw, prompt arming. Engine barrel + dependency-direction test cover the new module
+  automatically. **ORACLE HELD: t3 replays byte-identically across the extraction; suite
+  unchanged 37/377. PROJECT_STATE debt #2 is FULLY RESOLVED** (trigger wiring landed arc 5;
+  the endTurn extraction was the open half — done).
+- **Live-verified** (real app, fresh server on the commit): Sigil-at-1 board → hand +2, toasts
+  in ruled order ("Convergence Sigil: Draw 1" THEN "crumbles"), Sigil in the Dead Zone.
+- **Docs:** GRU §Turn Structure Ready Phase — step list now shows where triggers sit (dated)
+  + the verbatim Rules Note (2026-07-20); parent + snapshot hash-identical. **Owner
+  re-uploads: Game_Rules_Updated.md, HANDOFF.md, tasks/PROJECT_STATE.md.** No open questions
+  surfaced — the only mid-extraction ordering call (buff expiry vs flip) commutes and is
+  documented in the code.
+
+## Previous session (2026-07-21) — t9 replacement fixture committed + Embercast timing CONFIRMED
 - **Fixture `twilight-solo-2634154-t9-mrupjvd2` COMMITTED** (owner-recorded on the fix commit,
   correct stamp, format 3, 293 entries, demotions [] — replays clean; suite 36 files / 374
   green). Replay coverage now: t3 + t7 + t9, the re-recording owed from 2026-07-20 delivered.
