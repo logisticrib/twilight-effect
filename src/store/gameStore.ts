@@ -2781,59 +2781,37 @@ export const useGameStore = create<GameStoreState>()(
     const decayedSacs: BoardEntity[] = []; // decay = sacrifice (canon) -> on-sacrifice listeners (arc 5)
     const whose = nextPlayer === s.localPlayer ? 'Your' : "Opponent's";
 
-    const readyPlayer = (ps: PlayerState): PlayerState => {
+    // ── Ready Phase, canonical order (Rules Note 2026-07-20 — LAST GASP) ─────────
+    //   1. ready permanents + flip Class Zone cards (readyAndFlip — NO removals)
+    //   2. start-of-turn triggered abilities FIRE — before any removal: a construct
+    //      on its last Anchor ticks once more; a companion about to flee fires first
+    //   3. Anchor decay (sacrifice at zero → arc-5 listeners) + Willpower flee exits
+    // Then the turn draw (Ready precedes Draw — arc-5 pin), statics, prompts.
+    // (Previously removals ran inside the ready pass, BEFORE start-of-turn effects —
+    // the last-counter construct never ticked. Owner ruled last-gasp 2026-07-20.)
+
+    const readyAndFlip = (ps: PlayerState): PlayerState => {
       // Flip CZ cards face-up → recalculate willpower
       const newCZ = ps.classZone.map(c => ({ ...c, faceDown: false }));
       const newWillpower = computeWillpower(newCZ);
-      // Fleeing checks read THE current Willpower (Dismayed-adjusted), evaluated
-      // against the just-recomputed base. Dismay pressure can cause fleeing — intended
-      // (owner ruling 2026-07-04).
-      const effWP = currentWillpower({ ...ps, willpower: newWillpower });
-      // Master of Foundations: this player's Physical Constructs skip anchor decay.
-      const noPhysicalDecay = controlsPreventAnchorDecay(ps);
       const newBoard: Board = {};
-      // Entities that leave during ready (decayed constructs, fleeing companions) go to
-      // the Dead Zone with their items; a tucked Oathsworn card returns to hand.
-      const buried: Card[] = [];
-      const returnedSworn: Card[] = [];
-      const bury = (ent: BoardEntity) => {
-        buried.push(...deadCardsOf(ent));
-        if (ent.sworn) returnedSworn.push(ent.sworn);
-        // A ready-phase exit (fleeing companion) opens an Item Transfer window for the
-        // readied player. Constructs return null (they carry no items).
-        const t = itemTransferOf(ent, nextPlayer);
-        if (t) readyTransfers.push(t);
-      };
       for (const [slot, ent] of Object.entries(ps.board)) {
         if (!ent) continue;
-        // Anchor decay for constructs (also ready them: clear exhaust/tap + once-per-turn
-        // markers, so "exhaust until your next turn" effects like Library of Memory expire).
+        // Ready constructs (clear exhaust/tap + once-per-turn markers, so "exhaust
+        // until your next turn" effects like Library of Memory expire). Anchor decay
+        // happens AFTER start-of-turn triggers (last gasp) — not here.
         if (ent.kind === 'construct') {
-          const skipDecay = noPhysicalDecay && isPhysicalConstruct(ent);
-          const newAnchors = skipDecay ? (ent.anchors ?? 0) : (ent.anchors ?? 0) - 1;
-          if (newAnchors <= 0) { // last anchor decayed — sacrificed
-            bury(ent);
-            decayedSacs.push(ent);
-            readyNotices.push(`${whose} ${ent.name} crumbles — its last Anchor decayed.`);
-            continue;
-          }
           newBoard[slot as SlotId] = {
-            ...ent, anchors: newAnchors, acts: freshActs(), tapped: 'none' as TapState, exhausted: false,
+            ...ent, acts: freshActs(), tapped: 'none' as TapState, exhausted: false,
             fresh: false, // entry turn is over (2026-07-15 — see placeCard)
             statuses: ent.statuses.filter(st => !st.startsWith('ability-used:')),
           };
           continue;
         }
-        // Companion fleeing: level > effective willpower
-        if (ent.kind === 'companion' && ent.level > effWP) {
-          bury(ent);
-          readyNotices.push(`${whose} ${ent.name} flees — Level ${ent.level} exceeds Willpower ${effWP}.`);
-          continue;
-        }
-        // Ready the entity (drop unused Hit & Run marker + once-per-turn ability markers).
-        // A Poisoned character does NOT ready here — the start-of-turn Poison check
-        // (PoisonModal → resolvePoison) decides whether it cleanses+readies or stays
-        // exhausted, so its tap/exhaust state is left for that check to resolve.
+        // Ready the character (drop unused Hit & Run marker + once-per-turn ability
+        // markers). A Poisoned character does NOT ready here — the start-of-turn
+        // Poison check (PoisonModal → resolvePoison) decides whether it cleanses+
+        // readies or stays exhausted, so its tap/exhaust state is left for that check.
         const poisoned = (ent.poison ?? 0) > 0;
         // Items ready alongside their controller's characters (Rules Note 2026-07-15).
         // Hash discipline: only items actually exhausted are touched — the exhausted
@@ -2856,29 +2834,101 @@ export const useGameStore = create<GameStoreState>()(
           statuses: ent.statuses.filter(st => st !== HIT_RUN_STATUS && !st.startsWith('ability-used:')),
         };
       }
-      return { ...ps, classZone: newCZ, willpower: newWillpower, board: newBoard,
-        dead: buried.length ? [...ps.dead, ...buried] : ps.dead,
-        hand: returnedSworn.length ? [...ps.hand, ...returnedSworn] : ps.hand };
+      return { ...ps, classZone: newCZ, willpower: newWillpower, board: newBoard };
     };
 
-    const readied = readyPlayer(g[nextPlayer]);
-    // Ready-phase decay is a SACRIFICE (canon: "sacrifice when last removed") — fire
-    // on-sacrifice listeners (arc 5, 2026-07-15) on the readied state, BEFORE the
-    // turn draw (Ready precedes Draw). Listeners gather from the PRE-ready board:
-    // the decayed construct's own listener fires (R3), and same-ready sacrifices
-    // hear each other (simultaneous decay — engine reading, flagged to the owner).
-    // NOTE: listener effects needing prompt sinks (dead-picks/armor) would need
-    // sinks threaded here; the shipped listener (draw) needs none.
-    let readiedGame: GameState = { ...g, [nextPlayer]: readied };
+    // Ready-phase removals — run AFTER start-of-turn triggers (last gasp).
+    const applyReadyRemovals = (game: GameState): GameState => {
+      const ps = game[nextPlayer];
+      // Fleeing checks read THE current Willpower (Dismayed-adjusted; base was
+      // recomputed at the flip). Dismay pressure can cause fleeing — intended
+      // (owner ruling 2026-07-04).
+      const effWP = currentWillpower(ps);
+      // Master of Foundations: this player's Physical Constructs skip anchor decay.
+      const noPhysicalDecay = controlsPreventAnchorDecay(ps);
+      const newBoard: Board = {};
+      // Entities that leave during ready (decayed constructs, fleeing companions) go to
+      // the Dead Zone with their items; a tucked Oathsworn card returns to hand.
+      const buried: Card[] = [];
+      const returnedSworn: Card[] = [];
+      const bury = (ent: BoardEntity) => {
+        buried.push(...deadCardsOf(ent));
+        if (ent.sworn) returnedSworn.push(ent.sworn);
+        // A ready-phase exit (fleeing companion) opens an Item Transfer window for the
+        // readied player. Constructs return null (they carry no items).
+        const t = itemTransferOf(ent, nextPlayer);
+        if (t) readyTransfers.push(t);
+      };
+      for (const [slot, ent] of Object.entries(ps.board)) {
+        if (!ent) continue;
+        if (ent.kind === 'construct') {
+          const skipDecay = noPhysicalDecay && isPhysicalConstruct(ent);
+          const newAnchors = skipDecay ? (ent.anchors ?? 0) : (ent.anchors ?? 0) - 1;
+          if (newAnchors <= 0) { // last anchor decayed — sacrificed (it already ticked)
+            bury(ent);
+            decayedSacs.push(ent);
+            readyNotices.push(`${whose} ${ent.name} crumbles — its last Anchor decayed.`);
+            continue;
+          }
+          newBoard[slot as SlotId] = { ...ent, anchors: newAnchors };
+          continue;
+        }
+        // Companion fleeing: level > effective willpower (it already fired its trigger)
+        if (ent.kind === 'companion' && ent.level > effWP) {
+          bury(ent);
+          readyNotices.push(`${whose} ${ent.name} flees — Level ${ent.level} exceeds Willpower ${effWP}.`);
+          continue;
+        }
+        newBoard[slot as SlotId] = ent;
+      }
+      return { ...game, [nextPlayer]: { ...ps, board: newBoard,
+        dead: buried.length ? [...ps.dead, ...buried] : ps.dead,
+        hand: returnedSworn.length ? [...ps.hand, ...returnedSworn] : ps.hand } };
+    };
+
+    // 1. Ready + flip.
+    let workGame: GameState = { ...g, [nextPlayer]: readyAndFlip(g[nextPlayer]) };
+
+    // Expire until-end-of-turn buffs on the player whose turn just ended (end-of-turn
+    // cleanup precedes the new turn's start-of-turn triggers — same relative order as
+    // before the 2026-07-20 restructure).
+    const acted = g.activePlayer;
+    const actedBoard: Board = {};
+    for (const [slot, ent] of Object.entries(workGame[acted].board) as [SlotId, BoardEntity | undefined][]) {
+      if (!ent) continue;
+      actedBoard[slot] = ent.buffs?.some(b => b.until === 'endOfTurn')
+        ? { ...ent, buffs: ent.buffs.filter(b => b.until !== 'endOfTurn') }
+        : ent;
+    }
+    workGame = { ...workGame, [acted]: { ...workGame[acted], board: actedBoard } };
+
+    // 2. LAST GASP (owner 2026-07-20): start-of-turn triggers fire BEFORE the
+    // removals — gathered from the readied, pre-removal board, so a last-counter
+    // construct and an about-to-flee companion both fire. Statics recomputed
+    // around the window (a trigger could remove a Dismay source before the flee
+    // check reads Willpower — recomputeStatics is idempotent, hash-safe).
+    workGame = recomputeStatics(workGame);
+    const sot = resolveStartOfTurn(workGame, nextPlayer);
+    workGame = recomputeStatics(sot.game);
+
+    // 3. Removals: anchor decay (sacrifice at zero) + Willpower flee. Decay is a
+    // SACRIFICE (canon) — fire on-sacrifice listeners (arc 5, 2026-07-15) BEFORE
+    // the turn draw (Ready precedes Draw). Listeners gather from the event-time
+    // (pre-removal) board: the decayed construct's own listener fires (R3), and
+    // same-ready sacrifices hear each other (simultaneous decay — engine reading,
+    // flagged to the owner). NOTE: listener effects needing prompt sinks
+    // (dead-picks/armor) would need sinks threaded here; the shipped listener
+    // (draw) needs none.
+    const preRemovalBoard = workGame[nextPlayer].board;
+    workGame = applyReadyRemovals(workGame);
     if (decayedSacs.length) {
-      const preBoard = g[nextPlayer].board;
       for (const dy of decayedSacs) {
-        const st = fireSacrificeTriggers(readiedGame, dy, nextPlayer, preBoard);
-        readiedGame = st.game;
+        const st = fireSacrificeTriggers(workGame, dy, nextPlayer, preRemovalBoard);
+        workGame = st.game;
         readyNotices.push(...st.msgs);
       }
     }
-    const readiedPost = readiedGame[nextPlayer];
+    const readiedPost = workGame[nextPlayer];
     // Draw a card for the next player (with deck-out check)
     let drawnDeck = readiedPost.deck;
     let drawnHand = readiedPost.hand;
@@ -2907,7 +2957,7 @@ export const useGameStore = create<GameStoreState>()(
       : null;
 
     let newGame: GameState = recomputeStatics({
-      ...readiedGame,
+      ...workGame,
       turn: nextTurn,
       activePlayer: nextPlayer,
       currentPhase: 'draw' as Phase,   // Start at Draw, player advances → CZ → Action
@@ -2919,24 +2969,10 @@ export const useGameStore = create<GameStoreState>()(
       [nextPlayer]: nextPlayerState,
     });
 
-    // Expire until-end-of-turn buffs on the player whose turn just ended.
-    const acted = g.activePlayer;
-    const actedBoard: Board = {};
-    for (const [slot, ent] of Object.entries(newGame[acted].board) as [SlotId, BoardEntity | undefined][]) {
-      if (!ent) continue;
-      actedBoard[slot] = ent.buffs?.some(b => b.until === 'endOfTurn')
-        ? { ...ent, buffs: ent.buffs.filter(b => b.until !== 'endOfTurn') }
-        : ent;
-    }
-    newGame = { ...newGame, [acted]: { ...newGame[acted], board: actedBoard } };
-
-    // Fire start-of-turn effects (constructs/companions) for the player starting their turn.
-    const sot = resolveStartOfTurn(newGame, nextPlayer);
-    newGame = sot.game;
-
     const drawId = ++toastId;
     setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== drawId) })), 4000);
-    const sotToasts = [...readyNotices, ...sot.msgs].map(msg => {
+    // Event order in the toasts mirrors the ruling: triggers first, then removals.
+    const sotToasts = [...sot.msgs, ...readyNotices].map(msg => {
       const tid = ++toastId;
       setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== tid) })), 4000);
       return { id: tid, msg };

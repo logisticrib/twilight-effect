@@ -312,7 +312,9 @@ Movement does not exhaust the character and does not produce a visible state cha
 **1. Ready Phase**
    - Ready all exhausted permanents you control
    - Flip all face-down Class Zone cards face-up
-   - Remove one Anchor counter from each Construct (a Construct whose last Anchor counter is removed is sacrificed and placed in its owner's Dead Zone)
+   - "At the start of your turn" triggered abilities fire *(position dated 2026-07-20 — see the Rules Note below)*
+   - Remove one Anchor counter from each Construct (a Construct whose last Anchor counter is removed is sacrificed and placed in its owner's Dead Zone); companions whose Level exceeds your current Willpower flee
+   - **Rules Note (2026-07-20) — Start-of-turn abilities fire before Ready Phase removals.** "At the start of your turn" triggered abilities of permanents in the encounter fire before Anchor decay is applied and before Willpower flee checks remove companions. A construct losing its last Anchor counter this turn still fires its start-of-turn ability first; a companion that will flee this turn fires its start-of-turn ability before fleeing. Prompt ordering within the Ready Phase otherwise follows the canonical step order (see the 2026-07-08 note: Poison before Item Transfer windows).
    - **Rules Note (ruled 2026-07-08):** When multiple start-of-turn prompts arise, they resolve in canonical Ready Phase step order. In particular, the Poison keyword check resolves BEFORE any Item Transfer on Character Exit windows opened by ready-phase exits (a fleeing companion's items; decayed Constructs carry no items, so no window opens for them).
 
 **2. Draw Phase**

@@ -24,15 +24,25 @@ describe('currentWillpower — the single accessor', () => {
 describe('fleeing reads current Willpower — Dismay pressure can cause fleeing (intended)', () => {
   function endTurnInto(dismayed: boolean) {
     freshGame();
+    // RE-BASED 2026-07-20 (last-gasp restructure): Dismay is DERIVED state — the
+    // Ready Phase now recomputes statics BEFORE the flee check (so a start-of-turn
+    // trigger that removes a Dismay source is honored), which correctly clears a
+    // hand-seeded `dismayed` flag with no source behind it. Seed a REAL Dismay
+    // source on the opponent's board instead (no shipped card carries Dismay, so a
+    // synthetic entity keyword exercises the derivation path end-to-end). The
+    // pinned ruling is unchanged: Dismay pressure alone can cause fleeing.
     gs.setState(s => ({ game: { ...s.game,
-      p2: { ...s.game.p2, dismayed, willpower: 3, dead: [],
+      p1: { ...s.game.p1, board: dismayed
+        ? { f1: mkComp('dismay-src', compCard.name, { keywords: ['Dismay'] }) }
+        : {} },
+      p2: { ...s.game.p2, willpower: 3, dead: [],
         classZone: CATALOG.slice(20, 23).map((c, i) => mkCz(c, 'Warrior', `cz-${i}`)),
         board: {
           f1: mkComp('edge', compCard.name, { level: 3 }),   // 3 ≤ 3 stays; 3 > 2 flees
           f2: mkComp('safe', compCard2.name, { level: 2 }),  // control: 2 ≤ 2 either way
         } },
     } }));
-    gs.getState().endTurn(); // p1 ends → readyPlayer(p2) runs the fleeing check
+    gs.getState().endTurn(); // p1 ends → p2's Ready Phase runs the fleeing check
     return gs.getState().game;
   }
 
