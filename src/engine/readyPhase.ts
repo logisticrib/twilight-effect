@@ -69,18 +69,24 @@ export interface ReadyRemovalsResult {
   game: GameState;
   notices: string[];
   transfers: PendingItemTransfer[];
-  decayedSacs: BoardEntity[];
+  /** EVERY Ready Phase sacrifice — decayed permanents AND fled companions
+   *  (re-rule 2026-07-20: fleeing IS a sacrifice), in board slot order. */
+  sacrificed: BoardEntity[];
 }
 
 /** Step 3 — Ready Phase removals, run AFTER start-of-turn triggers (last gasp):
  *  Anchor decay (sacrifice at zero; Master-of-Foundations exemption) + Willpower
- *  flee exits. Exits go to the Dead Zone with their items; a tucked Oathsworn
- *  card returns to hand; a fleeing companion opens an Item Transfer window. */
+ *  flee exits. BOTH are SACRIFICES (decay: canon "sacrifice when last removed";
+ *  flee: re-rule 2026-07-20 — "fleeing is a sacrifice", superseding the arc-5
+ *  audit's non-sacrifice classification). Exits go to the Dead Zone with their
+ *  items; a tucked Oathsworn card returns to hand (canon, verbatim: "When this
+ *  permanent leaves the encounter, return the sworn card to your hand." — death
+ *  and flee are both leaves); a fleeing companion opens an Item Transfer window. */
 export function applyReadyRemovals(game: GameState, side: 'p1' | 'p2', whose: string): ReadyRemovalsResult {
   const ps = game[side];
   const notices: string[] = [];
   const transfers: PendingItemTransfer[] = [];
-  const decayedSacs: BoardEntity[] = [];
+  const sacrificed: BoardEntity[] = [];
   // Fleeing checks read THE current Willpower (Dismayed-adjusted; base was
   // recomputed at the flip). Dismay pressure can cause fleeing — intended
   // (owner ruling 2026-07-04).
@@ -111,18 +117,22 @@ export function applyReadyRemovals(game: GameState, side: 'p1' | 'p2', whose: st
       const newAnchors = skipDecay ? (ent.anchors ?? 0) : (ent.anchors ?? 0) - 1;
       if (newAnchors <= 0) { // last anchor decayed — sacrificed (it already ticked)
         bury(ent);
-        decayedSacs.push(ent);
+        sacrificed.push(ent);
         notices.push(`${whose} ${ent.name} crumbles — its last Anchor decayed.`);
         continue;
       }
       cur = { ...ent, anchors: newAnchors };
     }
     // Companion fleeing: level > effective willpower (it already fired its trigger).
-    // A decay-SURVIVING Manifest is still a companion and still faces this check —
-    // pre-existing behavior, unchanged by the 2026-07-20 ruling (flagged in HANDOFF
-    // as an unruled edge: flee-vs-leave-as-sacrifice for Manifests).
+    // FLEEING IS A SACRIFICE (re-rule, owner 2026-07-20): the fleeing companion is
+    // sacrificed — death triggers fire and sacrifice listeners can hear it, subject
+    // to their own scope (Siegeworks stays Physical-Construct-scoped). This also
+    // dissolves the c367630 Manifest flag natively: a decay-surviving Manifest that
+    // fails the Willpower check is SACRIFICED — its "if it would leave the
+    // encounter, sacrifice it instead" clause is satisfied, not contradicted.
     if (cur.kind === 'companion' && cur.level > effWP) {
       bury(cur);
+      sacrificed.push(cur);
       notices.push(`${whose} ${cur.name} flees — Level ${cur.level} exceeds Willpower ${effWP}.`);
       continue;
     }
@@ -131,7 +141,7 @@ export function applyReadyRemovals(game: GameState, side: 'p1' | 'p2', whose: st
   return { game: { ...game, [side]: { ...ps, board: newBoard,
     dead: buried.length ? [...ps.dead, ...buried] : ps.dead,
     hand: returnedSworn.length ? [...ps.hand, ...returnedSworn] : ps.hand } },
-    notices, transfers, decayedSacs };
+    notices, transfers, sacrificed };
 }
 
 export interface ReadyPhaseResult {
@@ -163,13 +173,17 @@ export function runReadyPhase(game: GameState, side: 'p1' | 'p2', whose: string)
   const rem = applyReadyRemovals(g, side, whose);
   g = rem.game;
   const notices = [...rem.notices];
-  for (const dy of rem.decayedSacs) {
-    // Death/destroy triggers fire on a decay sacrifice like any other death
-    // (RULED 2026-07-08: sacrifice IS a death). No shipped CONSTRUCT carries one
-    // (byte-neutral there — the fixture oracle holds), but a decayed MANIFEST can:
-    // Memory Stone on the animated body arms its recovery pick via the dead-pick
-    // sink. Order mirrors destroyEntity's engine default: the dying permanent's
-    // own removal triggers first, then the on-sacrifice listeners.
+  for (const dy of rem.sacrificed) {
+    // EVERY Ready Phase exit is a SACRIFICE — decayed permanents (canon) and fled
+    // companions (re-rule, owner 2026-07-20) — and a sacrifice is a death (RULED
+    // 2026-07-08). This loop applies the same death machinery destroyEntity
+    // applies for the sacrifice cause, in its engine-default order: the dying
+    // permanent's own death/destroy triggers first (a fleeing Memory-Stone bearer
+    // arms its recovery pick via the dead-pick sink; no shipped CONSTRUCT carries
+    // one, so construct decay stays byte-neutral — the fixture oracle holds),
+    // then the on-sacrifice listeners, gathered from the event-time pre-removal
+    // board (fled companions pass through the listeners' own scope filters —
+    // Siegeworks is Physical-Construct-scoped and stays silent for them).
     if (hasRemovalTrigger(dy)) {
       const rt = resolveRemovalTriggers(g, dy, side, sot.deadPicks, sot.armorChoices);
       g = rt.game;

@@ -2,7 +2,65 @@
 
 Self-contained context for continuing the card-effect engine work in a fresh session.
 
-## Latest session (2026-07-21, latest) — Anchor decay keys on COUNTERS: Manifests are mortal (owner 2026-07-20)
+## Latest session (2026-07-21, final) — RE-RULE: Fleeing is a SACRIFICE (owner 2026-07-20)
+**Suite: 39 files / 389 tests green; tsc ZERO; validate:decks clean. LOCAL session, behavior
+change.** A fleeing companion (Level > current Willpower at turn start) is SACRIFICED — it
+dies with everything death means. SUPERSEDES the arc-5 audit's non-sacrifice classification
+of flee (b7eb834 era). **No test ever pinned flee-fires-nothing** — the classification lived
+in the audit record and GRU's sacrifice-events note; the note is AMENDED dated, the audit
+record stays as history, and these are the first flee-event pins (retire-and-rewrite
+satisfied at the actual sites the classification lived).
+- **OWNER DESIGN NOTE (recorded, NOT implemented):** the owner briefly considered fleeing
+  REMOVING the card from the game entirely; ruled sacrifice FOR NOW — the removed-from-game
+  idea is PARKED on the design-revisit list (PROJECT_STATE) so it isn't lost.
+- **Engine (readyPhase.ts):** fled companions join the same Ready Phase sacrifice machinery
+  as decay (the `sacrificed` list): death/destroy triggers fire first (Memory-Stone bearer
+  arms its recovery pick via the dead-pick sink), then on-sacrifice listeners gathered from
+  the event-time pre-removal board. IMPLEMENTATION-SHAPE NOTE: the brief said "routes
+  through destroyEntity" — encoded as the module's batch loop applying destroyEntity's
+  machinery in destroyEntity's documented order with the sacrifice cause (identical
+  semantics; keeps decay/flee symmetric and preserves the flagged simultaneity reading —
+  same-ready sacrifices hear each other via the shared event board).
+- **LISTENER-SCOPE SWEEP: nothing gains coverage.** The schema's ONLY sacrifice listener is
+  `ownPhysicalConstructSacrificed` — type-filtered by definition and double-guarded in
+  fireSacrificeTriggers (kind check + isPhysicalConstruct). No sacrifice-scoped listener
+  without a type filter exists; a fled companion passes through every current filter
+  silently. Schema comment amended dated (flee added to the fires-on list).
+- **MANIFEST COLLISION DISSOLVED (the c367630 flag):** a decay-surviving Manifest that fails
+  the Willpower check is now SACRIFICED — its "if it would leave the encounter, sacrifice it
+  instead" clause is satisfied, not contradicted. Pinned. The c367630 surfaced-unruled flag
+  is RESOLVED by this ruling.
+- **Oathsworn — canon-backed, NO stop needed:** OATHSWORN (verbatim): "When this permanent
+  leaves the encounter, return the sworn card to your hand." Death and flee are both leaves —
+  the sworn card returns either way (same as destroyEntity's handling). Pinned; text is not
+  silent, so nothing to surface.
+- **Docs (parent + snapshot hash-identical):** GRU §Companion Fleeing gained the verbatim
+  Rules Note (2026-07-20 — fleeing is a sacrifice); the 2026-07-15 sacrifice-events note
+  AMENDED dated (flee is a sacrifice, supersession named); the §Dead Zone "exactly as if it
+  had been destroyed" line tightened dated (both ready-phase exits ARE sacrifices). CDP's
+  flee cluster lines are silent on death-vs-non-death — nothing states otherwise, no change.
+- **Pins (`flee_sacrifice.test.ts`, 5):** death triggers fire on flee (Memory-Stone bearer;
+  + transfer window per the 2026-07-08 all-exits note); Siegeworks does NOT draw for a flee
+  (verbatim scope); Manifest decay-survivor flees into a real sacrifice (triggers included);
+  last gasp composes (tick before the flee-sacrifice); Oathsworn sworn-return on flee
+  (verbatim canon cited). Poison-before-transfer ordering: existing pin, untouched, cited.
+- **Mutations — 3.** M1 fled-not-sacrificed (3 EXACT); M3 sworn-return-dropped (1 EXACT);
+  M2 listener-guard-removed predicted 2 failed 3 — HONEST IMPRECISION: the extra was
+  anchor_decay_counters pin 5, which watches the SAME guard (proven by the identical
+  mutation last session and forgotten in this prediction); consistent, no contamination,
+  restores grep-verified.
+- **FIXTURE VERDICT — t3 STANDS:** replays clean end-to-end. The re-rule's observable
+  footprint needs a fled companion carrying a death-trigger item (Memory Stone is the only
+  one shipped) or a listener hearing non-Physical sacrifices (none exist) — t3's clean
+  replay proves neither occurs. Nothing newly retired. **TOTAL RECORDINGS OWED: still the
+  TWO from the last-gasp session** (t7/t9 replacements, from a server on THIS commit or
+  later — server restarted post-commit, stamp verified).
+- **Live-verified** (real app, fresh server): level-9 Memory-Stone bearer flees at the ready
+  → flee toast, death-trigger prompt ("Memory Stone: Choose a card to return from the Dead
+  Zone"), stone buried, transfer window queued.
+- **Owner re-uploads:** Game_Rules_Updated.md, HANDOFF.md, tasks/PROJECT_STATE.md.
+
+## Previous session (2026-07-21, latest) — Anchor decay keys on COUNTERS: Manifests are mortal (owner 2026-07-20)
 **Suite: 38 files / 384 tests green; tsc ZERO; validate:decks clean. LOCAL session, behavior
 change.** Canon ANIMATE MAGIC's "retains its text and Anchor counters" means the counters
 remain the permanent's LIFESPAN — an animated Manifest keeps decaying and dies at zero.

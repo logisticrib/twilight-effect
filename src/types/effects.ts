@@ -49,7 +49,8 @@ export type Trigger =
                                     // (Incantation) Construct from hand (Patient Conjurer)
   // On-sacrifice window (arc 5, owner-ratified 2026-07-15). Fires on every event
   // canon words as SACRIFICE — anchor decay reaching zero, Dismantle, sacrifice
-  // costs, trap self-sacrifice, Coercion — regardless of which player caused it;
+  // costs, trap self-sacrifice, Coercion, and (re-rule 2026-07-20) companion
+  // FLEEING — regardless of which player caused it;
   // NEVER on destruction by damage or non-sacrifice removal (the cause is threaded
   // through destroyEntity, not inferred from death generally). R3: the sacrificed
   // permanent's OWN listener fires too — gathered at event time (pre-removal),
