@@ -12,6 +12,7 @@ import type { BoardEntity, Card, TapState } from '../types/card';
 import type { GameState, PlayerState, PendingItemTransfer, PendingDeadPick,
               PendingModalChoice, PeekRequest, ArmorChoiceData } from './state';
 import type { Board, SlotId } from './geometry';
+import { FRONT_SLOTS, BACK_SLOTS } from './geometry';
 import { HIT_RUN_STATUS, currentWillpower, isPhysicalConstruct, hasAnchorCounters, recomputeStatics } from './stats';
 import { deadCardsOf, itemTransferOf, fireSacrificeTriggers } from './entities';
 import { hasRemovalTrigger, resolveRemovalTriggers } from './combat';
@@ -160,9 +161,11 @@ export interface ReadyPhaseResult {
 /** The whole Ready Phase for `side`, in the ruled order: readyAndFlip →
  *  start-of-turn triggers (last gasp; statics recomputed around the window — a
  *  trigger could remove a Dismay source before the flee check reads Willpower) →
- *  removals → arc-5 on-sacrifice listeners for decay sacrifices (gathered from
- *  the event-time, pre-removal board: the decayed construct's own listener fires
- *  (R3) and same-ready sacrifices hear each other — flagged engine reading).
+ *  removals → arc-5 on-sacrifice listeners, resolved SEQUENTIALLY (Rules Note
+ *  2026-07-21 — simultaneous events resolve one at a time; listeners and game
+ *  state are evaluated as of each individual event, so a permanent removed by an
+ *  earlier event is off the board for later ones. Overrules the arc-5 flagged
+ *  mutual-hearing reading).
  *  NOTE: listener effects needing prompt sinks (dead-picks/armor) would need
  *  sinks threaded here; the shipped listener (draw) needs none. */
 export function runReadyPhase(game: GameState, side: 'p1' | 'p2', whose: string): ReadyPhaseResult {
@@ -173,7 +176,20 @@ export function runReadyPhase(game: GameState, side: 'p1' | 'p2', whose: string)
   const rem = applyReadyRemovals(g, side, whose);
   g = rem.game;
   const notices = [...rem.notices];
-  for (const dy of rem.sacrificed) {
+  // SEQUENTIAL RESOLUTION (Rules Note 2026-07-21): the batch's events resolve one
+  // at a time in deterministic slot-scan order (the arc-5 listener convention) —
+  // an auto-ordering STOPGAP, not the full rule: canon gives the ORDER choice to
+  // the owning player (active player across owners). No shipped card makes that
+  // choice outcome-relevant; the moment one does, a full ordering prompt becomes
+  // necessary (HANDOFF design note 2026-07-21). Each event's listeners are
+  // gathered from `eventBoard` — the board as of THAT event: the dying permanent
+  // itself is still present (its own listener fires, R3), permanents removed by
+  // EARLIER events in the sequence are gone.
+  const slotOrder = [...FRONT_SLOTS, ...BACK_SLOTS];
+  const slotOf = (ent: BoardEntity) => slotOrder.findIndex(s => preRemovalBoard[s]?.id === ent.id);
+  const events = [...rem.sacrificed].sort((a, b) => slotOf(a) - slotOf(b));
+  let eventBoard: Board = preRemovalBoard;
+  for (const dy of events) {
     // EVERY Ready Phase exit is a SACRIFICE — decayed permanents (canon) and fled
     // companions (re-rule, owner 2026-07-20) — and a sacrifice is a death (RULED
     // 2026-07-08). This loop applies the same death machinery destroyEntity
@@ -181,17 +197,20 @@ export function runReadyPhase(game: GameState, side: 'p1' | 'p2', whose: string)
     // permanent's own death/destroy triggers first (a fleeing Memory-Stone bearer
     // arms its recovery pick via the dead-pick sink; no shipped CONSTRUCT carries
     // one, so construct decay stays byte-neutral — the fixture oracle holds),
-    // then the on-sacrifice listeners, gathered from the event-time pre-removal
-    // board (fled companions pass through the listeners' own scope filters —
-    // Siegeworks is Physical-Construct-scoped and stays silent for them).
+    // then the on-sacrifice listeners (fled companions pass through the
+    // listeners' own scope filters — Siegeworks is Physical-Construct-scoped and
+    // stays silent for them).
     if (hasRemovalTrigger(dy)) {
       const rt = resolveRemovalTriggers(g, dy, side, sot.deadPicks, sot.armorChoices);
       g = rt.game;
       notices.push(...rt.msgs);
     }
-    const st = fireSacrificeTriggers(g, dy, side, preRemovalBoard);
+    const st = fireSacrificeTriggers(g, dy, side, eventBoard);
     g = st.game;
     notices.push(...st.msgs);
+    // This event has resolved — its permanent is not on the board for later events.
+    eventBoard = Object.fromEntries(
+      Object.entries(eventBoard).filter(([, e]) => e?.id !== dy.id)) as Board;
   }
   return { game: g, sotMsgs: sot.msgs, notices, transfers: rem.transfers,
     peeks: sot.peeks, deadPicks: sot.deadPicks, armorChoices: sot.armorChoices, modals: sot.modals };

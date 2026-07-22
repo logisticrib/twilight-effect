@@ -8,6 +8,9 @@
 // by damage (the cause is threaded through destroyEntity, not inferred from death).
 // R3: the sacrificed permanent's OWN listener fires (gathered at event time,
 // resolved after it leaves — 2026-07-12 queued-trigger canon).
+// SEQUENTIAL (Rules Note 2026-07-21, overrules the arc-5 flagged mutual-hearing
+// reading): simultaneous events resolve one at a time — a permanent removed by an
+// earlier event in the sequence is not on the board for later events.
 // R1: there is no maximum number of Anchor counters (pinned here via Reinforce
 // raising counters above the printed value — no clipping anywhere).
 import { describe, it, expect } from 'vitest';
@@ -133,6 +136,26 @@ describe('Siegeworks — "When one of your Physical Constructs is sacrificed, dr
       effects: [{ op: 'anchor', delta: -1, target: 'anyConstruct' }], eligibleIds: ['bw-1'] } });
     gs.getState().resolveActionTarget('bw-1');
     expect(p1().hand.length, 'both listeners drew').toBe(handBefore + 2);
+  });
+
+  it('SEQUENTIAL RESOLUTION (Rules Note 2026-07-21): two same-ready decays resolve one at a time — 3 listener draws, not 4', () => {
+    // Both Siegeworks on their last Anchor decay in the same Ready Phase. Ruled
+    // (2026-07-21, overruling the arc-5 flagged mutual-hearing reading): events
+    // resolve sequentially in slot-scan order, each evaluated as of ITS moment —
+    //   event f1: both listeners on board → own draw (R3) + f2's draw = 2
+    //   event f2: f1 is already gone      → own draw (R3) only        = 1
+    // 3 listener draws + the normal turn draw = hand +4 (mutual hearing gave 5).
+    freshGame();
+    gs.setState(s => ({ game: { ...s.game,
+      p2: { ...s.game.p2, board: { f1: { ...siege('sw-1'), anchors: 1 }, f2: { ...siege('sw-2'), anchors: 1 } },
+        deck: CATALOG.slice(40, 46), hand: [] },
+    } }));
+    gs.getState().endTurn();
+    const g = gs.getState().game;
+    expect(g.p2.board.f1, 'first Siegeworks decayed out').toBeUndefined();
+    expect(g.p2.board.f2, 'second Siegeworks decayed out').toBeUndefined();
+    expect(g.p2.dead.filter(c => c.name === 'Siegeworks').length, 'both buried').toBe(2);
+    expect(g.p2.hand.length, '3 sequential listener draws + turn draw').toBe(4);
   });
 
   it('sacrificeSelf activated cost fires it (sandbox ✕-sacrifice path)', () => {
