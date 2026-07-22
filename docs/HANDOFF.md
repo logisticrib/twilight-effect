@@ -2,7 +2,56 @@
 
 Self-contained context for continuing the card-effect engine work in a fresh session.
 
-## Latest session (2026-07-21, MP) — LIVE TWO-PEER PASS over the post-arc-1 holds: 3 of 4 confirmed; held-side UX unified at the reactiveHold gate (debt #10: one confirmation owed, see flag below)
+## Latest session (2026-07-21, ruling + confirmation) — SEQUENTIAL simultaneous events (owner ruling) + trap window isolated live: debt #10 CLOSED
+**Suite: 40 files / 403 tests green; tsc ZERO; validate:decks clean. LOCAL session, behavior
+change (Part A) + live confirmation (Part B). Commit `dd0cedf` (Part A).**
+- **PART A — RULING ENCODED (owner 2026-07-21, overrules the arc-5 flagged mutual-hearing
+  reading):** simultaneous events resolve SEQUENTIALLY, one at a time; listeners and game
+  state are evaluated as of each individual event — a permanent removed by an earlier event
+  is not on the board for later events. Rules Note (2026-07-21, owner verbatim) added to GRU
+  §Core Mechanics trigger block, dated as a ruling on a flagged open reading (NOT a
+  fabrication correction — canon never stated mutual hearing; sweep confirmed). Snapshot
+  hash-identical.
+- **Diagnosis first (per brief):** runReadyPhase fired every batch sacrifice's listeners
+  against the CONSTANT preRemovalBoard — mutual hearing confirmed at the exact line before
+  changing it. FIX: the batch resolves one event at a time against a shrinking `eventBoard`
+  (the dying permanent still present for its own event — R3 preserved); events auto-ordered
+  in deterministic canonical slot-scan order ([...FRONT_SLOTS, ...BACK_SLOTS] — the arc-5
+  listener convention; the batch is now explicitly sorted, no longer board-insertion order).
+- **DESIGN NOTE (not a debt): auto-ordering is a STOPGAP.** Canon gives the ORDER choice to
+  the owning player (active player across owners) — the engine auto-orders because no
+  shipped card makes simultaneous-event order outcome-relevant. The moment one does, a full
+  ordering prompt becomes necessary. Also honestly noted: the slot-scan ORDER itself is
+  unpinned — all shipped listeners are order-symmetric (draw counts don't depend on which
+  Siegeworks goes first), so a pin would need an asymmetric listener that doesn't exist.
+- **Pins:** NEW sequential pin (onsacrifice_trigger.test.ts): two same-ready 1-anchor
+  Siegeworks = 3 listener draws (first event: both listeners; second: first is gone) + turn
+  draw = hand +4, both buried. No pin ever asserted mutual hearing (flag lived in
+  HANDOFF/comments only — nothing retired). Single-decay pins (R2 decay-of-another, R3
+  own-decay) pass UNCHANGED, as predicted. **Mutation — 1, EXACT:** mutual hearing restored
+  (constant board) → exactly the new pin fails (1); restore grep-verified.
+- **FIXTURE VERDICT — t3 + t8 + t9 ALL STAND** (replayed clean in the gate run): no recorded
+  game contains a same-ready multi-sacrifice with a listener. Nothing retired.
+- **PART B — DEBT #10 CLOSED, option (b): the trap-reaction window isolated LIVE.** Fresh
+  server on `dd0cedf` (REC stamp verified from the running app), fresh host/join session.
+  Board: host attacker vs guest companion + guest Iron Spikes. The combat-declaration window
+  fired across peers exactly per canon: Spikes hit the attacker for 1 AT DECLARATION (toast
+  before the combat hit), defender took 3, Spikes persists, stack drained, NO ordering
+  prompt and NO hold on either peer (a single mandatory reactive holds nobody — verified
+  reactiveHold null + no banner on the guest). Byte-identical peer state before and after.
+  **This isolates exactly what S1 didn't: a single mandatory trap auto-firing in the
+  COMBAT-DECLARATION window with no prompt machinery around it.** With S1 (entry-window
+  traps + ordering), S2, S3, and the hold mechanics verified last session, all four
+  debt-#10 items now have explicit live coverage — debt CLOSED.
+- **Part B bonus — Part A smoke-tested over the wire:** two 1-anchor guest Siegeworks
+  double-decayed at the guest's ready (host endTurn): guest hand +4 exactly (3 sequential
+  listener draws + turn draw), both buried, byte-identical peer hashes. The sequential path
+  works across peers.
+- **Docs:** GRU Rules Note (above; parent + snapshot hash-identical). PROJECT_STATE: debt
+  #10 closed; design-revisit "simultaneous-decay UNRULED" item resolved by this ruling.
+  **Owner re-uploads: Game_Rules_Updated.md, HANDOFF.md, tasks/PROJECT_STATE.md.**
+
+## Previous session (2026-07-21, MP) — LIVE TWO-PEER PASS over the post-arc-1 holds: 3 of 4 confirmed; held-side UX unified at the reactiveHold gate (debt #10: one confirmation owed — SETTLED by the session above)
 **Suite: 40 files / 402 tests green; tsc ZERO; validate:decks clean. LOCAL session, no rules
 change.** Method: fresh dev server, TWO browser tabs over REAL PeerJS (public broker), host=p1
 / guest=p2; scenario boards seeded host-side via store setState (syncs wholesale — the tier3
