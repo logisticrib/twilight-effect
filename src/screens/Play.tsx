@@ -16,6 +16,7 @@ import { CardPickModal } from './play/modals/CardPickModal';
 import { PoisonModal } from './play/modals/PoisonModal';
 import { CoercionModal } from './play/modals/CoercionModal';
 import { RecorderButton } from './play/RecorderButton';
+import { ReactiveHoldBanner } from './play/ReactiveHoldBanner';
 
 function GameView() {
   // Deliberately NO store subscription here: GameView is the root of the whole board
@@ -333,41 +334,6 @@ function PoisonHost() {
   const setGame = useGameStore(s => s.setGame);
   if (!pendingPoison || (!isSolo && pendingPoison !== localPlayer)) return null;
   return <PoisonModal player={pendingPoison} onClose={() => setGame(g => ({ ...g, pendingPoison: null }))} />;
-}
-
-/** Multiplayer: the active player is held while the opponent resolves a reactive
- *  Dead-Zone prompt (e.g. their Memory Stone, fired by our kill). Sandbox needs no
- *  banner — the picker modal already covers the board for the single controller. */
-function ReactiveHoldBanner() {
-  const dp = useGameStore(s => s.game.pendingDeadPick);
-  const pa = useGameStore(s => s.game.pendingArmor);
-  const pv = useGameStore(s => s.game.pendingPreventOrder);
-  const it = useGameStore(s => s.game.pendingItemTransfer);
-  const localPlayer = useGameStore(s => s.localPlayer);
-  const isSolo = useGameStore(s => s.conn.mode === 'solo');
-  if (isSolo) return null;
-  // Hold for an opponent-owned reactive prompt: Dead-Zone recovery, an Armor choice,
-  // or an Item Transfer window. Only shown to the held (non-owning) peer, so the owner
-  // is always "the opponent" (synced player names are perspective-relative).
-  const source = (dp && dp.lp !== localPlayer) ? dp.source
-               : (pa && pa.defender !== localPlayer) ? `${pa.entityName}'s armor`
-               : (pv && pv.chooser !== localPlayer) ? `${pv.entityName}'s damage prevention`
-               : (it && it.lp !== localPlayer) ? `${it.sourceName}'s Item Transfer`
-               : null;
-  if (!source) return null;
-  return (
-    <div style={{
-      position: 'fixed', top: 52, left: '50%', transform: 'translateX(-50%)', zIndex: Z.holdBanner,
-      background: 'rgba(18,14,10,0.96)', border: `1px solid ${TBL.amber}`, borderRadius: 10,
-      padding: '10px 20px', boxShadow: `0 4px 24px rgba(0,0,0,0.6), 0 0 0 1px ${TBL.amber}33`,
-      fontFamily: "'Newsreader', serif", fontSize: 15, color: TBL.ink, whiteSpace: 'nowrap',
-    }}>
-      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: TBL.amber2, letterSpacing: '0.18em', textTransform: 'uppercase', marginRight: 10 }}>
-        Hold
-      </span>
-      Waiting for the opponent to resolve {source}…
-    </div>
-  );
 }
 
 /** Dead-Zone recovery picker (Library of Memory / Scavenger): pick a card to return

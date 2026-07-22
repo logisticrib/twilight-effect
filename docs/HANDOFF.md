@@ -2,7 +2,67 @@
 
 Self-contained context for continuing the card-effect engine work in a fresh session.
 
-## Latest session (2026-07-21, addendum) — replacement fixtures COMMITTED, nothing owed
+## Latest session (2026-07-21, MP) — LIVE TWO-PEER PASS over the post-arc-1 holds: PASSED; held-side UX unified at the reactiveHold gate (debt #10 CLOSED)
+**Suite: 40 files / 402 tests green; tsc ZERO; validate:decks clean. LOCAL session, no rules
+change.** Method: fresh dev server, TWO browser tabs over REAL PeerJS (public broker), host=p1
+/ guest=p2; scenario boards seeded host-side via store setState (syncs wholesale — the tier3
+wire-test precedent); owner-side resolutions clicked through the REAL rendered modals; full
+game state (canonical stringify minus local `selected`) hash-compared across peers after
+EVERY step.
+- **RESULTS — all four holds PASS with byte-identical peer state:** S1 pendingTriggerOrder
+  (host-owned: 2 guest Tripwire Snares on the host's companion play; guest's
+  resolveTriggerOrder probe refused by the owner-gate; host's one real modal click fired both
+  traps in the ruled toast order). S2 pendingPreventOrder (GUEST-owned chooser, reverse hold
+  direction: paused combat ctx resolved ON THE GUEST client — applyCombatHit + driveAttack ran
+  there — 3 dealt − 2 pools = 1 taken, attacker exhausted, synced back). S3 pendingPeek
+  chooseDeck (guest staff tap, window model: staff exhausted as the whole cost, bearer
+  untapped; guest saw the HOST's real top card, look-only preserved deck order). Arming
+  snapshots delivered exactly once; wire suppression + release verified each time.
+- **FINDINGS (held-side UX only — all fixed this session, one class):**
+  1. **ReactiveHoldBanner was a hand-enumerated COPY** covering 4 of reactiveHold()'s NINE
+     hold kinds — trigger ordering, deck peeks, Coercion, attack choice, and the ownEnter
+     stack head held the peer with NO banner (the lesson-2026-07-20 divergence class; the
+     CoercionModal comment claiming the banner shows was false). FIX: banner extracted to
+     `screens/play/ReactiveHoldBanner.tsx` and DERIVES from reactiveHold() itself — every
+     current and future hold kind shows automatically; the Coercion comment is now true.
+  2. **Silent held refusals:** only activateAbility toasted; endTurn / placeCard /
+     resolveAttack / resolveMove / equipItem / playAction / markAction returned silently
+     (no-silent-outcomes violation, demonstrated live: a held endTurn did nothing with no
+     reason shown). FIX: shared `heldRefusal()` — every hold-gated reducer now toasts
+     "Waiting for the opponent to resolve <hold>." (activateAbility's exact wording).
+  3. **⚠ FLAGGED CLOSURES (not in any brief — overrule if intended):** beginPlay/beginAttack
+     were NOT hold-gated at all (a held player could arm a picker whose resolution was
+     guaranteed to refuse — the 2026-07-20 dead-prompt class); advancePhase / completeCzPhase
+     / endTurnToEndPhase, czToHand / handToCz, sacrificeEntity, adjustHp, resetActions were
+     NOT hold-gated either (game-mutating while the wire suppresses their broadcast = a
+     silent LOCAL divergence until the owner's next snapshot clobbers it). ALL user-initiated
+     game-mutating reducers now share the gate. Prompt-RESOLUTION reducers deliberately
+     excluded — they are owner-gated by design and the owner is never held by their own
+     prompt. NOTE: in SANDBOX the gate also refuses while an other-seat prompt is up
+     (pre-existing for the original seven; the modal is on-screen there) — the toast says
+     "the opponent", the wording activateAbility always used; flag if sandbox wording should
+     differ.
+- **Pins (`mp_hold_ux.test.tsx`, 9):** banner shows the previously-missing kinds (trigger
+  order / deck peek / Coercion) + covered-kind regression (prevention) + absent for owner and
+  sandbox; held endTurn + markAction refuse LOUDLY; beginPlay/beginAttack refuse at ARM time;
+  phase reducers refuse; unheld regression (same seats/seeds proceed — no over-refusal).
+- **Mutations — 4, ALL failure sets predicted EXACTLY:** M1 banner re-enumerated (1: the
+  missing-kinds pin); M2 heldRefusal silenced (5: every toast pin); M3 armer gates removed
+  (2); M4 phase gates removed (1). Restores grep-verified (zero MUTATION hits).
+- **FIXTURE VERDICT — t3 + t8 + t9 ALL STAND** (replayed clean inside the gate runs): toasts
+  are store-local (never hashed), and the new gates bite only while HELD — no recorded solo
+  action ran under an other-seat-owned hold (the clean replays are the proof, not an
+  assumption).
+- **Live-verified on the fixed build** (server restarted post-edit, fresh MP session): guest
+  banner "HOLD — Waiting for the opponent to resolve simultaneous trigger ordering…", held
+  endTurn toast rendered in the DOM, hold released after the host's real modal click, peer
+  canonical hashes identical before and after.
+- **Docs: NO rules-doc change** (no rule changed — existing MP hold semantics enforced and
+  made loud). **Owner re-uploads: HANDOFF.md, tasks/PROJECT_STATE.md** (debt #10 closed;
+  CODE_BUNDLE.md optional if refreshing — gameStore/Play changed).
+- Not covered live (noted, not scheduled): stacked simultaneous holds, disconnect mid-hold.
+
+## Previous session (2026-07-21, addendum) — replacement fixtures COMMITTED, nothing owed
 - **`3c8ee3f`: owner recorded t8 (269 entries) + t9 (362 entries) on `988e5d3`** — correct
   stamps, format 3, demotions [], both replay clean; suite 40 files-worth / 393 tests green.
   Both games run Convergence Sigil / Library of Memory / Siegeworks / Memory Stone boards,

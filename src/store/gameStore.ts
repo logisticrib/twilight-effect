@@ -161,6 +161,15 @@ function mkToasts(msgs: string[]): { id: number; msg: string }[] {
   });
 }
 
+/** Held-refusal for the reactiveHold gate: a reducer refused because the opponent owns
+ *  a live reactive prompt must SAY so — a silent return reads as a dead click (no-
+ *  silent-outcomes convention; surfaced by the live two-peer MP pass 2026-07-21, where
+ *  a held endTurn did nothing with no reason shown). Same message activateAbility's
+ *  gate has always toasted; ReactiveHoldBanner derives from the same reactiveHold(). */
+function heldRefusal(s: { toasts: { id: number; msg: string }[] }, hold: string) {
+  return { toasts: [...s.toasts, ...mkToasts([`Waiting for the opponent to resolve ${hold}.`])] };
+}
+
 /**
  * Commit an attack (R2, owner 2026-07-12: declaration and damage are SEPARATE steps —
  * damage does not go on the stack at declaration): tap the attacker, build the hit
@@ -979,6 +988,11 @@ export const useGameStore = create<GameStoreState>()(
   // ── Phase advancement ──────────────────────────────────────────────────────
   /** Draw → CZ phase. */
   advancePhase: () => set(s => {
+    // Hold gate (live MP pass 2026-07-21): phase advancement while the opponent
+    // resolves a reactive prompt is exactly the clobber reactiveHold exists to stop
+    // (the wire suppresses the broadcast, so it was a silent LOCAL divergence).
+    const heldBy = reactiveHold(s.game, s.localPlayer);
+    if (heldBy) return heldRefusal(s, heldBy);
     if (gameIsOver(s.game)) return s;
     const { currentPhase } = s.game;
     // Only advances draw→cz. CZ→action must go through completeCzPhase.
@@ -988,6 +1002,8 @@ export const useGameStore = create<GameStoreState>()(
 
   /** CZ phase → Action phase. Called by CZExchangePanel after any valid choice (exchange or pass). */
   completeCzPhase: () => set(s => {
+    const heldBy = reactiveHold(s.game, s.localPlayer); // hold gate, see advancePhase
+    if (heldBy) return heldRefusal(s, heldBy);
     if (gameIsOver(s.game)) return s;
     if (s.game.currentPhase !== 'cz') return s;
     return { game: { ...s.game, currentPhase: 'action' as Phase } };
@@ -995,13 +1011,16 @@ export const useGameStore = create<GameStoreState>()(
 
   // Move active player to End Phase (they confirm before passing the turn)
   endTurnToEndPhase: () => set(s => {
+    const heldBy = reactiveHold(s.game, s.localPlayer); // hold gate, see advancePhase
+    if (heldBy) return heldRefusal(s, heldBy);
     if (gameIsOver(s.game)) return s;
     return { game: { ...s.game, currentPhase: 'end' as Phase } };
   }),
 
   // ── Equip item ─────────────────────────────────────────────────────────────
   equipItem: (entityId, handCardId) => set(s => {
-    if (reactiveHold(s.game, s.localPlayer)) return s;
+    const heldBy = reactiveHold(s.game, s.localPlayer);
+    if (heldBy) return heldRefusal(s, heldBy);
     if (gameIsOver(s.game) || notActionPhase(s.game)) return s;
     const lp = s.localPlayer;
     const card = s.game[lp].hand.find(c => c.id === handCardId);
@@ -1080,7 +1099,8 @@ export const useGameStore = create<GameStoreState>()(
   // target, arms pendingActionTarget and waits for a click; otherwise resolves
   // immediately. Either way the card ends up in the Dead Zone.
   playAction: (handCardId) => set(s => {
-    if (reactiveHold(s.game, s.localPlayer)) return s;
+    const heldBy = reactiveHold(s.game, s.localPlayer);
+    if (heldBy) return heldRefusal(s, heldBy);
     if (gameIsOver(s.game) || notActionPhase(s.game)) return s;
     const lp = s.localPlayer;
     const card = s.game[lp].hand.find(c => c.id === handCardId);
@@ -1632,6 +1652,8 @@ export const useGameStore = create<GameStoreState>()(
 
   // ── Sandbox: sacrifice a permanent outright (a real exit — see interface note) ──
   sacrificeEntity: (entityId) => set(s => {
+    const heldBy = reactiveHold(s.game, s.localPlayer); // hold gate, see advancePhase
+    if (heldBy) return heldRefusal(s, heldBy);
     if (gameIsOver(s.game)) return s;
     const loc = findEntityAnywhere(s.game, entityId);
     if (!loc || loc.ent.kind === 'pc') return s; // never the PC (losing it ends the game)
@@ -1961,6 +1983,8 @@ export const useGameStore = create<GameStoreState>()(
 
   // ── Class Zone exchange ─────────────────────────────────────────────────────
   czToHand: (czCardId) => set(s => {
+    const heldBy = reactiveHold(s.game, s.localPlayer); // hold gate, see advancePhase
+    if (heldBy) return heldRefusal(s, heldBy);
     if (gameIsOver(s.game)) return s;
     // Reducer-level CZ-phase gate: the exchange happens in the CZ phase, once per turn
     // (the panel enforced this in the UI only — czExchangeUsed was set but never checked).
@@ -1985,6 +2009,8 @@ export const useGameStore = create<GameStoreState>()(
   }),
 
   handToCz: (handCardId) => set(s => {
+    const heldBy = reactiveHold(s.game, s.localPlayer); // hold gate, see advancePhase
+    if (heldBy) return heldRefusal(s, heldBy);
     if (gameIsOver(s.game)) return s;
     if (s.game.currentPhase !== 'cz' || s.game.czExchangeUsed) return s; // reducer-level gate (see czToHand)
     const lp = s.localPlayer;
@@ -2052,7 +2078,8 @@ export const useGameStore = create<GameStoreState>()(
   }),
 
   resolveMove: (targetSlot) => set(s => {
-    if (reactiveHold(s.game, s.localPlayer)) return s;
+    const heldBy = reactiveHold(s.game, s.localPlayer);
+    if (heldBy) return heldRefusal(s, heldBy);
     if (gameIsOver(s.game) || notActionPhase(s.game)) return s;
     const { pending, game } = s;
     if (!pending || pending.action !== 'move') return s;
@@ -2134,6 +2161,11 @@ export const useGameStore = create<GameStoreState>()(
 
   // ── Attack ─────────────────────────────────────────────────────────────────
   beginAttack: (charId) => set(s => {
+    // FLAGGED CLOSURE (live MP pass 2026-07-21): arming was previously NOT hold-gated —
+    // a held player could open the target picker whose resolveAttack was guaranteed to
+    // refuse (a dead prompt, the 2026-07-20 no-dead-prompt class). Refuse loudly at arm.
+    const heldBy = reactiveHold(s.game, s.localPlayer);
+    if (heldBy) return heldRefusal(s, heldBy);
     if (gameIsOver(s.game)) return s;
     const attLoc = findEntityAnywhere(s.game, charId);
     if (!attLoc) return s;
@@ -2191,7 +2223,8 @@ export const useGameStore = create<GameStoreState>()(
   }),
 
   resolveAttack: (targetEntityId) => set(s => {
-    if (reactiveHold(s.game, s.localPlayer)) return s;
+    const heldBy = reactiveHold(s.game, s.localPlayer);
+    if (heldBy) return heldRefusal(s, heldBy);
     if (gameIsOver(s.game) || notActionPhase(s.game)) return s;
     const { pending, game } = s;
     if (!pending || pending.action !== 'attack') return s;
@@ -2378,6 +2411,10 @@ export const useGameStore = create<GameStoreState>()(
 
   // ── Play card ──────────────────────────────────────────────────────────────
   beginPlay: (cardId) => set(s => {
+    // FLAGGED CLOSURE (live MP pass 2026-07-21): same dead-prompt closure as
+    // beginAttack — placeCard is hold-gated, so arming while held must refuse too.
+    const heldBy = reactiveHold(s.game, s.localPlayer);
+    if (heldBy) return heldRefusal(s, heldBy);
     if (gameIsOver(s.game)) return s;
     if (notActionPhase(s.game)) {
       const id = ++toastId;
@@ -2533,7 +2570,8 @@ export const useGameStore = create<GameStoreState>()(
   }),
 
   placeCard: (slot) => set(s => {
-    if (reactiveHold(s.game, s.localPlayer)) return s;
+    const heldBy = reactiveHold(s.game, s.localPlayer);
+    if (heldBy) return heldRefusal(s, heldBy);
     if (gameIsOver(s.game) || notActionPhase(s.game)) return s;
     const { pendingPlay, game, localPlayer } = s;
     if (!pendingPlay) return s;
@@ -2660,7 +2698,8 @@ export const useGameStore = create<GameStoreState>()(
 
   // ── Action bookkeeping ─────────────────────────────────────────────────────
   markAction: (entityId, type) => set(s => {
-    if (reactiveHold(s.game, s.localPlayer)) return s;
+    const heldBy = reactiveHold(s.game, s.localPlayer);
+    if (heldBy) return heldRefusal(s, heldBy);
     if (gameIsOver(s.game) || notActionPhase(s.game)) return s;
     const loc = findEntityAnywhere(s.game, entityId);
     if (!loc) return s;
@@ -2680,6 +2719,8 @@ export const useGameStore = create<GameStoreState>()(
   }),
 
   resetActions: (entityId) => set(s => {
+    const heldBy = reactiveHold(s.game, s.localPlayer); // hold gate, see advancePhase
+    if (heldBy) return heldRefusal(s, heldBy);
     if (gameIsOver(s.game)) return s;
     // Playtest helper: also lift the activation lock for this character.
     const finishedActors = s.game.finishedActors.filter(x => x !== entityId);
@@ -2750,6 +2791,8 @@ export const useGameStore = create<GameStoreState>()(
 
   // ── HP nudge ──────────────────────────────────────────────────────────────
   adjustHp: (entityId, delta) => set(s => {
+    const heldBy = reactiveHold(s.game, s.localPlayer); // hold gate, see advancePhase
+    if (heldBy) return heldRefusal(s, heldBy);
     if (gameIsOver(s.game)) return s;
     const loc = findEntityAnywhere(s.game, entityId);
     if (!loc) return s;
@@ -2764,7 +2807,8 @@ export const useGameStore = create<GameStoreState>()(
 
   // ── Turn end / ready phase ────────────────────────────────────────────────
   endTurn: () => set(s => {
-    if (reactiveHold(s.game, s.localPlayer)) return s;
+    const heldBy = reactiveHold(s.game, s.localPlayer);
+    if (heldBy) return heldRefusal(s, heldBy);
     if (gameIsOver(s.game)) return s;
     // Unresolved triggers hold the turn: the stack must drain (and any simultaneous-
     // trigger ordering pick must resolve) before the turn can pass (R1, 2026-07-12).
