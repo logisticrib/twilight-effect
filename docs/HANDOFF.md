@@ -2,14 +2,14 @@
 
 Self-contained context for continuing the card-effect engine work in a fresh session.
 
-## Latest session (2026-07-21, MP) — LIVE TWO-PEER PASS over the post-arc-1 holds: PASSED; held-side UX unified at the reactiveHold gate (debt #10 CLOSED)
+## Latest session (2026-07-21, MP) — LIVE TWO-PEER PASS over the post-arc-1 holds: 3 of 4 confirmed; held-side UX unified at the reactiveHold gate (debt #10: one confirmation owed, see flag below)
 **Suite: 40 files / 402 tests green; tsc ZERO; validate:decks clean. LOCAL session, no rules
 change.** Method: fresh dev server, TWO browser tabs over REAL PeerJS (public broker), host=p1
 / guest=p2; scenario boards seeded host-side via store setState (syncs wholesale — the tier3
 wire-test precedent); owner-side resolutions clicked through the REAL rendered modals; full
 game state (canonical stringify minus local `selected`) hash-compared across peers after
 EVERY step.
-- **RESULTS — all four holds PASS with byte-identical peer state:** S1 pendingTriggerOrder
+- **RESULTS — all three driven scenarios PASS with byte-identical peer state:** S1 pendingTriggerOrder
   (host-owned: 2 guest Tripwire Snares on the host's companion play; guest's
   resolveTriggerOrder probe refused by the owner-gate; host's one real modal click fired both
   traps in the ruled toast order). S2 pendingPreventOrder (GUEST-owned chooser, reverse hold
@@ -60,6 +60,15 @@ EVERY step.
 - **Docs: NO rules-doc change** (no rule changed — existing MP hold semantics enforced and
   made loud). **Owner re-uploads: HANDOFF.md, tasks/PROJECT_STATE.md** (debt #10 closed;
   CODE_BUNDLE.md optional if refreshing — gameStore/Play changed).
+- **⚠ OPEN CONFIRMATION owed before debt #10 is called FULLY done (owner, 2026-07-21):** the
+  debt listed FOUR holds; this report describes THREE scenarios. The reactiveHold MECHANISM
+  was verified inside every scenario (arming snapshot delivered once, banner, held-reducer
+  refusal, wire suppression + release), and S1's traps DID fire over the wire — but no
+  scenario isolated the reactive/trap WINDOW as its own item (e.g. a combat-declaration trap
+  — Iron Spikes on beginAttack/resolveAttack — firing across peers, or the ownEnter
+  stack-head hand-off holding the non-controller). NEXT SESSION: either confirm S1
+  constitutes coverage of the fourth item, or drive one targeted two-peer scenario for it;
+  only then mark debt #10 fully closed.
 - Not covered live (noted, not scheduled): stacked simultaneous holds, disconnect mid-hold.
 
 ## Previous session (2026-07-21, addendum) — replacement fixtures COMMITTED, nothing owed
