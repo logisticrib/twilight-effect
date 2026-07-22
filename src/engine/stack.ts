@@ -163,14 +163,24 @@ export function orderedForStack(items: ReactiveStackEntry[], picked: number[]): 
  * orders their OWN simultaneous triggers, so the ordering prompt goes to the batch's
  * CONTROLLER — not the active player (supersedes the 2026-07-12/13 active-player
  * notes and Rules_Taxonomy Tier 5 #9 / Tier 3 #18's tiebreaker). Every gather site
- * produces a single-controller batch by construction: gatherReactive/gatherParanoia
- * scan only the subject's OPPONENT, gatherOwnPlay only the subject's own side, and
- * the placeCard play window is type-exclusive per play (Paranoia = companion plays;
- * ownPlaysMagicalConstruct = construct plays — one card is one type). A future
- * cross-owner batch would need the rule's structural queue order (active player's
- * group queues first, the non-active player's above — theirs resolve first) plus a
- * per-owner prompt each: FLAG to the owner and build it then; do not guess here.
+ * produces a single-controller batch by construction today: gatherReactive/
+ * gatherParanoia scan only the subject's OPPONENT, gatherOwnPlay only the subject's
+ * own side, and the placeCard play window is type-exclusive per play (Paranoia =
+ * companion plays; ownPlaysMagicalConstruct = construct plays — one card is one
+ * type). That construction is GUARDED here, not assumed (detection over
+ * enumeration, 2026-07-22 follow-up): a mixed-owner batch fails loudly by name.
  */
 export function batchOrderer(items: ReactiveStackEntry[]): 'p1' | 'p2' {
-  return items[0].controller;
+  const owner = items[0].controller;
+  const stray = items.find(it => it.controller !== owner);
+  if (stray) {
+    throw new Error(
+      `batchOrderer: MIXED-OWNER simultaneous-trigger batch — unsupported. ` +
+      `A single ordering prompt cannot serve two owners. Implement the 2026-07-22 ` +
+      `Rules Note's structural queue order (the active player's triggers queue onto ` +
+      `the stack first, the non-active player's above them — theirs resolve first) ` +
+      `with a per-owner ordering prompt before shipping a card that creates this ` +
+      `case. Batch: ${items.map(it => `${'sourceName' in it ? it.sourceName : it.kind}@${it.controller}`).join(', ')}`);
+  }
+  return owner;
 }

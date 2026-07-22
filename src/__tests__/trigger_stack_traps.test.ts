@@ -22,7 +22,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { gs, freshGame, mkComp, mkConstruct, mkCz } from './helpers';
 import { reactiveHold } from '../store/gameStore';
-import { orderedForStack } from '../engine';
+import { orderedForStack, batchOrderer } from '../engine';
 import type { ReactiveStackEntry } from '../engine';
 import { CATALOG } from '../data/catalog';
 import type { Card } from '../types/card';
@@ -155,6 +155,21 @@ describe('R4 / Pit Trap — "When an opposing companion moves into the front lin
     expect(g.p1.board.f2?.id, 'move landed').toBe('mv-3');
     expect(g.p1.board.f2?.exhausted).toBe(false);
     expect(g.p2.board.f2?.name, 'Pit Trap did not fire').toBe('Pit Trap');
+  });
+
+  it('batchOrderer GUARD: a mixed-owner batch fails loudly by name (chokepoint, not a comment — 2026-07-22 follow-up)', () => {
+    const entry = (id: string, controller: 'p1' | 'p2') => ({
+      kind: 'reactive', sourceId: id, sourceName: 'Synthetic Trap', controller,
+      trigger: 'oppCompanionEnters', subjectId: 'x', subjectName: 'X',
+    }) as never;
+    // Homogeneous batch: returns the batch's controller (the 2026-07-22 chooser).
+    expect(batchOrderer([entry('a', 'p2'), entry('b', 'p2')] as never)).toBe('p2');
+    // Mixed-owner batch: no shipped card can create one (gathers are single-side by
+    // construction) — if a future card does, the guard names the missing machinery
+    // (the 2026-07-22 structural queue order + per-owner prompts) instead of
+    // silently handing one owner's triggers to the other.
+    expect(() => batchOrderer([entry('a', 'p1'), entry('b', 'p2')] as never))
+      .toThrow(/MIXED-OWNER.*2026-07-22|2026-07-22.*MIXED-OWNER|MIXED-OWNER[\s\S]*2026-07-22/);
   });
 
   // RETIRED + REWRITTEN 2026-07-22: the old pin asserted lp 'p1' per the superseded

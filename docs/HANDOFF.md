@@ -2,7 +2,47 @@
 
 Self-contained context for continuing the card-effect engine work in a fresh session.
 
-## Latest session (2026-07-22) — UNIFIED simultaneous-ordering rule (owner ruling; supersedes two prior notes)
+## Latest session (2026-07-22, later) — Keyword-coverage query (read-only) + batchOrderer chokepoint guard
+**Suite: 40 files / 404 tests green; tsc ZERO; validate:decks clean. Part A touched NOTHING
+(read-only query; findings below); Part B is one engine guard + one pin.**
+- **PART A — UNPLAYED-KEYWORD LIST (dev-deck coverage targets; all three behavior sources
+  checked per convention — keywords array, structured effects, rules text):** ZERO shipped
+  carriers (11): Evasive, Scavenger, Tribute, Poison, Acrobatics, Coercion, Dismay, Untamed,
+  Oathsworn, Bane, Paranoia. CARRIED (counts): Zealous 12; Cleave 5; Armor 5 (X = 1, 2, 4
+  exercised); Ranged 4 (incl. item-granted via Pikestaff); Reckless 4; Kit-Master 3 (1
+  companion + the 2 item-variant belts); Guardian 2 printed + 3 op-grantors (Bastion Wall
+  static grant; Hold the Pass / Last Stand at the Gate end-of-turn buff grants); Reinforce 2
+  (N = 2, 3); Hit & Run 2; Dismantle 1 (N = 2). **ANIMATE MAGIC nuance:** the MECHANIC ships
+  on 3 cards via the `animate` op (X = 2 Sigil-Bound Scholar, 3 The Verdant Still ×up-to-2,
+  4 Eiralyth) — but NO shipped card prints the keyword form "ANIMATE MAGIC X", so the
+  registry's parseAnimateMagic printed-keyword path has never been exercised by a shipped
+  card (a dev card printing the keyword would cover it). Binding Sigil exercises
+  suppressKeywords (all keywords, front enemy companions). Construct-subtype context:
+  Incantation 15 / Fortification 6 / Trap 4 shipped; CHANT/SONG/DIRGE/UTTERANCE zero (their
+  classes have no deck).
+- **PART A — REGISTRY RECONCILIATION (OPEN QUESTIONS, deliberately NOT fixed):**
+  (1) `src/data/keywordRegistry.ts` (the engine implementation registry, 21 keys) LACKS
+  **Tribute** — present in KEYWORD_DEFS (22) and canon; Tribute is invisible to the
+  gap-tracking registry (not even registered-unimplemented like Untamed). Owner: should it
+  gain a `done:false` entry? (2) Canon's **ARMOR X (companion variant)** is a separate
+  Master_Keyword_List entry with distinct wording ("…no longer prevents damage via this
+  ability"); BOTH registries carry only the item-variant definition — if a companion ever
+  prints Armor, the prose-completeness check would match against the wrong canonical text.
+  (3) Correctly-absent canon entries (noted, no action): DISMAYED (state), COUNTER CONSTRUCT
+  (design pattern), PHASE ENDING (rules tool), and the 7 construct subtypes (keyword-like,
+  live as `subtype` values).
+- **PART B — batchOrderer GUARD (detection over enumeration):** the 2026-07-22 session's
+  single-controller-by-construction COMMENT is now a chokepoint guard — a mixed-owner batch
+  throws by name, citing the 2026-07-22 Rules Note's structural queue order (+ per-owner
+  prompts) as the machinery to build when a card creates the case. Structural rule NOT
+  implemented now (per brief). Pin (trigger_stack_traps): synthetic mixed batch trips the
+  guard by name; homogeneous batch returns its controller. **Mutation — 1, EXACT:** guard
+  removed → exactly the new pin; restore grep-verified. Fixtures t3/t8/t9 replay clean
+  (guard inert for every shipped batch — all single-controller).
+- **Docs: no canon changes** (Part A was a query; discrepancies surfaced, not harmonized).
+  **Owner re-uploads: HANDOFF.md only.**
+
+## Previous session (2026-07-22) — UNIFIED simultaneous-ordering rule (owner ruling; supersedes two prior notes)
 **Suite: 40 files / 403 tests green; tsc ZERO; validate:decks clean. LOCAL session, behavior
 change.** THE RULE (GRU Rules Note 2026-07-22, owner verbatim): each player orders their OWN
 simultaneous triggers and events; when both players have simultaneous triggers, the active
