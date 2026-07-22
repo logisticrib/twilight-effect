@@ -164,9 +164,9 @@ Derives from Tier 2 #4 (RPG-encounter architecture). The choice between cumulati
 
 Derives from #11 (per-character activation). Once characters activate individually, you need a state indicator showing whether a character has used their actions this turn. Exhaustion (rotating the card 90°) is the chosen indicator. The choice extends to player characters — they can be exhausted by weapon attacks, following the same rule as companions.
 
-#### 18. Triggered abilities resolve in opposite order to triggering; simultaneous triggers ordered by active player
+#### 18. Triggered abilities resolve in opposite order to triggering; simultaneous triggers ordered by their owner
 
-Derives from Tier 2 #5 (structural prevention) and #5 (sorcery-speed only). With no instant-speed interaction, the only point where one ability can interrupt another is during trigger resolution. The chosen resolution order is LIFO (last-in-first-out, reverse of triggering); the chosen tiebreaker for simultaneous triggers is "active player decides." Both are conventional in TCGs but were real choices.
+Derives from Tier 2 #5 (structural prevention) and #5 (sorcery-speed only). With no instant-speed interaction, the only point where one ability can interrupt another is during trigger resolution. The chosen resolution order is LIFO (last-in-first-out, reverse of triggering). *Note (2026-07-22, supersedes the original "active player decides" tiebreaker):* each player orders their own simultaneous triggers; when both players have simultaneous triggers, the active player's queue onto the stack first and the non-active player's queue above them (so the non-active player's resolve first, per LIFO). Both the LIFO order and the tiebreaker are conventional in TCGs but were real choices.
 
 ### Card Types, Classes, and Game Procedure
 
@@ -298,9 +298,9 @@ Depends on Tier 4 #9 (class bonuses) and Tier 4 #2 (turn structure — specifica
 
 Depends on Tier 4 #10 (mulligan procedure) and Tier 4 #1 (starting hand size). The rule exists to prevent a player from mulliganning so many times that they'd have to bottom more cards than they're holding. Second-order because it's an edge-case resolution within the mulligan procedure.
 
-### 9. Order of resolution for simultaneous triggers — active player decides
+### 9. Order of resolution for simultaneous triggers — each owner orders their own
 
-Depends on Tier 3 #18 (trigger resolution order — opposite of triggering) and Tier 4 #2 (turn structure, defining the active player). The simultaneous-trigger rule is the tiebreaker for when LIFO ordering doesn't apply.
+Depends on Tier 3 #18 (trigger resolution order — opposite of triggering) and Tier 4 #2 (turn structure, defining the active player). The simultaneous-trigger rule is the tiebreaker for when LIFO ordering doesn't apply. *Note (2026-07-22, supersedes the original "active player decides"):* each player orders their own simultaneous triggers; across owners the queue order is structural — the active player's group queues first, the non-active player's above it (theirs resolve first).
 
 ### 10. Activated abilities of items can be played immediately; companions need a Willpower check first
 
@@ -330,7 +330,7 @@ Currently dice or counters in paper play. Could be tokens, marks on the card sle
 
 ### 5. Ordering of self-controlled simultaneous triggers
 
-When multiple of *your own* triggers fire at the same time, you order them as the active player. The active-player-decides rule is locked at Tier 5; *which order you actually pick* is up to you each time.
+When multiple of *your own* triggers fire at the same time, you order them — as their owner, whether or not you are the active player (2026-07-22; previously worded "as the active player" under the superseded tiebreaker). The each-owner-orders rule is locked at Tier 5; *which order you actually pick* is up to you each time.
 
 ### 6. Class Zone visual layout
 

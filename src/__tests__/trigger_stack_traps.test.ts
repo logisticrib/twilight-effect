@@ -15,10 +15,13 @@
 //      triggers resolve before damage is queued; dead attacker → the attack fizzles.
 // R3 — Paranoia peek-before-enter: pinned in keyword_paranoia.test.ts (rewritten).
 // R4 — Pit Trap is movement-only; mandatory triggers fire even when their effects
-//      no-op; Iron Spikes fires at declaration; the ACTIVE player orders
-//      simultaneous triggers (canon STANDS — reconfirmed over trap-controller).
+//      no-op; Iron Spikes fires at declaration. ORDERING RE-RULED 2026-07-22
+//      (supersedes the 2026-07-12 active-player reconfirmation): each player
+//      orders their OWN simultaneous triggers — the prompt goes to the batch's
+//      controller (the once-rejected trap-controller reading is now the rule).
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { gs, freshGame, mkComp, mkConstruct, mkCz } from './helpers';
+import { reactiveHold } from '../store/gameStore';
 import { orderedForStack } from '../engine';
 import type { ReactiveStackEntry } from '../engine';
 import { CATALOG } from '../data/catalog';
@@ -154,14 +157,20 @@ describe('R4 / Pit Trap — "When an opposing companion moves into the front lin
     expect(g.p2.board.f2?.name, 'Pit Trap did not fire').toBe('Pit Trap');
   });
 
-  it('two Pit Traps: the ACTIVE player (the mover) orders them; BOTH mandatory triggers fire', () => {
+  // RETIRED + REWRITTEN 2026-07-22: the old pin asserted lp 'p1' per the superseded
+  // active-player tiebreaker (2026-07-12). Rules Note 2026-07-22: each player orders
+  // their OWN simultaneous triggers — the prompt goes to the TRAP CONTROLLER.
+  it('two Pit Traps: their CONTROLLER orders them (Rules Note 2026-07-22); the mover is HELD; BOTH mandatory triggers fire', () => {
     seed([], { f2: pitTrap('pt-1'), f3: pitTrap('pt-2') }, { b1: mkComp('mv-4', 'Mover') });
     gs.getState().beginMove('mv-4');
     gs.getState().resolveMove('f1');
     let g = gs.getState().game;
     expect(g.pendingTriggerOrder?.items.length, '>1 simultaneous trigger → ordering prompt').toBe(2);
-    expect(g.pendingTriggerOrder?.lp, 'ordered by the ACTIVE player, not the trap controller (canon STANDS, 2026-07-12)').toBe('p1');
-    gs.getState().resolveTriggerOrder(1); // one pick fully orders two items
+    expect(g.pendingTriggerOrder?.lp, 'ordered by the traps\' OWNER, not the mover (2026-07-22)').toBe('p2');
+    // MP hold direction flips with the chooser: the ACTIVE mover now waits.
+    expect(reactiveHold(g, 'p1'), 'the mover (p1) is the held peer').not.toBeNull();
+    expect(reactiveHold(g, 'p2'), 'the owner (p2) is never held by their own prompt').toBeNull();
+    gs.getState().resolveTriggerOrder(1); // one pick fully orders two items (sandbox drives both seats)
     g = gs.getState().game;
     expect(g.pendingTriggerOrder ?? null).toBeFalsy();
     expect(g.p1.board.f1?.exhausted, 'mover exhausted (second exhaust was a no-op)').toBe(true);
@@ -230,14 +239,17 @@ describe('R2 / Iron Spikes — "Whenever an opposing companion attacks one of yo
 });
 
 // ─── Simultaneous ordering + the endTurn gate ───────────────────────────────────
-describe('Simultaneous triggers — active-player ordering (canon STANDS, reconfirmed 2026-07-12)', () => {
-  it('two defender-owned Tripwires on the active player\'s companion entering are ordered by the ACTIVE (entering) player', () => {
+// RETIRED + REWRITTEN 2026-07-22: this block pinned the active-player tiebreaker
+// ("canon STANDS, reconfirmed 2026-07-12"). SUPERSEDED — Rules Note 2026-07-22:
+// each player orders their own simultaneous triggers.
+describe('Simultaneous triggers — owner ordering (Rules Note 2026-07-22, supersedes the active-player tiebreaker)', () => {
+  it('two defender-owned Tripwires on the active player\'s companion entering are ordered by the TRAP CONTROLLER', () => {
     const comp = mkHandComp('hc-4', 'Sturdy Recruit', 3);
     seed([comp], { f1: tripwire('tw-1'), f2: tripwire('tw-2') });
     play(comp);
     let g = gs.getState().game;
     expect(g.p1.board.b1?.name, 'the companion has ENTERED (the traps are enter-triggers, queued above its own)').toBe('Sturdy Recruit');
-    expect(g.pendingTriggerOrder?.lp, 'ruled consequence: ordered by the active (entering) player').toBe('p1');
+    expect(g.pendingTriggerOrder?.lp, 'ordered by the traps\' owner, not the entering player (2026-07-22)').toBe('p2');
     expect(g.pendingTriggerOrder?.items.map(i => i.kind === 'reactive' ? i.sourceName : ''), 'both traps queued')
       .toEqual(['Tripwire Snare', 'Tripwire Snare']);
 

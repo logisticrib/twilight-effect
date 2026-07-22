@@ -193,17 +193,18 @@ describe('Paranoia — trigger order (RE-RULED 2026-07-12) & "plays a Companion"
 });
 
 describe('Paranoia — multiple permanents each trigger (stacked, re-sliced)', () => {
-  // REWRITTEN 2026-07-12 (trigger-stack arc): two Paranoia triggers on the same play
-  // are >1 simultaneous trigger, so the ACTIVE player (the placer) now orders them
-  // before anything resolves; the peeks then resolve one after another off the
-  // stack, each re-slicing the live deck. (Pre-arc they auto-queued in board order
-  // via pendingPeekQueue with no ordering prompt.)
-  it('two Paranoia permanents → the placer orders them, then sequential peeks; the second sees the post-decision top', () => {
+  // REWRITTEN 2026-07-12 (trigger-stack arc); chooser RETIRED + REWRITTEN 2026-07-22:
+  // the old pin asserted the placer (active player) orders per the superseded
+  // tiebreaker. Rules Note 2026-07-22: each player orders their OWN simultaneous
+  // triggers — both Paranoias belong to their controller, who orders them before
+  // anything resolves; the peeks then resolve one after another off the stack,
+  // each re-slicing the live deck.
+  it('two Paranoia permanents → their CONTROLLER orders them (2026-07-22), then sequential peeks; the second sees the post-decision top', () => {
     seed(emberAdept, { f1: watcher('par-1'), f2: watcher('par-2') });
     play(emberAdept);
     let g = gs.getState().game;
     expect(g.pendingTriggerOrder?.items.length, 'ordering prompt over the two simultaneous triggers').toBe(2);
-    expect(g.pendingTriggerOrder?.lp, 'the ACTIVE (placing) player orders — not the trap controller').toBe('p1');
+    expect(g.pendingTriggerOrder?.lp, "Paranoia's controller orders — not the placer (2026-07-22)").toBe('p2');
     expect(g.pendingPeek, 'nothing resolves before the order is decided').toBeNull();
 
     gs.getState().resolveTriggerOrder(0);           // one pick fully orders two items

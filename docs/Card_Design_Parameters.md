@@ -374,7 +374,7 @@ Three distinct trigger conditions:
 - **Use a stack** - multiple triggers resolve in order (most recent first)
 - **"May" indicates optional** - choice made when trigger resolves
 - **Template:** "When/Whenever/At [event], [effect]"
-- Rules Note (ruled 2026-07-12): the stack model above is now engine-implemented and owner-ratified as the operational timing model — playing a card puts it on the stack ("plays" and "enters" are distinct sequential events), queued triggers resolve even if their source or subject has since died, and the ACTIVE player orders simultaneous triggers. Full dated notes: Game_Rules_Updated.md §Core Mechanics, "Triggered Abilities & The Trigger Stack".
+- Rules Note (ruled 2026-07-12; chooser superseded 2026-07-22): the stack model above is now engine-implemented and owner-ratified as the operational timing model — playing a card puts it on the stack ("plays" and "enters" are distinct sequential events), queued triggers resolve even if their source or subject has since died, and each player orders their OWN simultaneous triggers (2026-07-22 — previously the active player; across owners the active player's queue first, the non-active player's above them). Full dated notes: Game_Rules_Updated.md §Core Mechanics, "Triggered Abilities & The Trigger Stack".
 
 ### Activated Abilities
 - **Player choice** to use during appropriate timing
@@ -471,7 +471,7 @@ Three distinct trigger conditions:
 - Rules Note (ruled 2026-07-14): damage PREVENTION ("would take/would be dealt damage" → prevent some or all of it) is engine-implemented as one family — Armor and board-sourced prevent-N effects alike. Deal-side modifiers form the dealt amount before prevention applies; fully prevented damage is no damage (no Poison, no "when damaged" triggers); when several preventions could apply to one damage instance, the affected character's controller orders them. Full dated notes: Game_Rules_Updated.md §Core Mechanics, "Damage Prevention".
 
 ### PRINCIPLE (2026-07-14): No arbitrary orderings between cards
-**The rules never rank cards or effects against each other by list, timestamp, or type hierarchy.** Whenever card effects collide and order matters, a player present at the collision decides — the active player for simultaneous triggers; the affected character's controller for prevention. Rationale: every card is unique and the pool is unbounded — players always have partial information about what exists, so any global ordering is unlearnable by design. Every future mechanic must satisfy this constraint.
+**The rules never rank cards or effects against each other by list, timestamp, or type hierarchy.** Whenever card effects collide and order matters, a player present at the collision decides — each owner for their own simultaneous triggers (2026-07-22; across owners the queue order is structural: active player's first, non-active's above); the affected character's controller for prevention. Rationale: every card is unique and the pool is unbounded — players always have partial information about what exists, so any global ordering is unlearnable by design. Every future mechanic must satisfy this constraint.
 
 ---
 

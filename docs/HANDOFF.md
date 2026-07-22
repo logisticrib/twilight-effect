@@ -2,7 +2,58 @@
 
 Self-contained context for continuing the card-effect engine work in a fresh session.
 
-## Latest session (2026-07-21, ruling + confirmation) — SEQUENTIAL simultaneous events (owner ruling) + trap window isolated live: debt #10 CLOSED
+## Latest session (2026-07-22) — UNIFIED simultaneous-ordering rule (owner ruling; supersedes two prior notes)
+**Suite: 40 files / 403 tests green; tsc ZERO; validate:decks clean. LOCAL session, behavior
+change.** THE RULE (GRU Rules Note 2026-07-22, owner verbatim): each player orders their OWN
+simultaneous triggers and events; when both players have simultaneous triggers, the active
+player's queue onto the stack first and the non-active player's queue above them (theirs
+resolve first, LIFO); same rule for simultaneous state events (decay); per-event listener/state
+evaluation unchanged from 2026-07-21.
+- **SUPERSESSIONS (all dated in place, never silent):** (1) GRU 2026-07-12 Trigger Stack
+  note's "order chosen by the active player, regardless of who controls them" sentence;
+  (2) GRU 2026-07-13 identical-copies note's chooser (SUBSTANCE stands: identical copies
+  are still actively ordered, no auto-ordering exception — now by their owner); (3) GRU
+  2026-07-21 sequential-events note's cross-ownership clause ("the active player chooses" →
+  structural queue order). Rules_Taxonomy Tier 3 #18 + Tier 5 #9 + Tier 6 #5 updated dated;
+  CDP §Triggered-Abilities note + the §PRINCIPLE (no arbitrary orderings) line amended dated.
+  Citation sweep done BEFORE editing (every engine/store/test comment citing Tier 5 #9 /
+  Tier 3 #18 or "active player orders" updated; historical HANDOFF/todo records left as
+  written, per convention).
+- **Engine:** new `stack.ts batchOrderer(items)` — the ordering prompt's `lp` is the batch's
+  CONTROLLER, consulted at ALL FIVE pendingTriggerOrder arming sites (declaration window,
+  enter window, effect-move window, resolveMove window, placeCard play window). Every gather
+  site produces a single-controller batch BY CONSTRUCTION (gatherReactive/gatherParanoia scan
+  the subject's opponent; gatherOwnPlay the subject's own side; the play window is
+  type-exclusive per play — Paranoia = companion plays, ownPlaysMagicalConstruct = construct
+  plays). A future cross-owner batch needs the structural queue order + per-owner prompts —
+  documented at batchOrderer: FLAG, don't guess. TriggerOrderModal copy re-voiced ("they are
+  yours, so you decide"); resolveTriggerOrder's owner-gate mechanics unchanged (now gates to
+  the new owner automatically).
+- **DERIVED, NOT CHANGED (verified per brief):** the attack-declaration queue (attacker's
+  onAttack first, opposing traps above → traps resolve first) is byte-identical and now
+  DERIVED from the general rule — comments updated to cite it, code untouched; Glass Cannon
+  fizzle + all declaration-window pins passed untouched. Sequential decay (2026-07-21)
+  unchanged: 3-draw pin green; slot-scan auto-order stands as the stopgap for the OWNER'S OWN
+  ordering choice (design note stands).
+- **Pins retired + rewritten dated (3):** two Pit Traps → controller orders (+ NEW
+  hold-direction asserts: reactiveHold holds the MOVER, never the owner — the MP hold flip
+  verified in-test per brief item 6); two Tripwires → trap controller orders; two Paranoias →
+  Paranoia's controller orders (not the placer). onplay two-listener pin retitled only (owner
+  IS the placer there — chooser value unchanged).
+- **Mutation — 1 (all five sites reverted to active-player as one conceptual mutation), failure
+  set predicted EXACTLY:** the 3 rewritten pins, nothing else. Restore grep-verified. HONEST
+  COVERAGE NOTE: the declaration-window and effect-move sites have no lp pin of their own
+  (no multi-Iron-Spikes or effect-driven multi-Pit-Trap pin exists) — they share the same
+  one-line batchOrderer pattern proven at the other three sites.
+- **FIXTURE VERDICT — t3 + t8 + t9 ALL STAND** (replayed clean in the gate runs): no recorded
+  game ever armed a multi-trigger ordering prompt, so the chooser flip touches no recording.
+- **Live-verified (fresh server, real board):** two-Pit-Trap sandbox board — prompt armed
+  with lp = p2 (trap controller), reactiveHold reports the MOVER as the held peer, the
+  re-voiced modal rendered, one real click resolved both traps (mover exhausted, both buried).
+- **Owner re-uploads: Game_Rules_Updated.md, Card_Design_Parameters.md, Rules_Taxonomy.md,
+  HANDOFF.md, tasks/PROJECT_STATE.md.**
+
+## Previous session (2026-07-21, ruling + confirmation) — SEQUENTIAL simultaneous events (owner ruling) + trap window isolated live: debt #10 CLOSED
 **Suite: 40 files / 403 tests green; tsc ZERO; validate:decks clean. LOCAL session, behavior
 change (Part A) + live confirmation (Part B). Commit `dd0cedf` (Part A).**
 - **PART A — RULING ENCODED (owner 2026-07-21, overrules the arc-5 flagged mutual-hearing

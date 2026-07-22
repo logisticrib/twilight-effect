@@ -117,10 +117,11 @@ export interface GameState {
   /** The LIFO trigger stack — LAST element is the top (next to resolve). Present
    *  only while non-empty. */
   triggerStack?: StackEntry[];
-  /** Simultaneous-trigger ordering prompt: >1 reactive trigger queued at once — the
-   *  ACTIVE player decides the order they go on the stack (Rules_Taxonomy Tier 5 #9 /
-   *  Tier 3 #18, reconfirmed by the owner 2026-07-12: it is the ACTIVE player, not
-   *  the trap controller). Present only while a choice is pending. */
+  /** Simultaneous-trigger ordering prompt: >1 reactive trigger queued at once — their
+   *  OWNER decides the order they go on the stack (Rules Note 2026-07-22: each player
+   *  orders their own simultaneous triggers; supersedes the 2026-07-12 active-player
+   *  reconfirmation and Tier 5 #9 / Tier 3 #18's tiebreaker — `lp` is the batch's
+   *  controller, via batchOrderer). Present only while a choice is pending. */
   pendingTriggerOrder?: PendingTriggerOrder | null;
   // ── Damage prevention (capability arc 2, owner-ratified 2026-07-14). Both fields
   //    are OPTIONAL and set back to `undefined` when drained, so games with no
@@ -173,10 +174,11 @@ export type StackEntry =
   | ReactiveStackEntry;
 
 /** Simultaneous-trigger ordering prompt. `items` are the reactive triggers that
- *  queued at once; the ACTIVE player picks resolution order BLIND (nothing resolves
- *  between picks — the order is decided at queue time, then they go on the stack).
- *  `picked` accumulates item indices in RESOLUTION order; when one unpicked item
- *  remains the order is complete and the stack runs. */
+ *  queued at once; their OWNER (`lp` = the batch's controller — Rules Note
+ *  2026-07-22) picks resolution order BLIND (nothing resolves between picks — the
+ *  order is decided at queue time, then they go on the stack). `picked` accumulates
+ *  item indices in RESOLUTION order; when one unpicked item remains the order is
+ *  complete and the stack runs. */
 export interface PendingTriggerOrder {
   lp: 'p1' | 'p2';
   items: ReactiveStackEntry[];

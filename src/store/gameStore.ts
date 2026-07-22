@@ -21,7 +21,7 @@ import { ADJ, FRONT_SLOTS, BACK_SLOTS, isFront, findSlot, type SlotId, type Boar
          type AttackCtx, type ArmorChoiceData,
          type PendingItemTransfer, type StackEntry,
          gatherParanoia, gatherReactive, gatherOwnPlay, pushStack, setStack, resolveReactiveEntry,
-         orderedForStack, resolveCombatTriggers, combatTriggerEffects,
+         orderedForStack, batchOrderer, resolveCombatTriggers, combatTriggerEffects,
          findEntityAnywhere, updateEntity, removeEntity, deadCardsOf,
          itemTransferOf, itemProfileOf, itemTransferCandidates, armNextItemTransfer,
          setPcHp, payPcHp, pcIdOf, charsOf,
@@ -216,8 +216,11 @@ function commitAttack(s: StackRunCtx, game: GameState, charId: string, targetEnt
 
   // Declaration-window triggers. Reactive traps (Iron Spikes) fire only when an
   // opposing COMPANION attacks one of the trap controller's COMPANIONS (R4); the
-  // attacker's own onAttack clauses queue FIRST, traps above them (the ruled queue
-  // order, 2026-07-12) — so the traps resolve first, the attacker's clauses after.
+  // attacker's own onAttack clauses queue FIRST, traps above them — so the traps
+  // resolve first, the attacker's clauses after. Originally the 2026-07-12 ruled
+  // queue order; since the 2026-07-22 Rules Note this is DERIVED from the general
+  // rule (the active player's simultaneous triggers queue first, the non-active
+  // player's above — theirs resolve first). Behavior byte-identical, code unchanged.
   const declReactive = attacker.kind === 'companion' && tgtLoc.ent.kind === 'companion'
     ? gatherReactive(newGame, 'oppCompanionAttacksCompanion', { id: charId, name: attacker.name, controller: attLoc.player })
     : [];
@@ -235,10 +238,11 @@ function commitAttack(s: StackRunCtx, game: GameState, charId: string, targetEnt
     ...(hasOwnAttack ? [{ kind: 'ownAttack', attacker, side: attLoc.player } satisfies StackEntry] : []),
   ]);
   if (declReactive.length > 1) {
-    // >1 simultaneous reactive trigger — the ACTIVE player orders them (canon:
-    // Rules_Taxonomy Tier 5 #9 / Tier 3 #18; reconfirmed by the owner 2026-07-12
-    // over the in-session trap-controller suggestion).
-    g = { ...g, pendingTriggerOrder: { lp: g.activePlayer, items: declReactive, picked: [] } };
+    // >1 simultaneous reactive trigger — their CONTROLLER (the defender) orders them
+    // (Rules Note 2026-07-22: each player orders their own simultaneous triggers;
+    // supersedes the 2026-07-12 active-player reconfirmation and Tier 5 #9 /
+    // Tier 3 #18 — the once-rejected trap-controller reading is now the rule).
+    g = { ...g, pendingTriggerOrder: { lp: batchOrderer(declReactive), items: declReactive, picked: [] } };
     return { game: g, local: {}, toastMsgs: [] };
   }
   const r = runStack(pushStack(g, declReactive), s);
@@ -275,8 +279,8 @@ export function reactiveHold(game: GameState, localPlayer: 'p1' | 'p2'): string 
   // items) — the active player waits so broadcasts don't clobber the resolution.
   const it = game.pendingItemTransfer;
   if (it && it.lp !== localPlayer) return `${it.sourceName}'s items (Item Transfer)`;
-  // The opponent's simultaneous-trigger ordering pick (trigger stack, 2026-07-12) —
-  // the ACTIVE player orders; everyone else waits.
+  // The opponent's simultaneous-trigger ordering pick (trigger stack, 2026-07-12;
+  // chooser re-ruled 2026-07-22) — the triggers' OWNER orders; everyone else waits.
   const po = game.pendingTriggerOrder;
   if (po && po.lp !== localPlayer) return 'simultaneous trigger ordering';
   // The opponent's prevention-ordering pick (R3, 2026-07-14) — the affected
@@ -529,7 +533,7 @@ function runOnEnter(
 /**
  * Drive the trigger stack (GameState.triggerStack, top = last) until it drains or
  * PAUSES: on a Paranoia peek (the controller decides), on a simultaneous-trigger
- * ordering pick (the active player decides), on a mid-combat Armor choice, or on an
+ * ordering pick (the triggers' owner decides — 2026-07-22), on a mid-combat Armor choice, or on an
  * 'ownEnter' hand-off owned by the other client. Every pause resumes through the
  * corresponding resolver, which re-enters this driver. Collected trap toasts are
  * returned for the calling reducer to surface — no silent outcomes (2026-07-12).
@@ -589,10 +593,10 @@ function runStack(game: GameState, s: StackRunCtx):
         ? gatherReactive(g, 'oppCompanionEnters', { id: top.ent.id, name: top.ent.name, controller: top.controller })
         : [];
       if (reactive.length > 1) {
-        // >1 simultaneous trigger — the ACTIVE player (here: the entering player)
-        // decides the order they go on the stack (Rules_Taxonomy Tier 5 #9 / Tier 3
-        // #18; owner-reconfirmed 2026-07-12).
-        g = { ...pushStack(g, batch), pendingTriggerOrder: { lp: g.activePlayer, items: reactive, picked: [] } };
+        // >1 simultaneous trigger — their CONTROLLER (the trap side, not the
+        // entering player) orders them (Rules Note 2026-07-22, supersedes the
+        // active-player tiebreaker).
+        g = { ...pushStack(g, batch), pendingTriggerOrder: { lp: batchOrderer(reactive), items: reactive, picked: [] } };
         break; // PAUSE — resolveTriggerOrder resumes
       }
       g = pushStack(g, [...batch, ...reactive]);
@@ -1402,7 +1406,8 @@ export const useGameStore = create<GameStoreState>()(
     if (movedToFront && loc) {
       const reactive = gatherReactive(finalGame, 'oppCompanionMovesToFront', { id: loc.ent.id, name: loc.ent.name, controller: loc.player });
       if (reactive.length > 1) {
-        finalGame = { ...finalGame, pendingTriggerOrder: { lp: finalGame.activePlayer, items: reactive, picked: [] } };
+        // Their CONTROLLER orders (Rules Note 2026-07-22).
+        finalGame = { ...finalGame, pendingTriggerOrder: { lp: batchOrderer(reactive), items: reactive, picked: [] } };
       } else if (reactive.length === 1) {
         const rs = runStack(pushStack(finalGame, reactive), s);
         finalGame = rs.game; stackMsgs.push(...rs.toastMsgs); stackLocal = rs.local;
@@ -1681,11 +1686,13 @@ export const useGameStore = create<GameStoreState>()(
     return { pendingActionTarget: null };
   }),
 
-  // ── Simultaneous-trigger ordering (trigger stack, owner-ratified 2026-07-12) ──
-  // Canon: the ACTIVE player decides the order simultaneous triggers go on the
-  // stack (Rules_Taxonomy Tier 5 #9 / Tier 3 #18 — reconfirmed 2026-07-12: active
-  // player, NOT the trap controller). Picks are BLIND: the order is decided at
-  // queue time and nothing resolves between picks.
+  // ── Simultaneous-trigger ordering (trigger stack, owner-ratified 2026-07-12;
+  // chooser re-ruled 2026-07-22) ──
+  // Canon (Rules Note 2026-07-22): each player orders their OWN simultaneous
+  // triggers — `lp` is the batch's controller (supersedes the 2026-07-12
+  // active-player reconfirmation and Tier 5 #9 / Tier 3 #18's tiebreaker).
+  // Picks are BLIND: the order is decided at queue time and nothing resolves
+  // between picks (unchanged).
   resolveTriggerOrder: (idx) => set(s => {
     if (gameIsOver(s.game)) return s;
     const po = s.game.pendingTriggerOrder;
@@ -2147,8 +2154,9 @@ export const useGameStore = create<GameStoreState>()(
     if (ent.kind === 'companion' && !isFront(src.slot) && isFront(targetSlot)) {
       const reactive = gatherReactive(moved, 'oppCompanionMovesToFront', { id: ent.id, name: ent.name, controller: src.player });
       if (reactive.length > 1) {
-        // >1 simultaneous trigger — the ACTIVE player (the mover) orders them.
-        return { pending: null, game: { ...moved, pendingTriggerOrder: { lp: moved.activePlayer, items: reactive, picked: [] } } };
+        // >1 simultaneous trigger — their CONTROLLER (the trap side, not the mover)
+        // orders them (Rules Note 2026-07-22).
+        return { pending: null, game: { ...moved, pendingTriggerOrder: { lp: batchOrderer(reactive), items: reactive, picked: [] } } };
       }
       if (reactive.length === 1) {
         const r = runStack(pushStack(moved, reactive), s);
@@ -2681,9 +2689,15 @@ export const useGameStore = create<GameStoreState>()(
     const playWindow = [...paranoia, ...onPlay];
     const g = pushStack(paidGame, [{ kind: 'enter', ent: newEnt, card, slot, controller: lp }]);
     if (playWindow.length > 1) {
-      // >1 simultaneous play-window trigger — the ACTIVE player orders them.
+      // >1 simultaneous play-window trigger — their CONTROLLER orders them (Rules
+      // Note 2026-07-22): multi-Paranoia → the Paranoia controller (not the placer);
+      // multi-own-play listeners → the placer (unchanged there — owner IS the
+      // placer). The batch is single-controller by construction (see batchOrderer:
+      // Paranoia fires on companion plays, ownPlaysMagicalConstruct on construct
+      // plays — one card is one type; a future cross-owner window needs the
+      // structural queue order + per-owner prompts, flag before building).
       return { pendingPlay: null, pendingTrigger: null, pendingKit: null,
-        game: { ...g, pendingTriggerOrder: { lp: g.activePlayer, items: playWindow, picked: [] } } };
+        game: { ...g, pendingTriggerOrder: { lp: batchOrderer(playWindow), items: playWindow, picked: [] } } };
     }
     const r = runStack(pushStack(g, playWindow), s);
     return {

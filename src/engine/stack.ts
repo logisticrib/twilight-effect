@@ -47,8 +47,9 @@ const SLOT_SCAN = [...FRONT_SLOTS, ...BACK_SLOTS];
  * Gather the reactive triggers an event queues: permanents on the board OPPOSING the
  * event's subject whose card carries a clause with this trigger (the trap windows —
  * 'oppCompanionEnters' / 'oppCompanionMovesToFront' / 'oppCompanionAttacksCompanion').
- * Scanned in deterministic slot order; when more than one fires at once the ACTIVE
- * player orders them via PendingTriggerOrder before they go on the stack.
+ * Scanned in deterministic slot order; when more than one fires at once, their
+ * OWNER orders them via PendingTriggerOrder before they go on the stack
+ * (Rules Note 2026-07-22 — each player orders their own simultaneous triggers).
  */
 export function gatherReactive(
   game: GameState, trigger: Trigger,
@@ -155,4 +156,21 @@ export function orderedForStack(items: ReactiveStackEntry[], picked: number[]): 
   const rest = items.map((_, i) => i).filter(i => !picked.includes(i));
   const resolutionOrder = [...picked, ...rest];      // first element resolves first
   return resolutionOrder.map(i => items[i]).reverse(); // push order: last-resolving first
+}
+
+/**
+ * The orderer for a simultaneous-trigger batch (Rules Note 2026-07-22): each player
+ * orders their OWN simultaneous triggers, so the ordering prompt goes to the batch's
+ * CONTROLLER — not the active player (supersedes the 2026-07-12/13 active-player
+ * notes and Rules_Taxonomy Tier 5 #9 / Tier 3 #18's tiebreaker). Every gather site
+ * produces a single-controller batch by construction: gatherReactive/gatherParanoia
+ * scan only the subject's OPPONENT, gatherOwnPlay only the subject's own side, and
+ * the placeCard play window is type-exclusive per play (Paranoia = companion plays;
+ * ownPlaysMagicalConstruct = construct plays — one card is one type). A future
+ * cross-owner batch would need the rule's structural queue order (active player's
+ * group queues first, the non-active player's above — theirs resolve first) plus a
+ * per-owner prompt each: FLAG to the owner and build it then; do not guess here.
+ */
+export function batchOrderer(items: ReactiveStackEntry[]): 'p1' | 'p2' {
+  return items[0].controller;
 }

@@ -120,7 +120,7 @@ describe('Patient Conjurer — "When you play a Magical Construct, this characte
     expect(g.p1.deck.length, 'no draw: at resolution the construct had NOT entered yet').toBe(deckBefore);
   });
 
-  it('two listeners queue the active-player ordering prompt (identical triggers still ordered — 2026-07-13 canon); a queued trigger from a departed listener still resolves as a no-op', () => {
+  it('two listeners queue the OWNER ordering prompt (2026-07-22 — here the owner IS the placer, unchanged; identical triggers still actively ordered); a queued trigger from a departed listener still resolves as a no-op', () => {
     seed([incantation()], { b1: conjurer('pc-1', 2), b2: conjurer('pc-2', 2) });
     play(incantation(), 'f1');
     let g = gs.getState().game;

@@ -253,13 +253,13 @@ function TriggerOrderModal() {
   const isSolo = useGameStore(s => s.conn.mode === 'solo');
   const resolveTriggerOrder = useGameStore(s => s.resolveTriggerOrder);
   if (!po) return null;
-  if (!isSolo && po.lp !== localPlayer) return null; // the active player orders; others hold
+  if (!isSolo && po.lp !== localPlayer) return null; // the triggers' owner orders; others hold (2026-07-22)
   const remaining = po.items.map((it, i) => ({ it, i })).filter(x => !po.picked.includes(x.i));
   const nth = po.picked.length + 1;
   return (
     <ModalShell glyph="⧉" eyebrow="Simultaneous triggers"
       title={nth === 1 ? 'Choose which trigger resolves first' : `Choose the trigger to resolve #${nth}`}
-      sub="These triggers fired at the same time — as the active player, you decide the order they go on the stack.">
+      sub="These triggers fired at the same time — they are yours, so you decide the order they go on the stack.">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {remaining.map(({ it, i }) => (
           <button key={i} onClick={() => resolveTriggerOrder(i)} style={md.btn('primary')}>
