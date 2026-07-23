@@ -15,6 +15,8 @@ import { ModalShell, md } from './play/modals/ModalShell';
 import { CardPickModal } from './play/modals/CardPickModal';
 import { PoisonModal } from './play/modals/PoisonModal';
 import { CoercionModal } from './play/modals/CoercionModal';
+import { DiscardModal } from './play/modals/DiscardModal';
+import { HandRevealModal } from './play/modals/HandRevealModal';
 import { RecorderButton } from './play/RecorderButton';
 import { ReactiveHoldBanner } from './play/ReactiveHoldBanner';
 
@@ -42,6 +44,7 @@ function GameView() {
         || !!game.pendingAttackChoice || !!game.pendingPoison || !!game.pendingCoercion
         || !!game.pendingItemTransfer || !!game.pendingModalChoice || !!game.gameOver
         || !!game.pendingTriggerOrder || !!game.pendingPreventOrder
+        || !!game.pendingDiscard || !!game.pendingHandReveal
         || !!s.pendingEquipPick || s.pendingKit?.step === 'item' || !!s.pileView;
 
       if (e.key === 'Tab') {
@@ -85,6 +88,8 @@ function GameView() {
       <AttackChoiceModal />
       <PoisonHost />
       <CoercionModal />
+      <DiscardModal />
+      <HandRevealModal />
       <TriggerOrderModal />
       <StackResumeDriver />
       <ReactiveHoldBanner />
@@ -175,17 +180,64 @@ function PeekModal() {
   const localPlayer = useGameStore(s => s.localPlayer);
   const isSolo = useGameStore(s => s.conn.mode === 'solo');
   const resolvePeek = useGameStore(s => s.resolvePeek);
+  const resolvePeekOrder = useGameStore(s => s.resolvePeekOrder);
   const cancelPeek = useGameStore(s => s.cancelPeek);
   const [assign, setAssign] = useState<('hand' | 'top' | 'bottom')[]>([]);
+  const [order, setOrder] = useState<number[]>([]); // reorder mode: card indices, first = new top
 
   // Only the player doing the scry sees it (in multiplayer); sandbox shows all.
   const owned = pk != null && (isSolo || pk.lp === localPlayer);
 
   useEffect(() => {
     if (pk) setAssign(pk.cards.map(() => (pk.dests.includes('top') ? 'top' : pk.dests[0])));
+    setOrder([]);
   }, [pk]);
 
   if (!pk || !owned) return null;
+
+  // Reorder mode (Arc A, 2026-07-22 — "put them back in any order"): click the cards
+  // in the sequence they should return to the top (first click = new top card).
+  if (pk.reorder) {
+    const pos = (i: number) => order.indexOf(i);
+    const toggle = (i: number) =>
+      setOrder(o => (o.includes(i) ? o.filter(x => x !== i) : [...o, i]));
+    const complete = order.length === pk.cards.length;
+    return (
+      <ModalShell glyph="☾" eyebrow={pk.source}
+        title={`Put ${pk.cards.length} card${pk.cards.length !== 1 ? 's' : ''} back in any order${pk.deckSide !== pk.lp ? " — opponent's deck" : ''}`}
+        sub="Click the cards in the order they should sit on top of the deck (first click = new top). Click a numbered card to unpick it."
+        width="min(760px, 94vw)"
+        footer={
+          <>
+            <div style={md.spacer} />
+            <button style={md.btn('ghost')} onClick={() => setOrder([])}>Reset</button>
+            <button style={md.btn('ghost')} onClick={() => cancelPeek()}>Keep current order</button>
+            <button disabled={!complete} onClick={() => resolvePeekOrder(order)}
+              style={complete ? md.btn('primary') : { ...md.btn('primary'), opacity: 0.5, cursor: 'not-allowed' }}>
+              Confirm order
+            </button>
+          </>
+        }>
+        <div style={{ display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap' }}>
+          {pk.cards.map((c, i) => (
+            <button key={i} onClick={() => toggle(i)}
+              style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer', position: 'relative', borderRadius: 8 }}
+              title={pos(i) >= 0 ? `Position ${pos(i) + 1} from the top — click to unpick` : 'Click to pick the next position'}>
+              <CardFace data={c} scale={0.62} />
+              {pos(i) >= 0 && (
+                <span style={{ position: 'absolute', top: 6, right: 6, width: 26, height: 26, borderRadius: '50%',
+                  background: TBL.amber, color: '#1a1208', fontWeight: 700, fontSize: 14,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontFamily: "'Inter', sans-serif", boxShadow: '0 0 6px rgba(0,0,0,0.5)' }}>
+                  {pos(i) + 1}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      </ModalShell>
+    );
+  }
 
   // "Any deck" choice phase (2026-07-16 — Lens of Foretelling / Runic Convergence
   // Staff): the controller picks WHOSE deck before it is sliced.
@@ -318,7 +370,8 @@ function StackResumeDriver() {
     if (head?.kind !== 'ownEnter') return;
     const s = useGameStore.getState();
     if ((s.conn.mode === 'solo' || head.controller === s.localPlayer)
-      && !s.game.pendingPeek && !s.game.pendingTriggerOrder && !s.game.pendingArmor && !s.game.pendingPreventOrder) {
+      && !s.game.pendingPeek && !s.game.pendingTriggerOrder && !s.game.pendingArmor && !s.game.pendingPreventOrder
+      && !s.game.pendingDiscard && !s.game.pendingHandReveal) {
       s.resumeStack();
     }
   }, [head]);

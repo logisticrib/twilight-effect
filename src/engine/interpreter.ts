@@ -55,6 +55,16 @@ export function effectsWouldAffectSomething(game: GameState, lp: 'p1' | 'p2', ef
         }
         return true;
       }
+      case 'returnFromDead': {
+        // Universal pre-cost refusal (RULED 2026-07-08 — the Quill precedent),
+        // aligned 2026-07-22 for Fence's Ledger (owner-confirmed): a recovery with
+        // no eligible Dead-Zone card affects nothing — refuse BEFORE any cost is
+        // paid. Filters mirror the interpreter's (cardType, itemKind).
+        if (e.to !== 'hand') return true; // 'encounter' unimplemented — stay conservative
+        if (game[lp].dead.some(c =>
+          (!e.cardType || c.type === e.cardType) && (!e.itemKind || c.itemKind === e.itemKind))) return true;
+        break;
+      }
       default:
         return true; // draw, buffs, dice, peeks… always meaningful (or unmodeled)
     }
@@ -538,6 +548,38 @@ export function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceNam
         const d = destroyEntity(g, sourceId, sink, armorSink, 'sacrifice'); // sacrifice = death (fires triggers + on-sacrifice listeners)
         g = d.game;
         msgs.push(`${loc.ent.name} is sacrificed`, ...d.msgs);
+        break;
+      }
+      case 'discard': {
+        // Arc A (2026-07-22). The DISCARDING player chooses the card (owner agency —
+        // the Coercion precedent), so this arms a victim-owned prompt rather than
+        // auto-picking. Writes pendingDiscard directly (single slot + queue): callers
+        // need no sink threading, and the shipped call sites stay byte-identical
+        // (no shipped card carries the op). Victim resolution by target scope:
+        let victim: 'p1' | 'p2' | null = null;
+        if (e.target === 'targetPlayer') victim = lp === 'p1' ? 'p2' : 'p1';
+        else if (e.target === 'damagedController') victim = ctx?.damagedOwner ?? null;
+        else if (e.target === 'eventSubject' && ctx?.subjectId) victim = findEntityAnywhere(g, ctx.subjectId)?.player ?? null;
+        if (!victim) break; // unmodeled scope / subject gone — validator bars the former
+        if (g[victim].hand.length === 0) { msgs.push(`${g[victim].name} has no cards to discard`); break; }
+        for (let n = 0; n < e.count; n++) {
+          const pd = { source: sourceName, victim };
+          g = g.pendingDiscard
+            ? { ...g, pendingDiscardQueue: [...(g.pendingDiscardQueue ?? []), pd] }
+            : { ...g, pendingDiscard: pd };
+        }
+        msgs.push(`${g[victim].name} must discard ${e.count === 1 ? 'a card' : `${e.count} cards`}`);
+        break;
+      }
+      case 'revealHand': {
+        // Arc A (2026-07-22): the acting player looks at the opponent's hand. Both
+        // clients hold full game state (established info model) — the prompt is UI
+        // entitlement: only the looker's client renders it, the hand's owner is held.
+        const other: 'p1' | 'p2' = lp === 'p1' ? 'p2' : 'p1';
+        if (g[other].hand.length === 0) { msgs.push(`${g[other].name} has no cards in hand`); break; }
+        if (g.pendingHandReveal) break; // single slot — no consumer arms two in one resolution
+        g = { ...g, pendingHandReveal: { source: sourceName, lp, handSide: other, ...(e.pick ? { pick: e.pick } : {}) } };
+        msgs.push(`Look at ${g[other].name}'s hand`);
         break;
       }
       // Remaining ops (move slot-pick, two-target attacks, sacrificeItem, deckPeek…) — later slices.

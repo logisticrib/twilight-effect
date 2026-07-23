@@ -64,7 +64,15 @@
       "text": "COERCION. When this companion enters, target opponent must discard a card or sacrifice a permanent. When this enters, look at target opponent's hand.",
       "flavor": "",
       "dev": true,
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-07-22, Arc A): opponent-hand reveal machinery ('look at target opponent's hand')",
+      "effects": [
+        {
+          "trigger": "onEnter",
+          "effects": [
+            { "op": "revealHand" }
+          ]
+        }
+      ],
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-07-22, Arc G-adjacent): revealHand machinery EXISTS (Arc A), but Coercion claims the single-pending enter window (runOnEnter's !pendingCoercion guard) so this authored clause is DROPPED — same-owner enter-trigger ordering needed, and the order is information-relevant (hand seen pre- vs post-coercion), so no auto-order may be guessed",
       "createdAt": "2026-07-22T00:00:00.000000Z",
       "updatedAt": "2026-07-22T00:00:00.000000Z"
     },
@@ -109,7 +117,14 @@
       "text": "DISMAY. As long as one or more permanents with Dismay are in the encounter under your control, your opponent is Dismayed. (A Dismayed player has −1 Willpower. Dismayed does not stack.) When this enters, look at the top 2 cards of your deck. Put them back in any order.",
       "flavor": "",
       "dev": true,
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-07-22, Arc A): multi-card look-and-REORDER peek (resolvePeek only assigns top/bottom, preserving original order)",
+      "effects": [
+        {
+          "trigger": "onEnter",
+          "effects": [
+            { "op": "deckPeek", "look": 2, "dests": ["top"], "reorder": true }
+          ]
+        }
+      ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
       "updatedAt": "2026-07-22T00:00:00.000000Z"
     },
@@ -356,7 +371,14 @@
       "text": "EVASIVE. This character can attack any opponent character regardless of the target's positioning. Still subject to Guardian targeting requirement. Whenever this deals damage to a character, that character's controller discards a card.",
       "flavor": "",
       "dev": true,
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-07-22, Arc A): discard op is declared-only in the interpreter (onDealDamage trigger exists; the discard effect does not resolve)",
+      "effects": [
+        {
+          "trigger": "onDealDamage",
+          "effects": [
+            { "op": "discard", "count": 1, "target": "damagedController" }
+          ]
+        }
+      ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
       "updatedAt": "2026-07-22T00:00:00.000000Z"
     },
@@ -531,7 +553,14 @@
       "text": "Target opponent discards a card.",
       "flavor": "",
       "dev": true,
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-07-22, Arc A): discard op is declared-only in the interpreter",
+      "effects": [
+        {
+          "trigger": "onPlay",
+          "effects": [
+            { "op": "discard", "count": 1, "target": "targetPlayer" }
+          ]
+        }
+      ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
       "updatedAt": "2026-07-22T00:00:00.000000Z"
     },
@@ -554,7 +583,14 @@
       "text": "Look at the top 3 cards of target opponent's deck. Put them back in any order.",
       "flavor": "",
       "dev": true,
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-07-22, Arc A): opponent-deck multi-card look-and-REORDER peek (resolvePeek only assigns top/bottom, preserving original order)",
+      "effects": [
+        {
+          "trigger": "onPlay",
+          "effects": [
+            { "op": "deckPeek", "look": 3, "dests": ["top"], "reorder": true, "deck": "opp" }
+          ]
+        }
+      ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
       "updatedAt": "2026-07-22T00:00:00.000000Z"
     },
@@ -1066,7 +1102,14 @@
       "text": "When an opposing companion enters the encounter, its controller discards a card.",
       "flavor": "",
       "dev": true,
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-07-22, Arc A): discard op is declared-only in the interpreter (the oppCompanionEnters trap window itself is shipped; the clause would silently no-op)",
+      "effects": [
+        {
+          "trigger": "oppCompanionEnters",
+          "effects": [
+            { "op": "discard", "count": 1, "target": "eventSubject" }
+          ]
+        }
+      ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
       "updatedAt": "2026-07-22T00:00:00.000000Z"
     },
@@ -1189,7 +1232,14 @@
       "text": "Look at target opponent's hand. You may choose a card from it. If you do, that player puts that card on the bottom of their deck, then draws a card.",
       "flavor": "",
       "dev": true,
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-07-22, Arc A): opponent-hand reveal + pick-from-hand machinery",
+      "effects": [
+        {
+          "trigger": "onPlay",
+          "effects": [
+            { "op": "revealHand", "pick": "toBottomDraw" }
+          ]
+        }
+      ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
       "updatedAt": "2026-07-22T00:00:00.000000Z"
     }

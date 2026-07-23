@@ -51,11 +51,13 @@ export function buildPeek(game: GameState, req: PeekRequest): PendingPeek | null
   // resolvePeekDeck slices it. Skipped only when BOTH decks are empty.
   if (req.deck === 'any') {
     if (game.p1.deck.length === 0 && game.p2.deck.length === 0) return null;
-    return { source: req.source, lp: req.lp, deckSide: req.lp, cards: [], dests: req.dests, maxHand: req.maxHand, chooseDeck: true, look: req.look };
+    return { source: req.source, lp: req.lp, deckSide: req.lp, cards: [], dests: req.dests, maxHand: req.maxHand, chooseDeck: true, look: req.look, ...(req.reorder ? { reorder: true as const } : {}) };
   }
-  const cards = game[req.deckSide].deck.slice(0, req.look);
+  // deck 'opp' (Arc A, 2026-07-22): the OPPONENT's deck, no choice phase.
+  const side: 'p1' | 'p2' = req.deck === 'opp' ? (req.lp === 'p1' ? 'p2' : 'p1') : req.deckSide;
+  const cards = game[side].deck.slice(0, req.look);
   if (cards.length === 0) return null;
-  return { source: req.source, lp: req.lp, deckSide: req.deckSide, cards, dests: req.dests, maxHand: req.maxHand };
+  return { source: req.source, lp: req.lp, deckSide: side, cards, dests: req.dests, maxHand: req.maxHand, ...(req.reorder ? { reorder: true as const } : {}) };
 }
 
 /** Pop the next valid peek off a queue, skipping any whose deck is now empty. */

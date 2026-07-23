@@ -77,6 +77,17 @@ export interface GameState {
    *  discard a card or sacrifice a permanent. Routed to the victim's client; the
    *  acting player is held (see `reactiveHold`) until it resolves. */
   pendingCoercion: PendingCoercion | null;
+  // ── Arc A prompts (2026-07-22). All three OPTIONAL and reset to `undefined` when
+  //    cleared — games that never arm them keep their exact pre-arc canonical replay
+  //    hash (stableStringify omits undefined-valued keys; the triggerStack discipline).
+  /** Forced discard chosen by the discarding player (discard op). Routed to the
+   *  victim's client; everyone else is held (see `reactiveHold`). */
+  pendingDiscard?: PendingDiscard | null;
+  /** Further discards queued behind the active one (e.g. one per damage event). */
+  pendingDiscardQueue?: PendingDiscard[];
+  /** Opponent-hand reveal (revealHand op). Routed to the LOOKER's client; the
+   *  hand's owner is held (see `reactiveHold`). */
+  pendingHandReveal?: PendingHandReveal | null;
   /** Mid-combat Armor choice — when an attack hits a character with 2+ armor pieces,
    *  combat PAUSES and the DEFENDER picks which piece absorbs the hit (rules: "the
    *  controlling player chooses which armor prevents the damage"). Carries the
@@ -232,6 +243,32 @@ export interface PendingPeek {
    *  identically. resolvePeekDeck completes the phase. */
   chooseDeck?: true;
   look?: number;
+  /** Reorder peek (Arc A, 2026-07-22): "put them back in any order" — the looker
+   *  returns ALL looked-at cards to the top in a chosen sequence via
+   *  resolvePeekOrder (a permutation), instead of per-card dest assignment.
+   *  OPTIONAL — absent for ordinary peeks (hash discipline as above). */
+  reorder?: true;
+}
+
+/** A forced discard chosen by the DISCARDING player (owner agency — the Coercion
+ *  precedent): "target opponent discards a card". One prompt per single discard;
+ *  further discards queue (pendingDiscardQueue). Routed to the victim's client;
+ *  everyone else is held (see reactiveHold). */
+export interface PendingDiscard {
+  source: string;       // the card that forced the discard
+  victim: 'p1' | 'p2';  // who chooses and discards
+}
+
+/** An opponent-hand reveal (Arc A, 2026-07-22): the LOOKER (`lp`) sees `handSide`'s
+ *  hand. With `pick: 'toBottomDraw'` (Mark the Pockets) the looker may choose a
+ *  card — it goes to the BOTTOM of its owner's deck and that player draws a card.
+ *  Both clients hold full game state (the established info model); this prompt is
+ *  UI entitlement — only the looker's client renders it, the hand's owner is held. */
+export interface PendingHandReveal {
+  source: string;
+  lp: 'p1' | 'p2';        // the looker (prompt owner)
+  handSide: 'p1' | 'p2';  // whose hand is revealed
+  pick?: 'toBottomDraw';
 }
 
 /** A queued start-of-turn peek (deck not yet sliced — re-sliced when it becomes
@@ -243,7 +280,8 @@ export interface PeekRequest {
   look: number;
   dests: ('hand' | 'top' | 'bottom')[];
   maxHand?: number;
-  deck?: 'any';   // "any deck" (2026-07-16): controller chooses the side at resolution
+  deck?: 'any' | 'opp';  // 'any' (2026-07-16): controller chooses the side; 'opp' (Arc A): the opponent's deck
+  reorder?: true;        // Arc A: "put them back in any order" (resolvePeekOrder)
 }
 
 /** Coercion (on-enter keyword): the opponent of the entering companion must discard

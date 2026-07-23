@@ -48,7 +48,7 @@ export type _ExhaustiveTargets = AssertNever<Exclude<TargetSpec, (typeof TARGET_
 const OPS = [
   'damage', 'damageSelfPC', 'heal', 'buff', 'draw', 'discard', 'mill', 'shuffleHandRedraw',
   'deckPeek', 'returnFromDead', 'search', 'move', 'bounce', 'extraAttack', 'forceAttack',
-  'anchor', 'sacrifice', 'sacrificeItem', 'equipFromHand', 'animate', 'dieCheck',
+  'anchor', 'sacrifice', 'sacrificeItem', 'equipFromHand', 'animate', 'dieCheck', 'revealHand',
   'attackDisarm', 'moveAnchor', 'attackBonus', 'magicDamageBonus', 'preventAnchorDecay',
   'lineWard', 'exhaustSelf', 'exhaust', 'modal', 'gainControl', 'suppressKeywords', 'counterAction',
   'grantKeywords', 'backLineAttack', 'preventDamage', 'firstMagicUncounterable', 'restrictAttack', 'restrictMove',
@@ -140,7 +140,15 @@ function validateEffect(e: Effect, path: string, p: (msg: string) => void, keywo
       count('count');
       if (e.if !== undefined && !validCondition(e.if)) p(`${path}(draw): bad condition ${JSON.stringify(e.if)}`);
       break;
-    case 'discard': count('count'); target('target'); break;
+    case 'discard':
+      count('count');
+      // Engine-supported victim scopes only (Arc A 2026-07-22; the preventDamage
+      // precedent — the contract must not advertise unimplemented coverage).
+      if (e.target !== 'targetPlayer' && e.target !== 'damagedController' && e.target !== 'eventSubject') {
+        p(`${path}(discard): target must be targetPlayer, damagedController, or eventSubject`);
+      }
+      if (e.random) p(`${path}(discard): random discards are not engine-supported (the chooser is the discarding player)`);
+      break;
     case 'mill': count('count'); target('target'); break;
     case 'shuffleHandRedraw':
       if (e.offset !== undefined && !isInt(e.offset)) p(`${path}(shuffleHandRedraw): offset must be an integer`);
@@ -149,8 +157,15 @@ function validateEffect(e: Effect, path: string, p: (msg: string) => void, keywo
       count('look');
       const dests = Array.isArray(e.dests) ? e.dests : [];
       if (!dests.length || dests.some(d => !['hand', 'top', 'bottom'].includes(d))) p(`${path}(deckPeek): bad dests`);
+      if (e.deck !== undefined && e.deck !== 'any' && e.deck !== 'opp') p(`${path}(deckPeek): bad deck "${String(e.deck)}"`);
+      // Reorder peeks return everything to the TOP in a chosen order — dests other
+      // than ['top'] would advertise choices resolvePeekOrder never offers.
+      if (e.reorder && (dests.length !== 1 || dests[0] !== 'top')) p(`${path}(deckPeek): a reorder peek must use dests ['top']`);
       break;
     }
+    case 'revealHand':
+      if (e.pick !== undefined && e.pick !== 'toBottomDraw') p(`${path}(revealHand): bad pick "${String(e.pick)}"`);
+      break;
     case 'returnFromDead':
       if (e.to !== 'hand' && e.to !== 'encounter') p(`${path}(returnFromDead): bad to "${String(e.to)}"`);
       if (e.itemKind !== undefined && !has(ITEM_KINDS, e.itemKind)) p(`${path}(returnFromDead): bad itemKind "${String(e.itemKind)}"`);

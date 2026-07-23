@@ -17,7 +17,7 @@ import { recomputeStatics, isImmuneToSplash, HIT_RUN_STATUS,
 export * from '../engine';
 import { ADJ, FRONT_SLOTS, BACK_SLOTS, isFront, findSlot, type SlotId, type Board,
          type Phase, type GameState,
-         type PendingCoercion, type PendingDeadPick,
+         type PendingCoercion, type PendingDeadPick, type PendingDiscard,
          type AttackCtx, type ArmorChoiceData,
          type PendingItemTransfer, type StackEntry,
          gatherParanoia, gatherReactive, gatherOwnPlay, pushStack, setStack, resolveReactiveEntry,
@@ -263,11 +263,19 @@ export function reactiveHold(game: GameState, localPlayer: 'p1' | 'p2'): string 
   // (and anyone else) waits for it.
   const co = game.pendingCoercion;
   if (co && co.victim !== localPlayer) return `${co.source} (Coercion)`;
+  // A forced discard is the DISCARDING player's choice (Arc A 2026-07-22, the
+  // Coercion pattern) — whoever forced it waits.
+  const pd = game.pendingDiscard;
+  if (pd && pd.victim !== localPlayer) return `${pd.source} (discard)`;
   // An opponent-owned deck peek: normally their own-turn scry (holding the inactive
   // peer is harmless), but with Paranoia the ACTIVE player's companion play arms a
   // peek OWNED by the inactive controller — the placer must wait for the decision.
   const pk = game.pendingPeek;
   if (pk && pk.lp !== localPlayer) return `${pk.source} (deck peek)`;
+  // A hand reveal is the LOOKER's window (Arc A 2026-07-22) — the hand's owner
+  // (and anyone else) waits while they look/pick.
+  const hr = game.pendingHandReveal;
+  if (hr && hr.lp !== localPlayer) return `${hr.source} (hand reveal)`;
   // A mid-combat Armor choice owned by the opponent (defender) holds the attacker
   // until it resolves, so the attacker's broadcasts don't clobber the resolution.
   const pa = game.pendingArmor;
@@ -480,7 +488,8 @@ function runOnEnter(
       const cards = g[lp].deck.slice(0, enterPeek.look);
       if (cards.length > 0) {
         return {
-          game: { ...g, pendingPeek: { source: card.name, lp, deckSide: lp, cards, dests: enterPeek.dests, maxHand: enterPeek.maxHand } },
+          game: { ...g, pendingPeek: { source: card.name, lp, deckSide: lp, cards, dests: enterPeek.dests, maxHand: enterPeek.maxHand,
+            ...(enterPeek.reorder ? { reorder: true as const } : {}) } }, // Arc A: Herald of Despair's look-and-reorder
           local: { ...local, pendingTrigger: null, pendingKit: null },
           msg: `${card.name} enters — look at your deck.`,
         };
@@ -567,6 +576,11 @@ function runStack(game: GameState, s: StackRunCtx):
       const r = resolveReactiveEntry(g, top, deadSink, armorSink);
       g = r.game;
       toastMsgs.push(r.toast);
+      // Arc A (2026-07-22): a reactive clause that forces a discard (Tripline of
+      // Bells) PAUSES the stack — the trap's chosen discard is part of its
+      // resolution and completes before anything beneath it (LIFO), in particular
+      // before the entering companion's own ownEnter. resolveDiscard re-enters.
+      if (g.pendingDiscard) break;
       continue;
     }
 
@@ -816,6 +830,16 @@ interface GameStoreState {
   /** Dead-Zone recovery: take the dead card at `idx` (in the dead array) to hand. */
   resolveDeadPick: (idx: number) => void;
   cancelDeadPick: () => void;
+  /** Reorder peek (Arc A): return the looked-at cards to the TOP of the peeked deck
+   *  in the given order (a permutation of card indices; order[0] = new top). */
+  resolvePeekOrder: (order: number[]) => void;
+  /** Forced discard (Arc A): the VICTIM discards the chosen hand card, then the
+   *  queue advances and any paused trigger stack (a trap's discard) resumes. */
+  resolveDiscard: (cardId: string) => void;
+  /** Hand reveal (Arc A): the LOOKER closes the reveal — with a pick mode and a
+   *  chosen card, that card goes to the BOTTOM of its owner's deck and the owner
+   *  draws a card; null = done looking / skip the optional pick. */
+  resolveHandReveal: (cardId: string | null) => void;
   /** Equip-from-hand: equip the chosen item card onto the pending target. */
   resolveEquipPick: (handCardId: string) => void;
   cancelEquipPick: () => void;
@@ -1226,17 +1250,20 @@ export const useGameStore = create<GameStoreState>()(
       };
     }
 
-    // Deck-peek action: move to Dead Zone and open the scry modal.
+    // Deck-peek action: move to Dead Zone and open the scry modal. deck 'opp'
+    // (Arc A — Recite the Ledger) peeks the OPPONENT's deck; reorder passes
+    // through to the modal's "put back in any order" mode.
     const peek = onPlay.find(e => e.op === 'deckPeek');
     if (peek && peek.op === 'deckPeek') {
-      const cards = g0[lp].deck.slice(0, peek.look);
+      const peekSide: 'p1' | 'p2' = peek.deck === 'opp' ? (lp === 'p1' ? 'p2' : 'p1') : lp;
+      const cards = g0[peekSide].deck.slice(0, peek.look);
       const newHand = g0[lp].hand.filter(c => c.id !== handCardId);
       if (cards.length === 0) {
         return { game: { ...g0, [lp]: { ...g0[lp], hand: newHand, dead: [...g0[lp].dead, card] } }, pendingPlay: null, toasts: [...s.toasts, ...mkToasts(riderMsgs), mkToast(`${card.name} — deck is empty.`)] };
       }
       return {
         game: { ...g0, [lp]: { ...g0[lp], hand: newHand, dead: [...g0[lp].dead, card] },
-          pendingPeek: { source: card.name, lp, deckSide: lp, cards, dests: peek.dests, maxHand: peek.maxHand } },
+          pendingPeek: { source: card.name, lp, deckSide: peekSide, cards, dests: peek.dests, maxHand: peek.maxHand, ...(peek.reorder ? { reorder: true as const } : {}) } },
         pendingPlay: null,
         toasts: [...s.toasts, ...mkToasts(riderMsgs)],
       };
@@ -1623,7 +1650,8 @@ export const useGameStore = create<GameStoreState>()(
     const peekEff = ability.effects.find(e => e.op === 'deckPeek');
     if (peekEff && peekEff.op === 'deckPeek') {
       const built = buildPeek(g, { source: ability.sourceName, lp: player, deckSide: player,
-        look: peekEff.look, dests: peekEff.dests, maxHand: peekEff.maxHand, deck: peekEff.deck });
+        look: peekEff.look, dests: peekEff.dests, maxHand: peekEff.maxHand, deck: peekEff.deck,
+        ...(peekEff.reorder ? { reorder: true as const } : {}) });
       if (!built) {
         return { game: armPrompts(g, deadSink, armorSink), toasts: [...s.toasts, toast(`${ability.sourceName} — the deck is empty.`)] };
       }
@@ -1715,7 +1743,8 @@ export const useGameStore = create<GameStoreState>()(
     const stack = s.game.triggerStack;
     const top = stack?.[stack.length - 1];
     if (!top) return s;
-    if (s.game.pendingTriggerOrder || s.game.pendingPeek || s.game.pendingArmor || s.game.pendingPreventOrder) return s; // paused on a prompt, not a hand-off
+    if (s.game.pendingTriggerOrder || s.game.pendingPeek || s.game.pendingArmor || s.game.pendingPreventOrder
+      || s.game.pendingDiscard || s.game.pendingHandReveal) return s; // paused on a prompt, not a hand-off
     if (top.kind === 'ownEnter' && s.conn.mode !== 'solo' && top.controller !== s.localPlayer) return s;
     const r = runStack(s.game, s);
     return { ...r.local, game: r.game, toasts: [...s.toasts, ...mkToasts(r.toastMsgs)] };
@@ -1786,6 +1815,36 @@ export const useGameStore = create<GameStoreState>()(
       game: armNextItemTransfer(g),
       toasts: [...s.toasts, { id, msg: `${pk.source}: ${parts.join(', ')}` }, ...mkToasts(stackMsgs)],
     };
+  }),
+
+  // ── Reorder peek (Arc A, 2026-07-22): "put them back in any order" ───────────
+  resolvePeekOrder: (order) => set(s => {
+    if (gameIsOver(s.game)) return s;
+    const pk = s.game.pendingPeek;
+    if (!pk || !pk.reorder) return s;
+    if (s.conn.mode !== 'solo' && pk.lp !== s.localPlayer) return s; // owner-gated
+    const n = pk.cards.length;
+    if (order.length !== n || new Set(order).size !== n || order.some(i => !Number.isInteger(i) || i < 0 || i >= n)) return s; // must be a permutation
+    const side = pk.deckSide;
+    const ps = s.game[side];
+    const below = ps.deck.slice(n);
+    let g: GameState = { ...s.game, pendingPeek: null, [side]: { ...ps, deck: [...order.map(i => pk.cards[i]), ...below] } };
+    // Same resumption chain as resolvePeek: a paused trigger stack first, then any
+    // queued start-of-turn peeks.
+    let local: Partial<GameStoreState> = {};
+    const stackMsgs: string[] = [];
+    if (g.triggerStack?.length) {
+      const r = runStack(g, s);
+      g = r.game; local = r.local; stackMsgs.push(...r.toastMsgs);
+    }
+    if (!g.pendingPeek) {
+      const { peek, rest } = nextPeek(g, g.pendingPeekQueue);
+      g = { ...g, pendingPeek: peek, pendingPeekQueue: rest };
+    }
+    const id = ++toastId;
+    setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 4000);
+    return { ...local, game: armNextItemTransfer(g),
+      toasts: [...s.toasts, { id, msg: `${pk.source}: ${n} card${n !== 1 ? 's' : ''} put back in the chosen order` }, ...mkToasts(stackMsgs)] };
   }),
 
   cancelPeek: () => set(s => {
@@ -2051,6 +2110,7 @@ export const useGameStore = create<GameStoreState>()(
       // Old saves stored a winner NAME in gameOver; only the side form is valid now.
       gameOver: sg.gameOver === 'p1' || sg.gameOver === 'p2' ? sg.gameOver : null,
       pendingPeek: null, pendingPeekQueue: [], pendingDeadPick: null, pendingDeadPickQueue: [], pendingPoison: null, pendingCoercion: null, pendingArmor: null, pendingAttackChoice: null,
+      pendingDiscard: undefined, pendingDiscardQueue: undefined, pendingHandReveal: undefined,
       // Transfer windows are safe to drop: the items already sit in the Dead Zone.
       // Modal choices too: the cost is unpaid until resolved, so nothing is lost.
       pendingItemTransfer: null, pendingItemTransferQueue: [],
@@ -2764,6 +2824,66 @@ export const useGameStore = create<GameStoreState>()(
     // Poison resolved — Item Transfer windows may now arm (Rules Note 2026-07-08:
     // the Poison check resolves BEFORE any transfer window).
     return { game: armNextItemTransfer({ ...g, pendingPoison: null }) };
+  }),
+
+  // ── Forced discard (Arc A, 2026-07-22): the VICTIM's choice, Coercion's pattern ──
+  resolveDiscard: (cardId) => set(s => {
+    if (gameIsOver(s.game)) return s;
+    const pd = s.game.pendingDiscard;
+    if (!pd) return s;
+    // Only the discarding player resolves it (multiplayer); sandbox controls both seats.
+    if (s.conn.mode !== 'solo' && pd.victim !== s.localPlayer) return s;
+    const ps = s.game[pd.victim];
+    const card = ps.hand.find(c => c.id === cardId);
+    if (!card) return s; // not a hand card — prompt stays armed (Coercion's idiom)
+    let g: GameState = { ...s.game,
+      [pd.victim]: { ...ps, hand: ps.hand.filter(c => c.id !== cardId), dead: [...ps.dead, card] } };
+    // Advance the queue, skipping entries whose victim ran out of cards meanwhile.
+    const rest = [...(g.pendingDiscardQueue ?? [])];
+    let next: PendingDiscard | undefined;
+    while (rest.length) {
+      const cand = rest.shift()!;
+      if (g[cand.victim].hand.length > 0) { next = cand; break; }
+    }
+    g = { ...g, pendingDiscard: next, pendingDiscardQueue: rest.length ? rest : undefined };
+    // A paused trigger stack resumes once every queued discard is settled (a trap's
+    // discard pauses before the entering companion's own ownEnter — Arc A).
+    let local: Partial<GameStoreState> = {};
+    const stackMsgs: string[] = [];
+    if (!g.pendingDiscard && g.triggerStack?.length) {
+      const r = runStack(g, s);
+      g = r.game; local = r.local; stackMsgs.push(...r.toastMsgs);
+    }
+    const id = ++toastId;
+    setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 4000);
+    return { ...local, game: armNextItemTransfer(g),
+      toasts: [...s.toasts, { id, msg: `${pd.source}: ${card.name} discarded` }, ...mkToasts(stackMsgs)] };
+  }),
+
+  // ── Hand reveal (Arc A, 2026-07-22): the LOOKER's window ────────────────────
+  resolveHandReveal: (cardId) => set(s => {
+    if (gameIsOver(s.game)) return s;
+    const hr = s.game.pendingHandReveal;
+    if (!hr) return s;
+    // Only the looker resolves it (multiplayer); sandbox controls both seats.
+    if (s.conn.mode !== 'solo' && hr.lp !== s.localPlayer) return s;
+    let g: GameState = { ...s.game, pendingHandReveal: undefined };
+    let msg = `${hr.source}: done looking`;
+    if (hr.pick === 'toBottomDraw' && cardId) {
+      const vs = g[hr.handSide];
+      const card = vs.hand.find(c => c.id === cardId);
+      if (!card) return s; // not a hand card — prompt stays armed
+      // Canon-literal (Mark the Pockets): the chosen card goes to the BOTTOM of its
+      // owner's deck, then that player draws a card (with an empty deck they draw
+      // the bottomed card right back — the text offers no exception).
+      const bottomed = { ...vs, hand: vs.hand.filter(c => c.id !== cardId), deck: [...vs.deck, card] };
+      const drawn = bottomed.deck[0];
+      g = { ...g, [hr.handSide]: { ...bottomed, deck: bottomed.deck.slice(1), hand: [...bottomed.hand, drawn] } };
+      msg = `${hr.source}: ${card.name} put on the bottom of ${vs.name}'s deck — they draw a card`;
+    }
+    const id = ++toastId;
+    setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 4000);
+    return { game: armNextItemTransfer(g), toasts: [...s.toasts, { id, msg }] };
   }),
 
   // ── Coercion resolution (the VICTIM's choice: discard or sacrifice) ────────

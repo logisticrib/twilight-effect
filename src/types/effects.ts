@@ -124,10 +124,21 @@ export type Effect =
   | { op: 'buff'; stat?: 'atk' | 'hp'; amount?: number; grant?: string[]; modifiers?: Modifier[]; scope: TargetSpec; duration: 'endOfTurn' | 'while'; where?: { line?: 'front' | 'back'; cls?: string } }
   // card / zone movement
   | { op: 'draw'; count: number; if?: Condition }
+  // discard (Arc A, 2026-07-22): the DISCARDING player chooses the card (owner
+  // agency, the Coercion precedent). Engine-supported victim scopes: targetPlayer
+  // (the opponent), damagedController (combat ctx), eventSubject (the subject's
+  // controller — trap windows). `random` remains unimplemented.
   | { op: 'discard'; count: number; target: TargetSpec; random?: boolean }
   | { op: 'mill'; count: number; target: TargetSpec }
   | { op: 'shuffleHandRedraw'; offset?: number }  // opponent shuffles hand into deck, redraws (handSize + offset); Convergence Sigil uses offset -1
-  | { op: 'deckPeek'; look: number; dests: ('hand' | 'top' | 'bottom')[]; maxHand?: number; deck?: 'any' }  // scry/select; deck 'any' = controller chooses whose (2026-07-16)
+  // deckPeek: deck 'any' = controller chooses whose (2026-07-16); deck 'opp' = the
+  // opponent's deck (Arc A); reorder = "put them back in any order" — all looked-at
+  // cards return to the top in a chosen sequence (resolvePeekOrder), dests ignored.
+  | { op: 'deckPeek'; look: number; dests: ('hand' | 'top' | 'bottom')[]; maxHand?: number; deck?: 'any' | 'opp'; reorder?: boolean }
+  // revealHand (Arc A, 2026-07-22): look at the opponent's hand. With pick
+  // 'toBottomDraw' the looker may choose a card — bottom of its owner's deck, then
+  // that player draws (Mark the Pockets).
+  | { op: 'revealHand'; pick?: 'toBottomDraw' }
   // itemKind narrows an Item recovery to Weapon/Armor/Trinket ("return target Weapon" —
   // Fence's Ledger, dev deck 2026-07-22); optional makes the pick skippable ("you may").
   | { op: 'returnFromDead'; cardType?: string; itemKind?: string; optional?: boolean; to: 'hand' | 'encounter' }
