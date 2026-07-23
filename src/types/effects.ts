@@ -39,9 +39,10 @@ export type Trigger =
                                     // NOT direct entry onto the front line (R4, owner 2026-07-12) (Pit Trap)
   | 'oppCompanionAttacksCompanion'  // an opposing companion declares an attack on one of YOUR companions
                                     // ("attacks" = declaration; resolves before damage — R2) (Iron Spikes)
-  | 'oppCompanionFlees'             // an opposing companion FLEES (Ready Phase Willpower exit) — the NARROW,
-                                    // text-literal event (Arc C 2026-07-23, Dread Chorister): flee-is-a-sacrifice
-                                    // canon does NOT widen this to all sacrifices; fired per flee event
+  | 'oppCompanionFlees'             // an opposing companion FLEES (Ready Phase Willpower exit). NARROW is
+                                    // OWNER-RULED (2026-07-23): "flees" means flees — never other sacrifices
+                                    // (flee-is-a-sacrifice governs what a flee IS, not what "flees" wording
+                                    // listens to). Fired per flee event (Dread Chorister)
   // On-play window (arc 4, owner-ratified 2026-07-15). "Play" means FROM HAND,
   // universally (R1 2026-07-15, generalizing the 2026-07-04 Paranoia ruling):
   // placements, Animate Magic conversions, and every other entry-into-play route

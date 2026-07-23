@@ -76,8 +76,8 @@ export interface ReadyRemovalsResult {
   sacrificed: BoardEntity[];
   /** The FLEE subset of `sacrificed` (Arc C, 2026-07-23): flee-specific listeners
    *  (Dread Chorister's "whenever an opposing companion flees") fire for these and
-   *  ONLY these — the narrow, text-literal reading. `kind` alone cannot identify a
-   *  flee: a Manifest is a companion that can also DECAY. */
+   *  ONLY these — narrow is OWNER-RULED 2026-07-23 ("flees" means flees). `kind`
+   *  alone cannot identify a flee: a Manifest is a companion that can also DECAY. */
   fled: BoardEntity[];
 }
 
@@ -219,9 +219,10 @@ export function runReadyPhase(game: GameState, side: 'p1' | 'p2', whose: string)
     g = st.game;
     notices.push(...st.msgs);
     // FLEE-specific listeners (Arc C, 2026-07-23 — Dread Chorister): fire the
-    // OPPONENT's 'oppCompanionFlees' carriers per flee event, NARROW reading —
-    // "flees" is narrower than "is sacrificed" (flee-is-a-sacrifice canon makes
-    // the wide reading defensible; the card says "flees" — owner may widen).
+    // OPPONENT's 'oppCompanionFlees' carriers per flee event. NARROW is
+    // OWNER-RULED (2026-07-23): "flees" means flees — flee-is-a-sacrifice governs
+    // what a flee IS, not what "flees" wording listens to. SETTLED; the decay/
+    // sacrifice-silent pins are the permanent guard.
     // Ordering note: fired after the event's own death machinery, within the same
     // sequential event — the existing auto-order STOPGAP (design note 2026-07-21)
     // extended to the cross-owner pair; no outcome-relevant ordering exists among
