@@ -30,12 +30,21 @@ try {
     console.warn(`⚠ ${gaps.length} AUTHORING GAP(S) — rules text with no effects (owner triage pending):`);
     for (const g of gaps) console.warn(`  - ${g}`);
   }
+  // DEV-deck machinery debt (2026-07-22): dev cards whose behavior awaits an engine
+  // arc carry a "DEV NOT-IMPLEMENTED" effectsFlag. Reported loudly, never fatal —
+  // visible debt, no silent gaps.
+  const devDebt = CATALOG.filter(c => c.dev && c.effectsFlag?.startsWith('DEV NOT-IMPLEMENTED'));
+  if (devDebt.length) {
+    console.warn(`⚠ ${devDebt.length} DEV card(s) await engine machinery (NOT-IMPLEMENTED, non-fatal):`);
+    for (const c of devDebt) console.warn(`  - ${c.name}: ${c.effectsFlag}`);
+  }
   if (fatal.length) {
     console.error(`✗ deck validation failed — ${fatal.length} problem(s):`);
     for (const problem of fatal) console.error(`  - ${problem}`);
     process.exitCode = 1;
   } else {
-    console.log(`✓ ${CATALOG.length} cards validate clean (both decks)${gaps.length ? ` — ${gaps.length} authoring gaps flagged above` : ''}`);
+    const devCount = CATALOG.filter(c => c.dev).length;
+    console.log(`✓ ${CATALOG.length} cards validate clean (${CATALOG.length - devCount} shipped + ${devCount} dev)${gaps.length ? ` — ${gaps.length} authoring gaps flagged above` : ''}${devDebt.length ? ` — ${devDebt.length} dev NOT-IMPLEMENTED flags listed above` : ''}`);
   }
 } finally {
   await server.close();

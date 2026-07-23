@@ -486,10 +486,12 @@ export function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceNam
         // `pendingDeadPick`); otherwise auto-pick the most-recent eligible card.
         if (e.to !== 'hand') break;
         const dead = g[lp].dead;
-        const options = dead.map((card, idx) => ({ card, idx })).filter(o => !e.cardType || o.card.type === e.cardType);
+        const options = dead.map((card, idx) => ({ card, idx }))
+          .filter(o => !e.cardType || o.card.type === e.cardType)
+          .filter(o => !e.itemKind || o.card.itemKind === e.itemKind);
         if (options.length === 0) { msgs.push('Dead Zone has no eligible card'); break; }
         if (sink) {
-          sink.push({ source: sourceName, lp, sourceId, options, postEffects: [], optional: false });
+          sink.push({ source: sourceName, lp, sourceId, options, postEffects: [], optional: e.optional ?? false });
           msgs.push('Choose a card to return from the Dead Zone');
           break;
         }

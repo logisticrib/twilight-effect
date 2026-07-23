@@ -4,7 +4,7 @@
 // the validator actually catches each class of authoring mistake.
 import { describe, it, expect } from 'vitest';
 import { validateCards } from '../data/validateCards';
-import { CATALOG } from '../data/catalog';
+import { CATALOG, SHIPPED_CATALOG, DW_ROGUE_DEV_CARDS } from '../data/catalog';
 import type { Card } from '../types/card';
 
 const base = CATALOG[0];
@@ -28,8 +28,26 @@ describe('data contract: the shipped decks validate clean', () => {
   // the capability program is CLOSED: zero flags. This pin now guards the
   // convention itself: any future effectsFlag must be a deliberate, owner-dated
   // deferral that updates this list by name.
-  it('ZERO deferred gaps remain (capability program closed 2026-07-15)', () => {
-    expect(CATALOG.filter(c => c.effectsFlag).map(c => c.name)).toEqual([]);
+  // RETIRED + REWRITTEN dated 2026-07-22 (dev-deck program): the SHIPPED-pool
+  // assertion is unchanged — zero shipped flags, capability program stays closed.
+  // The owner-authored DEV deck (dw_rogue_dev_50, every card dev:true, NON-CANON)
+  // is the sanctioned exception: its flags are visible machinery debt, and every
+  // one must start "DEV " ("DEV NOT-IMPLEMENTED …" = debt for a named arc;
+  // "DEV reminder-only …" = prose fully carried by the printed keyword).
+  it('ZERO deferred gaps remain on SHIPPED cards (capability program closed 2026-07-15; dev-deck carve-out 2026-07-22)', () => {
+    expect(CATALOG.filter(c => !c.dev && c.effectsFlag).map(c => c.name)).toEqual([]);
+  });
+
+  it('dev-card effectsFlags follow the DEV convention (visible debt, never silent)', () => {
+    const badDevFlags = CATALOG.filter(c => c.dev && c.effectsFlag && !c.effectsFlag.startsWith('DEV '));
+    expect(badDevFlags.map(c => c.name)).toEqual([]);
+  });
+
+  it('dev cards are flagged dev:true, exactly the dw_rogue_dev_50 deck, and SHIPPED_CATALOG excludes them', () => {
+    expect(CATALOG.filter(c => c.dev).length).toBe(50);
+    expect(DW_ROGUE_DEV_CARDS.every(c => c.dev === true)).toBe(true);
+    expect(SHIPPED_CATALOG.length).toBe(CATALOG.length - 50);
+    expect(SHIPPED_CATALOG.some(c => c.dev)).toBe(false);
   });
 });
 

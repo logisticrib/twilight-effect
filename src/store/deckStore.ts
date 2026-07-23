@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { SORCERER_WARRIOR_DECK, WIZARD_BUILDER_DECK } from '../data/catalog';
+import { SORCERER_WARRIOR_DECK, WIZARD_BUILDER_DECK, DW_ROGUE_DEV_DECK } from '../data/catalog';
 
 export interface Deck {
   id: string;
@@ -28,6 +28,8 @@ interface DeckState {
 const SEED: Deck[] = [
   makeDeck('sw', 'Sorcerer / Warrior', SORCERER_WARRIOR_DECK),
   makeDeck('wb', 'Wizard / Builder',   WIZARD_BUILDER_DECK),
+  // DEV deck (2026-07-22): owner-authored, non-canon — clearly marked in the name.
+  makeDeck('dwr-dev', 'DW / Rogue (DEV)', DW_ROGUE_DEV_DECK),
 ];
 
 export const useDeckStore = create<DeckState>()(
@@ -70,7 +72,20 @@ export const useDeckStore = create<DeckState>()(
           }),
         })),
     }),
-    { name: 'twilight-decks' }
+    {
+      name: 'twilight-decks',
+      // The store persists; without this a returning browser would keep its stored
+      // deck list and never see newly seeded decks (the DEV deck, 2026-07-22).
+      // Inject any seed deck whose id is missing; user-made decks are untouched.
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<DeckState>;
+        const decks = [...(p.decks ?? current.decks)];
+        for (const seed of SEED) {
+          if (!decks.some(d => d.id === seed.id)) decks.push(seed);
+        }
+        return { ...current, ...p, decks };
+      },
+    }
   )
 );
 

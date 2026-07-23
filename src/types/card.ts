@@ -30,6 +30,11 @@ export interface RawCard {
    *  (dated) — never set without an explicit owner ruling (check added 2026-07-08:
    *  a prose-only card must not mint silently). */
   effectsFlag?: string;
+  /** NON-CANON dev card (owner-authored dev decks, 2026-07-22). Dev cards are playable
+   *  and fully validated, but must be EXCLUDED from shipped-pool queries and coverage
+   *  audits' "shipped" counts. On dev cards, effectsFlag strings start "DEV " —
+   *  "DEV NOT-IMPLEMENTED …" marks visible machinery debt (tier4 pins the convention). */
+  dev?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }

@@ -153,6 +153,7 @@ function validateEffect(e: Effect, path: string, p: (msg: string) => void, keywo
     }
     case 'returnFromDead':
       if (e.to !== 'hand' && e.to !== 'encounter') p(`${path}(returnFromDead): bad to "${String(e.to)}"`);
+      if (e.itemKind !== undefined && !has(ITEM_KINDS, e.itemKind)) p(`${path}(returnFromDead): bad itemKind "${String(e.itemKind)}"`);
       break;
     case 'search':
       if (typeof e.cardType !== 'string' || !e.cardType) p(`${path}(search): cardType required`);
@@ -238,7 +239,11 @@ const proseTokens = (s: string): string[] =>
  *  (Heavy / Two-Handed / One-Handed) from a sentence — what survives is candidate
  *  rules prose. Case-insensitive literal removal (no regex-escaping pitfalls). */
 function stripKeywordNames(sentence: string): string {
-  let t = ` ${sentence} `;
+  // "X's Bane" first (2026-07-22): the parameterized Bane NAME must be stripped as a
+  // phrase BEFORE the literal loop removes the "Bane" token and breaks the pattern
+  // (latent ordering flaw — unreachable while no card printed a Bane keyword line;
+  // the dev deck's Paladin's/Druid's Bane carriers exposed it).
+  let t = ` ${sentence} `.replace(/\b\w+'s bane\b/gi, ' ');
   for (const n of [...Object.keys(KEYWORD_DEFS), 'Heavy', 'Two-Handed', 'One-Handed']) {
     const low = n.toLowerCase();
     for (;;) {

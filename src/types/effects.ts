@@ -128,7 +128,9 @@ export type Effect =
   | { op: 'mill'; count: number; target: TargetSpec }
   | { op: 'shuffleHandRedraw'; offset?: number }  // opponent shuffles hand into deck, redraws (handSize + offset); Convergence Sigil uses offset -1
   | { op: 'deckPeek'; look: number; dests: ('hand' | 'top' | 'bottom')[]; maxHand?: number; deck?: 'any' }  // scry/select; deck 'any' = controller chooses whose (2026-07-16)
-  | { op: 'returnFromDead'; cardType?: string; to: 'hand' | 'encounter' }
+  // itemKind narrows an Item recovery to Weapon/Armor/Trinket ("return target Weapon" —
+  // Fence's Ledger, dev deck 2026-07-22); optional makes the pick skippable ("you may").
+  | { op: 'returnFromDead'; cardType?: string; itemKind?: string; optional?: boolean; to: 'hand' | 'encounter' }
   | { op: 'search'; cardType: string }
   // board manipulation
   | { op: 'move'; target: TargetSpec; to: 'anySlot' | 'adjacent'; forced?: boolean }
