@@ -180,7 +180,7 @@ export function batchOrderer(items: ReactiveStackEntry[]): 'p1' | 'p2' {
       `Rules Note's structural queue order (the active player's triggers queue onto ` +
       `the stack first, the non-active player's above them — theirs resolve first) ` +
       `with a per-owner ordering prompt before shipping a card that creates this ` +
-      `case. Batch: ${items.map(it => `${'sourceName' in it ? it.sourceName : it.kind}@${it.controller}`).join(', ')}`);
+      `case. Batch: ${items.map(it => `${it.sourceName ?? it.kind}@${it.controller}`).join(', ')}`);
   }
   return owner;
 }

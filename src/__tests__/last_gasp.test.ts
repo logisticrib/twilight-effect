@@ -11,8 +11,6 @@ import { gs, freshGame, mkComp, mkConstruct } from './helpers';
 import { CATALOG } from '../data/catalog';
 import type { Card } from '../types/card';
 
-const compCard = CATALOG.find(c => c.type === 'Companion')!;
-
 afterEach(() => {
   for (let i = CATALOG.length - 1; i >= 0; i--) {
     if (String(CATALOG[i].id).startsWith('syn-lg-')) CATALOG.splice(i, 1);

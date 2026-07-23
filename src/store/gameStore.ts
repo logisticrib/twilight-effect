@@ -8,7 +8,7 @@ import { recomputeStatics, isImmuneToSplash, HIT_RUN_STATUS,
          isPhysicalConstruct, parseEnterTrigger, type EnterTriggerKind,
          isCharacter, firstItemOf, allItemsOf, canHoldItem, effectiveAttack, effectiveKeywords, effectiveMaxHp, wardedLines,
          canPlayActionCard, specialActionActor, minorActionReason, actionTypeOf, currentWillpower, parseBanes,
-         POISONED_STATUS, parseAnimateMagic, hasBackLineAttackAura,
+         POISONED_STATUS, parseAnimateMagic,
          attackRestrictedBy, moveRestrictedBy,
          canAttackFromPosition, isLegalAttackTarget, bindingGuardianIds, legalAttackTargetIds } from './keywords';
 
@@ -16,23 +16,23 @@ import { recomputeStatics, isImmuneToSplash, HIT_RUN_STATUS,
 // external import sites don't churn during the extraction (see src/engine/index.ts).
 export * from '../engine';
 import { ADJ, FRONT_SLOTS, BACK_SLOTS, isFront, findSlot, type SlotId, type Board,
-         type Phase, type PlayerState, type GameState,
+         type Phase, type GameState,
          type PendingCoercion, type PendingDeadPick,
          type AttackCtx, type ArmorChoiceData,
          type PendingItemTransfer, type StackEntry,
          gatherParanoia, gatherReactive, gatherOwnPlay, pushStack, setStack, resolveReactiveEntry,
          orderedForStack, batchOrderer, resolveCombatTriggers, combatTriggerEffects,
-         findEntityAnywhere, updateEntity, removeEntity, deadCardsOf,
-         itemTransferOf, itemProfileOf, itemTransferCandidates, armNextItemTransfer,
+         findEntityAnywhere, updateEntity, removeEntity,
+         itemProfileOf, itemTransferCandidates, armNextItemTransfer,
          setPcHp, payPcHp, pcIdOf, charsOf,
          ownPhysicalConstructIds,
          eligibleTargets, effectsWouldAffectSomething, actionTargetSpec, twoStepKind,
          permanentEffects, gatherActivated, abilityUsedTag, magicCtx,
-         destroyEntity, fireSacrificeTriggers, applyDamage, applyCombatHit, driveAttack, optionalAttackAbility,
+         destroyEntity, applyDamage, applyCombatHit, driveAttack, optionalAttackAbility,
          attackDamageBonus, resolveActionEffects, armPrompts, armNextArmorChoice,
          applyArmorCounter, applyPreventionOrder, armNextPreventOrder,
-         freshActs, uid, computeWillpower, makeNewGame, nextPeek, buildPeek, resolveStartOfTurn,
-         controlsPreventAnchorDecay, equipOnto, kitDests, runReadyPhase } from '../engine';
+         freshActs, uid, computeWillpower, makeNewGame, nextPeek, buildPeek,
+         equipOnto, kitDests, runReadyPhase } from '../engine';
 
 export type PlayPhase = 'lobby' | 'setup' | 'game';
 /** 'placing-pc' = waiting for the local player to choose a Back Line slot */
