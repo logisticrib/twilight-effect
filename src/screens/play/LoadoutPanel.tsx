@@ -108,7 +108,7 @@ function computeActions(
   // Zealous bypasses the entry-turn ("fresh") restriction for attacks (only).
   const attackOk = !sealed && !acts.major && !isExhausted && (!fresh || zealous) && (!isPC || hasWeapon) && canAttackFromPos && !attackRestricted;
   const attackReason = sealed ? 'Activation finished' :
-    attackRestricted ? `Cannot attack — ${attackRestricted} (opposing aura)` :
+    attackRestricted ? `Cannot attack — ${attackRestricted}` :
     !canAttackFromPos ? 'Must be in Front Line (or have Ranged)' :
     isPC && !hasWeapon ? 'Needs a weapon' :
     fresh && !zealous ? 'Cannot attack on its entry turn' :

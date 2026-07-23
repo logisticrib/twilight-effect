@@ -29,7 +29,7 @@ const TRIGGERS = [
   'onKill', 'onDeath', 'onDestroy', 'onLeave', 'startOfTurn', 'endOfTurn',
   'onOpponentAction', 'activated',
   // Reactive trap windows (trigger-stack arc, owner-ratified 2026-07-12).
-  'oppCompanionEnters', 'oppCompanionMovesToFront', 'oppCompanionAttacksCompanion',
+  'oppCompanionEnters', 'oppCompanionMovesToFront', 'oppCompanionAttacksCompanion', 'oppCompanionFlees',
   'ownPlaysMagicalConstruct', 'ownPhysicalConstructSacrificed', 'onEquippedPlaysMagicAction',
 ] as const satisfies readonly Trigger[];
 export type _ExhaustiveTriggers = AssertNever<Exclude<Trigger, (typeof TRIGGERS)[number]>>;
@@ -65,7 +65,7 @@ export type _ExhaustiveCosts = AssertNever<Exclude<Cost['kind'], (typeof COST_KI
 
 const CONDITION_KINDS = [
   'controlsType', 'controlsCount', 'willpowerAtLeast', 'targetIsSubtype',
-  'damagedIsEnemyCompanion', 'killedIsCompanion', 'killedIsPhysicalConstruct',
+  'damagedIsEnemyCompanion', 'killedIsCompanion', 'killedIsPhysicalConstruct', 'diedToDamage',
 ] as const satisfies readonly Condition['kind'][];
 export type _ExhaustiveConditions = AssertNever<Exclude<Condition['kind'], (typeof CONDITION_KINDS)[number]>>;
 

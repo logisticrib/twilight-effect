@@ -39,7 +39,11 @@ describe('R1 — "cannot" beats "can" (Crystalline Sentinel: "Opposing back-line
     gs.getState().beginAttack('ra-1');
     expect(gs.getState().pending, 'declaration refused (no pending attack armed)').toBeNull();
     const loc = { ent: gs.getState().game.p1.board.b1!, slot: 'b1' as const };
-    expect(attackRestrictedBy(gs.getState().game, loc.ent, 'p1', loc.slot), 'the gate names the restricting source').toBe('Crystalline Sentinel');
+    // REWRITTEN dated 2026-07-23 (Arc C carried item): attackRestrictedBy now returns
+    // the LABELED reason — "<source> (opposing aura)" for auras, "<source> (cannot
+    // attack)" for modifier restrictions — so consumers stop hardcoding the aura
+    // suffix (the Arc B Doubt mislabel). Substance unchanged: the source is named.
+    expect(attackRestrictedBy(gs.getState().game, loc.ent, 'p1', loc.slot), 'the gate names the restricting source').toBe('Crystalline Sentinel (opposing aura)');
   });
 
   it('Watchtower interop: aura-granted eligibility is ALSO overridden (permission then restriction)', () => {

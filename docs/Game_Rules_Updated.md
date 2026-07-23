@@ -216,6 +216,9 @@ Companions whose Level exceeds your current Willpower flee at the start of your 
 - HP can be restored, but never above the character's maximum HP
 - HP does not heal automatically at the end of a turn
 
+**Attack Modifiers:**
+- **Rules Note (owner-ruled 2026-07-23) — Attack modifiers sum, then clamp (no stat-level floor).** Attack modifiers accumulate on the raw value; whenever the game READS a character's attack — for damage, for display, for any effect that reads attack — it reads max(0, sum). The raw tally may be negative: a character at a raw −1 that later gains +1 reads 0, not 1. Rationale: order-independence — physical play tallies modifiers and clamps once at read time; a stat-level floor would make outcomes depend on the order modifiers were applied, which paper cannot track.
+
 **Attack Eligibility:**
 A character may only initiate an attack if it is in the Front Line, unless it has the Ranged keyword. A character with Ranged may initiate an attack from either the Front Line or the Back Line.
 

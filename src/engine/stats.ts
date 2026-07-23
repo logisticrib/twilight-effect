@@ -211,11 +211,10 @@ function itemAndAuraStat(ent: BoardEntity, game: GameState, stat: 'atk' | 'hp'):
  * static auras you control + temporary buffs.
  */
 export function effectiveAttack(ent: BoardEntity, game: GameState): number {
-  // NOTE (Arc B open question, 2026-07-23): the raw sum may go negative (Whispers
-  // of the West on a 1-attack companion = −1); this pre-existing clamp floors the
-  // VALUE at 0 for both damage and display, while storage keeps the raw entries —
-  // so a later +1 sees the raw −1 (sum-then-clamp). Whether negative attack should
-  // instead be 0 for all purposes is flagged for the owner, not ruled here.
+  // SUM-THEN-CLAMP IS CANON (owner-ruled 2026-07-23; GRU §Core Mechanics, Attack
+  // Modifiers): modifiers accumulate on the raw value — which may go negative —
+  // and every READ of attack is max(0, sum). A raw −1 given +1 later reads 0.
+  // Rationale: order-independence (paper tallies modifiers, clamps once at read).
   return Math.max(0, (ent.atk ?? 0) + itemAndAuraStat(ent, game, 'atk') + buffStat(ent, 'atk', game));
 }
 
@@ -414,8 +413,12 @@ export function attackRestrictedBy(game: GameState, ent: BoardEntity, controller
   // is the single attacker-side gate, so beginAttack, resolveAttack, and the
   // LoadoutPanel button all inherit it. buffActive keeps a dormant ("controller's
   // NEXT turn", cast mid-turn) or off-window entry inert.
+  // RETURN VALUE (labeled 2026-07-23): the full display reason incl. its kind —
+  // "<source> (cannot attack)" for modifiers, "<source> (opposing aura)" for
+  // restriction auras — so consumers stop hardcoding the aura suffix (the Arc B
+  // cosmetic mislabel: Doubt is a modifier, not an aura).
   const ca = ent.buffs?.find(b => b.modifiers?.includes('cannotAttack') && buffActive(b, game));
-  if (ca) return ca.source ?? 'an effect';
+  if (ca) return `${ca.source ?? 'an effect'} (cannot attack)`;
   const opp: 'p1' | 'p2' = controller === 'p1' ? 'p2' : 'p1';
   for (const src of Object.values(game[opp].board)) {
     if (!src) continue;
@@ -424,7 +427,7 @@ export function attackRestrictedBy(game: GameState, ent: BoardEntity, controller
       for (const e of ce.effects) {
         if (e.op !== 'restrictAttack') continue;
         if (e.where?.line && (e.where.line === 'front') !== isFront(slot)) continue;
-        return src.name;
+        return `${src.name} (opposing aura)`;
       }
     }
   }

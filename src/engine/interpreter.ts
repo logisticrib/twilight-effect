@@ -11,7 +11,7 @@ import { isFront } from './geometry';
 import type { GameState, PendingDeadPick, ArmorChoiceData } from './state';
 import { charsOf, companionIds, constructIds, findEntityAnywhere, updateEntity,
          removeEntity, destroyEntity, setPcHp, pcIdOf, itemCardsOf, itemTransferOf } from './entities';
-import { isPhysicalConstruct, currentWillpower, effectiveAttack, effectiveMaxHp } from './stats';
+import { isPhysicalConstruct, currentWillpower, effectiveAttack, effectiveMaxHp, isImmuneToSplash } from './stats';
 // Function-level cycle with combat.ts (resolveActionEffects deals damage; combat
 // triggers resolve effects). Safe: hoisted functions, called only at runtime.
 import { applyDamage } from './combat';
@@ -329,6 +329,8 @@ export function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceNam
         if (e.splash === 'board' || e.target === 'allEnemies') targets = charsOf(g, opp);
         else if (e.target === 'frontLineEnemy') targets = charsOf(g, opp, 'front');
         else if (e.target === 'backLineEnemy') targets = charsOf(g, opp, 'back');
+        else if (e.target === 'allEnemyCompanions') targets = (Object.values(g[opp].board) as (BoardEntity | undefined)[])
+          .filter((x): x is BoardEntity => !!x && x.kind === 'companion').map(x => x.id); // Arc C: The Names of the Lost
         else if (e.target === 'self') { if (sourceId) targets = [sourceId]; }
         else if (e.target === 'eventSubject') { if (ctx?.subjectId && findEntityAnywhere(g, ctx.subjectId)) targets = [ctx.subjectId]; }
         else if (e.target === 'damagedController') { if (ctx?.damagedOwner) { const pid = pcIdOf(g, ctx.damagedOwner); if (pid) targets = [pid]; } }
@@ -336,7 +338,22 @@ export function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceNam
           const slot = findEntityAnywhere(g, targetId)?.slot;
           if (slot) targets = charsOf(g, opp, isFront(slot) ? 'front' : 'back');
         } else if (targetId) targets = [targetId];
+        // Acrobatics (Arc C, 2026-07-23): "cannot be damaged by any source that does
+        // not target it directly" — every GROUP recipient here is untargeted (the
+        // Cleave-splash gate reused: isImmuneToSplash). The clicked target of a
+        // line splash IS directly targeted; single-target paths (targetId /
+        // eventSubject / self / damagedController) are direct and never gated.
+        const untargeted = e.splash === 'board' || e.splash === 'line'
+          || e.target === 'allEnemies' || e.target === 'frontLineEnemy'
+          || e.target === 'backLineEnemy' || e.target === 'allEnemyCompanions';
         for (const tid of targets) {
+          if (untargeted && tid !== targetId) {
+            const tloc = findEntityAnywhere(g, tid);
+            if (tloc && isImmuneToSplash(tloc.ent, g)) {
+              msgs.push(`${tloc.ent.name} is untouched (Acrobatics)`);
+              continue;
+            }
+          }
           const r = applyDamage(g, tid, amt, sourceName, lp, sink, undefined, armorSink);
           g = r.game; msgs.push(...r.msgs);
         }

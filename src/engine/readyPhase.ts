@@ -17,6 +17,7 @@ import { HIT_RUN_STATUS, currentWillpower, isPhysicalConstruct, hasAnchorCounter
 import { deadCardsOf, itemTransferOf, fireSacrificeTriggers } from './entities';
 import { hasRemovalTrigger, resolveRemovalTriggers } from './combat';
 import { freshActs, computeWillpower, controlsPreventAnchorDecay, resolveStartOfTurn } from './lifecycle';
+import { permanentEffects, resolveActionEffects } from './interpreter';
 
 /** Step 1 — ready all permanents + flip the Class Zone (no removals here). */
 export function readyAndFlip(ps: PlayerState): PlayerState {
@@ -73,6 +74,11 @@ export interface ReadyRemovalsResult {
   /** EVERY Ready Phase sacrifice — decayed permanents AND fled companions
    *  (re-rule 2026-07-20: fleeing IS a sacrifice), in board slot order. */
   sacrificed: BoardEntity[];
+  /** The FLEE subset of `sacrificed` (Arc C, 2026-07-23): flee-specific listeners
+   *  (Dread Chorister's "whenever an opposing companion flees") fire for these and
+   *  ONLY these — the narrow, text-literal reading. `kind` alone cannot identify a
+   *  flee: a Manifest is a companion that can also DECAY. */
+  fled: BoardEntity[];
 }
 
 /** Step 3 — Ready Phase removals, run AFTER start-of-turn triggers (last gasp):
@@ -88,6 +94,7 @@ export function applyReadyRemovals(game: GameState, side: 'p1' | 'p2', whose: st
   const notices: string[] = [];
   const transfers: PendingItemTransfer[] = [];
   const sacrificed: BoardEntity[] = [];
+  const fled: BoardEntity[] = [];
   // Fleeing checks read THE current Willpower (Dismayed-adjusted; base was
   // recomputed at the flip). Dismay pressure can cause fleeing — intended
   // (owner ruling 2026-07-04).
@@ -134,6 +141,7 @@ export function applyReadyRemovals(game: GameState, side: 'p1' | 'p2', whose: st
     if (cur.kind === 'companion' && cur.level > effWP) {
       bury(cur);
       sacrificed.push(cur);
+      fled.push(cur);
       notices.push(`${whose} ${cur.name} flees — Level ${cur.level} exceeds Willpower ${effWP}.`);
       continue;
     }
@@ -142,7 +150,7 @@ export function applyReadyRemovals(game: GameState, side: 'p1' | 'p2', whose: st
   return { game: { ...game, [side]: { ...ps, board: newBoard,
     dead: buried.length ? [...ps.dead, ...buried] : ps.dead,
     hand: returnedSworn.length ? [...ps.hand, ...returnedSworn] : ps.hand } },
-    notices, transfers, sacrificed };
+    notices, transfers, sacrificed, fled };
 }
 
 export interface ReadyPhaseResult {
@@ -201,13 +209,34 @@ export function runReadyPhase(game: GameState, side: 'p1' | 'p2', whose: string)
     // listeners' own scope filters — Siegeworks is Physical-Construct-scoped and
     // stays silent for them).
     if (hasRemovalTrigger(dy)) {
-      const rt = resolveRemovalTriggers(g, dy, side, sot.deadPicks, sot.armorChoices);
+      // Ready-phase exits are SACRIFICES — a death-cause-conditional trigger
+      // ("if it died to damage", Cult Fanatic) stays silent here (Arc C).
+      const rt = resolveRemovalTriggers(g, dy, side, sot.deadPicks, sot.armorChoices, 'sacrifice');
       g = rt.game;
       notices.push(...rt.msgs);
     }
     const st = fireSacrificeTriggers(g, dy, side, eventBoard);
     g = st.game;
     notices.push(...st.msgs);
+    // FLEE-specific listeners (Arc C, 2026-07-23 — Dread Chorister): fire the
+    // OPPONENT's 'oppCompanionFlees' carriers per flee event, NARROW reading —
+    // "flees" is narrower than "is sacrificed" (flee-is-a-sacrifice canon makes
+    // the wide reading defensible; the card says "flees" — owner may widen).
+    // Ordering note: fired after the event's own death machinery, within the same
+    // sequential event — the existing auto-order STOPGAP (design note 2026-07-21)
+    // extended to the cross-owner pair; no outcome-relevant ordering exists among
+    // shipped/dev listeners today (draw vs dead-pick are independent).
+    if (rem.fled.some(f => f.id === dy.id)) {
+      const opp: 'p1' | 'p2' = side === 'p1' ? 'p2' : 'p1';
+      for (const listener of Object.values(g[opp].board)) {
+        if (!listener) continue;
+        const effs = permanentEffects(listener, 'oppCompanionFlees');
+        if (!effs.length) continue;
+        const fr = resolveActionEffects(g, opp, listener.name, effs, undefined, listener.id, undefined, sot.deadPicks, sot.armorChoices);
+        g = fr.game;
+        if (fr.msgs.length) notices.push(`${listener.name}: ${fr.msgs.join(' | ')}`);
+      }
+    }
     // This event has resolved — its permanent is not on the board for later events.
     eventBoard = Object.fromEntries(
       Object.entries(eventBoard).filter(([, e]) => e?.id !== dy.id)) as Board;

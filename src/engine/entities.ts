@@ -136,9 +136,13 @@ export function fireSacrificeTriggers(
  *  ruled 2026-07-08: all exits) — queued here, ARMED later at a resolution boundary
  *  (`armNextItemTransfer` via armPrompts / prompt resolvers), so mid-combat kills
  *  defer the window until the attack completes (owner ruling 2026-07-08).
- *  `cause: 'sacrifice'` (arc 5, 2026-07-15) marks events canon words as sacrifice —
- *  it additionally fires on-sacrifice listeners; damage deaths pass no cause. */
-export function destroyEntity(game: GameState, entityId: string, sink?: PendingDeadPick[], armorSink?: ArmorChoiceData[], cause?: 'sacrifice'): { game: GameState; msgs: string[] } {
+ *  CAUSE IS REQUIRED (Arc C, 2026-07-23): every death names its cause — 'damage'
+ *  (the applyDamage destroy branch) or 'sacrifice' (every cost/effect/ready-phase
+ *  exit; arc 5, 2026-07-15). 'sacrifice' additionally fires on-sacrifice listeners,
+ *  and death-cause-conditional removal triggers ("if it died to damage" — Cult
+ *  Fanatic) gate on it in resolveRemovalTriggers. An unknowable cause is a BUG:
+ *  the required parameter makes a new call site without one fail to compile. */
+export function destroyEntity(game: GameState, entityId: string, sink: PendingDeadPick[] | undefined, armorSink: ArmorChoiceData[] | undefined, cause: 'damage' | 'sacrifice'): { game: GameState; msgs: string[] } {
   const loc = findEntityAnywhere(game, entityId);
   if (!loc) return { game, msgs: [] };
   const dead = deadCardsOf(loc.ent);
@@ -164,7 +168,7 @@ export function destroyEntity(game: GameState, entityId: string, sink?: PendingD
   // sacrifice but runs inside readyPlayer — no shipped construct carries a death
   // trigger, so wiring it there is deferred and FLAGGED, not silently skipped.)
   if (hasRemovalTrigger(loc.ent)) {
-    const rt = resolveRemovalTriggers(g, loc.ent, loc.player, sink, armorSink);
+    const rt = resolveRemovalTriggers(g, loc.ent, loc.player, sink, armorSink, cause);
     g = rt.game;
     msgs.push(...rt.msgs);
   }

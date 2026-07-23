@@ -39,6 +39,9 @@ export type Trigger =
                                     // NOT direct entry onto the front line (R4, owner 2026-07-12) (Pit Trap)
   | 'oppCompanionAttacksCompanion'  // an opposing companion declares an attack on one of YOUR companions
                                     // ("attacks" = declaration; resolves before damage — R2) (Iron Spikes)
+  | 'oppCompanionFlees'             // an opposing companion FLEES (Ready Phase Willpower exit) — the NARROW,
+                                    // text-literal event (Arc C 2026-07-23, Dread Chorister): flee-is-a-sacrifice
+                                    // canon does NOT widen this to all sacrifices; fired per flee event
   // On-play window (arc 4, owner-ratified 2026-07-15). "Play" means FROM HAND,
   // universally (R1 2026-07-15, generalizing the 2026-07-04 Paranoia ruling):
   // placements, Animate Magic conversions, and every other entry-into-play route
@@ -90,7 +93,11 @@ export type Condition =
   // combat-trigger event gates (checked against the damage/kill event, not the board)
   | { kind: 'damagedIsEnemyCompanion' }
   | { kind: 'killedIsCompanion' }
-  | { kind: 'killedIsPhysicalConstruct' };
+  | { kind: 'killedIsPhysicalConstruct' }
+  // Death-cause gate (Arc C, 2026-07-23 — Cult Fanatic's "if it died to damage"):
+  // evaluated in resolveRemovalTriggers against destroyEntity's REQUIRED cause,
+  // never by conditionMet (whose default-true covers board-state kinds).
+  | { kind: 'diedToDamage' };
 
 // ─── Amounts (fixed or derived/random) ─────────────────────────────────────────
 // perControlled 'constructs' was REMOVED 2026-07-03 (owner): no card authored it and the

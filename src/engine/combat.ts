@@ -165,7 +165,7 @@ export function applyDamage(game: GameState, entityId: string, dmg: number, sour
 
   if (newHp <= 0) {
     msgs.push(`${sourceName} destroys ${ent.name}!`);
-    const d = destroyEntity(g, entityId, sink, armorSink); // fires death triggers
+    const d = destroyEntity(g, entityId, sink, armorSink, 'damage'); // a DAMAGE death — fires death triggers; never on-sacrifice listeners
     msgs.push(...d.msgs);
     return { game: d.game, msgs };
   }
@@ -388,12 +388,18 @@ export function resolveCombatTriggers(game: GameState, attacker: BoardEntity, at
  * targets auto-pick the first own-side eligible. Called from applyDamage's destroy
  * branch (other removal paths — bounce/sacrifice — are not yet hooked).
  */
-export function resolveRemovalTriggers(game: GameState, ent: BoardEntity, controller: 'p1' | 'p2', sink?: PendingDeadPick[], armorSink?: ArmorChoiceData[]): { game: GameState; msgs: string[] } {
+export function resolveRemovalTriggers(game: GameState, ent: BoardEntity, controller: 'p1' | 'p2', sink: PendingDeadPick[] | undefined, armorSink: ArmorChoiceData[] | undefined, cause: 'damage' | 'sacrifice'): { game: GameState; msgs: string[] } {
   let g = game;
   const msgs: string[] = [];
   for (const trig of ['onDestroy', 'onLeave'] as const) {
     for (const clause of combatTriggerEffects(ent, trig)) {
-      if (clause.if && !conditionMet(g, controller, clause.if)) continue;
+      // Death-cause gate (Arc C, 2026-07-23 — "if it died to damage", Cult Fanatic):
+      // checked HERE against the exit's threaded cause, like combat's eventMatches —
+      // NEVER via conditionMet, whose default-true covers board-state kinds only.
+      // Flee/decay/Coercion/cost sacrifices ('sacrifice') never fire it.
+      if (clause.if?.kind === 'diedToDamage') {
+        if (cause !== 'damage') continue;
+      } else if (clause.if && !conditionMet(g, controller, clause.if)) continue;
       let targetId: string | undefined;
       const spec = actionTargetSpec(clause.effects);
       if (spec) {

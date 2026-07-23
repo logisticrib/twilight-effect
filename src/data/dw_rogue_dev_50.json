@@ -257,7 +257,15 @@
       "text": "RECKLESS. When this character attacks, it deals 1 damage to itself. When this dies, if it died to damage, return target card from your Dead Zone to your hand.",
       "flavor": "",
       "dev": true,
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-07-22, Arc C): died-to-damage conditional death trigger (engine fires onDestroy/onLeave without a damage-vs-sacrifice cause on the victim's own triggers; onDeath is declared but never fired)",
+      "effects": [
+        {
+          "trigger": "onDestroy",
+          "if": { "kind": "diedToDamage" },
+          "effects": [
+            { "op": "returnFromDead", "to": "hand" }
+          ]
+        }
+      ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
       "updatedAt": "2026-07-22T00:00:00.000000Z"
     },
@@ -348,7 +356,14 @@
       "text": "DISMAY. As long as one or more permanents with Dismay are in the encounter under your control, your opponent is Dismayed. (A Dismayed player has −1 Willpower. Dismayed does not stack.) Whenever an opposing companion flees, draw a card.",
       "flavor": "",
       "dev": true,
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-07-22, Arc C): opposing-flee listener (fleeing is a sacrifice per 2026-07-20 ruling, but no flee-scoped listener trigger exists)",
+      "effects": [
+        {
+          "trigger": "oppCompanionFlees",
+          "effects": [
+            { "op": "draw", "count": 1 }
+          ]
+        }
+      ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
       "updatedAt": "2026-07-22T00:00:00.000000Z"
     },
@@ -491,7 +506,14 @@
       "text": "At the start of your turn, deal 1 damage to each opposing companion.",
       "flavor": "",
       "dev": true,
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-07-22, Arc C): each-opposing-companion AoE scope (damage op has no allEnemyCompanions scope, and the interpreter's AoE loop does not consult Acrobatics immunity or the prevention family — must, per brief; verify vs Sewer Rat)",
+      "effects": [
+        {
+          "trigger": "startOfTurn",
+          "effects": [
+            { "op": "damage", "amount": 1, "target": "allEnemyCompanions" }
+          ]
+        }
+      ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
       "updatedAt": "2026-07-22T00:00:00.000000Z"
     },

@@ -2274,7 +2274,7 @@ export const useGameStore = create<GameStoreState>()(
     // opposing restriction aura overrides Ranged and Watchtower coverage alike.
     const restricted = attackRestrictedBy(s.game, ent, attLoc.player, attLoc.slot);
     if (restricted) {
-      return { ...toast(`${ent.name} cannot attack — ${restricted} (opposing aura).`) };
+      return { ...toast(`${ent.name} cannot attack — ${restricted}.`) };
     }
 
     // No dead prompts (2026-07-20): if opposing characters exist but the targeting
@@ -2318,7 +2318,7 @@ export const useGameStore = create<GameStoreState>()(
     // in normal flow; this covers a board that changed while the targeting UI was up.
     const restricted = attackRestrictedBy(game, attacker, attLoc.player, attLoc.slot);
     if (restricted) {
-      return { pending: null, toasts: [...s.toasts, pushToast(`${attacker.name} cannot attack — ${restricted} (opposing aura).`)] };
+      return { pending: null, toasts: [...s.toasts, pushToast(`${attacker.name} cannot attack — ${restricted}.`)] };
     }
 
     // ── Targeting rules — the SHARED gate (engine/stats.ts) computes legality;

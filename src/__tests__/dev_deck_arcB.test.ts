@@ -116,7 +116,8 @@ describe("Doubt (25) — cannot attack during its controller's next turn (a WIND
     cast('pc-1', dc('Doubt'), 'vic');
     expect(gateFor('vic', 'p2'), 'CAN attack this turn (window dormant)').toBeNull();
     nextTurn(); // the controller's next turn — window live
-    expect(gateFor('vic', 'p2'), 'locked during their turn').toBe('Doubt');
+    // Gate return LABELED 2026-07-23 (Arc C carried item): "<source> (cannot attack)".
+    expect(gateFor('vic', 'p2'), 'locked during their turn').toBe('Doubt (cannot attack)');
     const toastsBefore = gs.getState().toasts.length;
     gs.getState().beginAttack('vic');
     expect(gs.getState().pending, 'beginAttack refused').toBeNull();
@@ -138,7 +139,7 @@ describe("Doubt (25) — cannot attack during its controller's next turn (a WIND
     nextTurn(); // own turn ends — the still-pending entry must SURVIVE this strip
     nextTurn(); // the controller's next turn — window live
     expect(g().activePlayer).toBe('p1');
-    expect(gateFor('mine', 'p1'), "locked during the controller's next turn").toBe('Doubt');
+    expect(gateFor('mine', 'p1'), "locked during the controller's next turn").toBe('Doubt (cannot attack)');
     nextTurn(); // that turn ends — stripped
     nextTurn();
     expect(g().activePlayer).toBe('p1');

@@ -144,7 +144,11 @@ export function resolveStartOfTurn(game: GameState, side: 'p1' | 'p2'): { game: 
       if (elig.length === 0) continue; // no legal target — fizzle this source
       targetId = elig[0];
     }
-    const r = resolveActionEffects(g, side, loc.ent.name, effs, targetId, id, undefined, undefined, armorChoices);
+    // deadPicks threaded (Arc C, 2026-07-23): a start-of-turn effect KILL that fires
+    // a returnFromDead death trigger (Memory Stone / Cult Fanatic) arms the owner's
+    // picker instead of silently auto-picking — the 2026-06-22 interactive-picker
+    // ruling applied to the one call site that still passed no sink.
+    const r = resolveActionEffects(g, side, loc.ent.name, effs, targetId, id, undefined, deadPicks, armorChoices);
     g = r.game;
     if (r.msgs.length) msgs.push(`${loc.ent.name}: ${r.msgs.join(' | ')}`);
   }
