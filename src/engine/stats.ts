@@ -1,4 +1,4 @@
-import type { BoardEntity, Card, EquippedItem } from '../types/card';
+import type { ActiveBuff, BoardEntity, Card, EquippedItem } from '../types/card';
 import type { CardEffect, Modifier } from '../types/effects';
 import type { GameState, PlayerState } from './state';
 import type { SlotId } from './geometry';
@@ -161,12 +161,38 @@ function staticAuraStat(ent: BoardEntity, game: GameState, stat: 'atk' | 'hp'): 
       sum += e.amount ?? 0;
     }
   }
+  // Hostile auras (Arc B, 2026-07-23 — Pale Confessor): the OPPONENT's static buff
+  // clauses with scope 'allEnemyCompanions' hit this companion. where.line is the
+  // AFFECTED entity's own line, read live — moving out of the line sheds the
+  // debuff, moving back regains it, and the aura dies with its source (this scan
+  // re-derives from the board every read; nothing is stamped).
+  if (isCompanion) {
+    const opp: 'p1' | 'p2' = side === 'p1' ? 'p2' : 'p1';
+    for (const src of Object.values(game[opp].board)) {
+      if (!src) continue;
+      for (const e of staticBuffsOf(src)) {
+        if (e.op !== 'buff' || e.stat !== stat || e.scope !== 'allEnemyCompanions') continue;
+        if (e.where?.line && e.where.line !== entLine) continue;
+        if (e.where?.cls && e.where.cls !== ent.cls) continue;
+        sum += e.amount ?? 0;
+      }
+    }
+  }
   return sum;
 }
 
+/** Is a buff entry LIVE right now? (Arc B, 2026-07-23.) Shipped entries — no
+ *  window, no pending flag — are always live. A pendingUntilTurnOf entry is dormant
+ *  until its boundary clears the flag; an activeDuring entry applies only while
+ *  that player is active (Doubt's "during its controller's next turn"). */
+export function buffActive(b: ActiveBuff, game: GameState): boolean {
+  if (b.pendingUntilTurnOf) return false;
+  return !b.activeDuring || game.activePlayer === b.activeDuring;
+}
+
 /** Sum of temporary +stat buffs on an entity (Action-card buffs etc.). */
-function buffStat(ent: BoardEntity, stat: 'atk' | 'hp'): number {
-  return ent.buffs?.reduce((s, b) => s + (stat === 'atk' ? (b.atk ?? 0) : 0), 0) ?? 0;
+function buffStat(ent: BoardEntity, stat: 'atk' | 'hp', game: GameState): number {
+  return ent.buffs?.reduce((s, b) => s + (stat === 'atk' && buffActive(b, game) ? (b.atk ?? 0) : 0), 0) ?? 0;
 }
 
 /** Combined +stat from items + static auras (no base, no temp). */
@@ -185,7 +211,12 @@ function itemAndAuraStat(ent: BoardEntity, game: GameState, stat: 'atk' | 'hp'):
  * static auras you control + temporary buffs.
  */
 export function effectiveAttack(ent: BoardEntity, game: GameState): number {
-  return Math.max(0, (ent.atk ?? 0) + itemAndAuraStat(ent, game, 'atk') + buffStat(ent, 'atk'));
+  // NOTE (Arc B open question, 2026-07-23): the raw sum may go negative (Whispers
+  // of the West on a 1-attack companion = −1); this pre-existing clamp floors the
+  // VALUE at 0 for both damage and display, while storage keeps the raw entries —
+  // so a later +1 sees the raw −1 (sum-then-clamp). Whether negative attack should
+  // instead be 0 for all purposes is flagged for the owner, not ruled here.
+  return Math.max(0, (ent.atk ?? 0) + itemAndAuraStat(ent, game, 'atk') + buffStat(ent, 'atk', game));
 }
 
 /**
@@ -272,7 +303,7 @@ function auraGrantedKeywords(ent: BoardEntity, game: GameState): string[] {
 export function effectiveKeywords(ent: BoardEntity, game: GameState): string[] {
   if (isKeywordSuppressed(ent, game)) return [];
   const set = new Set(ent.keywords);
-  if (ent.buffs) for (const b of ent.buffs) (b.grant ?? []).forEach(k => set.add(k));
+  if (ent.buffs) for (const b of ent.buffs) if (buffActive(b, game)) (b.grant ?? []).forEach(k => set.add(k));
   const lo = ent.loadout;
   if (lo) {
     for (const it of [lo.weapon, ...lo.gear]) {
@@ -379,6 +410,12 @@ export function legalAttackTargetIds(game: GameState, attacker: BoardEntity, att
  *  player-facing reason, or null when unrestricted. */
 export function attackRestrictedBy(game: GameState, ent: BoardEntity, controller: 'p1' | 'p2', slot: SlotId): string | null {
   if (ent.kind !== 'companion') return null; // engine-supported scope: opposing COMPANIONS
+  // Arc B (Doubt): a LIVE cannotAttack modifier refuses by its source's name — this
+  // is the single attacker-side gate, so beginAttack, resolveAttack, and the
+  // LoadoutPanel button all inherit it. buffActive keeps a dormant ("controller's
+  // NEXT turn", cast mid-turn) or off-window entry inert.
+  const ca = ent.buffs?.find(b => b.modifiers?.includes('cannotAttack') && buffActive(b, game));
+  if (ca) return ca.source ?? 'an effect';
   const opp: 'p1' | 'p2' = controller === 'p1' ? 'p2' : 'p1';
   for (const src of Object.values(game[opp].board)) {
     if (!src) continue;
@@ -417,8 +454,13 @@ export function moveRestrictedBy(game: GameState, ent: BoardEntity, controller: 
 }
 
 /** Whether a flag modifier (e.g. 'hpFloor1') is currently active on an entity. */
-export function hasModifier(ent: BoardEntity, m: Modifier): boolean {
-  return !!ent.buffs?.some(b => b.modifiers?.includes(m));
+export function hasModifier(ent: BoardEntity, m: Modifier, game?: GameState): boolean {
+  // Window gate (Arc B): entries with a dormancy/window field count only when
+  // `game` is supplied and says they are live. Without `game`, windowed entries
+  // are conservatively SKIPPED (every shipped entry is window-less, so legacy
+  // callers are unchanged either way).
+  return !!ent.buffs?.some(b => b.modifiers?.includes(m)
+    && (b.pendingUntilTurnOf || b.activeDuring ? !!game && buffActive(b, game) : true));
 }
 
 export function parseEnterTrigger(keywords: string[]): EnterTrigger | null {

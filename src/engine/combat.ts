@@ -150,7 +150,7 @@ export function applyDamage(game: GameState, entityId: string, dmg: number, sour
     }
   }
 
-  const floor = hasModifier(ent, 'hpFloor1') ? 1 : 0;
+  const floor = hasModifier(ent, 'hpFloor1', g) ? 1 : 0; // game passed so a future windowed entry gates correctly (Arc B)
   const newHp = Math.max(floor, ent.hp - dmg);
 
   // The Player Character's HP is the single source of truth, mirrored to the

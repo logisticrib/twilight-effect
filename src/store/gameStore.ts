@@ -2955,19 +2955,46 @@ export const useGameStore = create<GameStoreState>()(
 
     const whose = nextPlayer === s.localPlayer ? 'Your' : "Opponent's";
 
-    // Expire until-end-of-turn buffs on the player whose turn just ended (end-of-turn
-    // cleanup precedes the new turn's start-of-turn triggers; it touches only the
-    // acted board, so running it before readyAndFlip — which touches only the next
-    // player's board — is state-identical to the pre-extraction order).
+    // Buff boundary pass (expiry precedes the new turn's start-of-turn triggers —
+    // ruled order; debuffs never affect flee/Poison, and the "until the start of
+    // your next turn" entries must be GONE before any start-of-turn evaluation).
+    // One pass over BOTH boards (Arc B: timed entries can sit on either side):
+    //  - until 'endOfTurn' on the ENDING player's entities (shipped, byte-identical:
+    //    a stripped entity keeps its buffs array, possibly empty);
+    //  - until {turnEnd of: acted} — unless still pendingUntilTurnOf (an own-turn
+    //    cast of a "controller's next turn" window survives its cast turn's end);
+    //  - until {turnStart of: next} — caster-anchored debuffs die as the caster's
+    //    turn begins;
+    //  - pendingUntilTurnOf === next — the window ARMS (dormant → live; the key is
+    //    dropped so the entry hashes like any live entry).
     const acted = g.activePlayer;
-    const actedBoard: Board = {};
-    for (const [slot, ent] of Object.entries(g[acted].board) as [SlotId, BoardEntity | undefined][]) {
-      if (!ent) continue;
-      actedBoard[slot] = ent.buffs?.some(b => b.until === 'endOfTurn')
-        ? { ...ent, buffs: ent.buffs.filter(b => b.until !== 'endOfTurn') }
-        : ent;
-    }
-    const expired: GameState = { ...g, [acted]: { ...g[acted], board: actedBoard } };
+    const buffBoundary = (side: 'p1' | 'p2', board: Board): Board => {
+      const out: Board = {};
+      for (const [slot, ent] of Object.entries(board) as [SlotId, BoardEntity | undefined][]) {
+        if (!ent) continue;
+        const affected = ent.buffs?.some(b =>
+          (b.until === 'endOfTurn' && side === acted)
+          || (b.until !== 'endOfTurn' && b.until.at === 'turnEnd' && b.until.of === acted && !b.pendingUntilTurnOf)
+          || (b.until !== 'endOfTurn' && b.until.at === 'turnStart' && b.until.of === nextPlayer)
+          || b.pendingUntilTurnOf === nextPlayer);
+        if (!affected) { out[slot] = ent; continue; }
+        const kept = ent.buffs!
+          .filter(b => b.until === 'endOfTurn' ? side !== acted
+            : b.until.at === 'turnEnd' ? (b.until.of !== acted || !!b.pendingUntilTurnOf)
+            : b.until.of !== nextPlayer)
+          .map(b => {
+            if (b.pendingUntilTurnOf !== nextPlayer) return b;
+            const { pendingUntilTurnOf: _armed, ...live } = b;
+            return live;
+          });
+        out[slot] = { ...ent, buffs: kept };
+      }
+      return out;
+    };
+    const expired: GameState = { ...g,
+      [acted]: { ...g[acted], board: buffBoundary(acted, g[acted].board) },
+      [nextPlayer]: { ...g[nextPlayer], board: buffBoundary(nextPlayer, g[nextPlayer].board) },
+    };
 
     // The whole Ready Phase in the ruled order (engine/readyPhase.ts — extracted
     // 2026-07-20, debt #2 closed): readyAndFlip → LAST GASP start-of-turn triggers

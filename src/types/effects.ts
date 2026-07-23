@@ -120,8 +120,14 @@ export type Effect =
   | { op: 'damage'; amount: Amount; target: TargetSpec; splash?: 'line' | 'board' }
   | { op: 'damageSelfPC'; amount: Amount }
   | { op: 'heal'; amount: Amount; target: TargetSpec }
-  // attack/stat modification (HP buffs ONLY as continuous statics — no temp +HP per rules §8)
-  | { op: 'buff'; stat?: 'atk' | 'hp'; amount?: number; grant?: string[]; modifiers?: Modifier[]; scope: TargetSpec; duration: 'endOfTurn' | 'while'; where?: { line?: 'front' | 'back'; cls?: string } }
+  // attack/stat modification (HP buffs ONLY as continuous statics — no temp +HP per rules §8).
+  // Durations (Arc B, 2026-07-23): 'endOfTurn' (shipped stamp) · 'while' (static aura,
+  // never stamped — negative amounts with scope allEnemyCompanions are hostile debuff
+  // auras, e.g. Pale Confessor) · 'untilYourNextTurn' (stamped; strips at the CASTER's
+  // next turn start) · 'controllersNextTurn' (stamped WINDOW: dormant until the
+  // target's controller's next turn, live during it, gone at its end — Doubt).
+  // amount may be negative (debuffs); the value clamp lives in effectiveAttack.
+  | { op: 'buff'; stat?: 'atk' | 'hp'; amount?: number; grant?: string[]; modifiers?: Modifier[]; scope: TargetSpec; duration: 'endOfTurn' | 'while' | 'untilYourNextTurn' | 'controllersNextTurn'; where?: { line?: 'front' | 'back'; cls?: string } }
   // card / zone movement
   | { op: 'draw'; count: number; if?: Condition }
   // discard (Arc A, 2026-07-22): the DISCARDING player chooses the card (owner

@@ -131,7 +131,16 @@ function validateEffect(e: Effect, path: string, p: (msg: string) => void, keywo
       // (owner ruling 2026-06-22, re-confirmed 2026-07-03). No exceptions.
       if (e.stat === 'hp') p(`${path}(buff): +HP effects are BANNED — max HP is fixed, only healing exists`);
       else if (e.stat !== undefined && e.stat !== 'atk') p(`${path}(buff): bad stat "${String(e.stat)}"`);
-      if (e.duration !== 'endOfTurn' && e.duration !== 'while') p(`${path}(buff): bad duration "${String(e.duration)}"`);
+      if (!['endOfTurn', 'while', 'untilYourNextTurn', 'controllersNextTurn'].includes(e.duration)) p(`${path}(buff): bad duration "${String(e.duration)}"`);
+      // The timed durations (Arc B) are STAMPED — the contract only advertises the
+      // scopes the interpreter stamps (own groups, all enemy companions, or one
+      // interactive pick). 'while' stays aura-read; 'endOfTurn' keeps its shipped
+      // contract untouched.
+      if ((e.duration === 'untilYourNextTurn' || e.duration === 'controllersNextTurn')
+        && !['ownParty', 'ownCompanions', 'allEnemyCompanions', 'anyCompanion', 'enemyCompanion', 'ownCompanion',
+          'anyCharacter', 'enemyCharacter', 'ownCharacter', 'otherCharacter'].includes(e.scope)) {
+        p(`${path}(buff): scope "${String(e.scope)}" is not stampable for a timed duration`);
+      }
       for (const m of e.modifiers ?? []) if (!has(MODIFIERS, m)) p(`${path}(buff): unknown modifier "${String(m)}"`);
       for (const g of e.grant ?? []) if (!(keywordBase(g) in keywords)) p(`${path}(buff): grants unknown keyword "${g}"`);
       if (e.where?.line !== undefined && e.where.line !== 'front' && e.where.line !== 'back') p(`${path}(buff): bad where.line`);

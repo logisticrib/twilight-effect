@@ -68,12 +68,24 @@ export interface Loadout {
 }
 
 /** A temporary modifier applied to a board entity (e.g. by an Action card).
- *  `until: 'endOfTurn'` buffs are stripped when the turn passes. */
+ *  `until: 'endOfTurn'` buffs are stripped when the buffed entity's owner's turn
+ *  ends (shipped). Timed anchors (Arc B, 2026-07-23) strip at the named player's
+ *  turn boundary instead — all boundary processing lives in endTurn's expiry pass.
+ *  EXTENSION POINT: Arc H's skip-refresh and Arc I's end-of-turn control reversion
+ *  should add anchor kinds here rather than fork a parallel mechanism. */
 export interface ActiveBuff {
   atk?: number;
   grant?: string[];       // keywords granted (e.g. 'Guardian')
-  modifiers?: Modifier[]; // flag modifiers (e.g. 'hpFloor1', 'cannotBeMoved')
-  until: 'endOfTurn';
+  modifiers?: Modifier[]; // flag modifiers (e.g. 'hpFloor1', 'cannotAttack')
+  until: 'endOfTurn' | { at: 'turnStart' | 'turnEnd'; of: 'p1' | 'p2' };
+  /** Window gate (Doubt): the payload applies only while `activeDuring` is the
+   *  active player. Absent = always live (every shipped buff). */
+  activeDuring?: 'p1' | 'p2';
+  /** Dormant until that player's turn STARTS ("during its controller's NEXT turn"
+   *  cast mid-turn): cleared at that boundary; a still-pending entry is never
+   *  active, and the turnEnd strip skips it (an own-turn cast must survive its own
+   *  cast turn's end). */
+  pendingUntilTurnOf?: 'p1' | 'p2';
   source?: string;        // card name that applied it (for toasts)
 }
 

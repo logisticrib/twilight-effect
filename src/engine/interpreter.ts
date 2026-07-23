@@ -7,7 +7,7 @@
 import type { BoardEntity, Card } from '../types/card';
 import type { Effect, Amount, Condition, TargetSpec, Trigger, Cost, CardEffect } from '../types/effects';
 import { CATALOG } from '../data/catalog';
-import { isFront, type SlotId } from './geometry';
+import { isFront } from './geometry';
 import type { GameState, PendingDeadPick, ArmorChoiceData } from './state';
 import { charsOf, companionIds, constructIds, findEntityAnywhere, updateEntity,
          removeEntity, destroyEntity, setPcHp, pcIdOf, itemCardsOf, itemTransferOf } from './entities';
@@ -131,6 +131,10 @@ export function effectTargetSpec(e: Effect): TargetSpec | null {
       for (const sub of [...e.onPass, ...e.onFail]) { const t = effectTargetSpec(sub); if (t) return t; }
       return null;
     }
+    // Arc B (2026-07-23): a buff with an interactive scope is a targeted stamp
+    // (Whispers of the West / Doubt). Shipped buff scopes (ownParty/ownCompanions/
+    // self) are not interactive → null, exactly as before.
+    case 'buff': return isInteractiveSpec(e.scope) ? e.scope : null;
     default: return null;
   }
 }
@@ -266,26 +270,53 @@ export function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceNam
   for (const e of effects) {
     switch (e.op) {
       case 'buff': {
-        if (e.duration !== 'endOfTurn') break;
-        const board = { ...g[lp].board };
+        // 'while' buffs are never stamped — they live as static auras (staticAuraStat).
+        if (e.duration === 'while') break;
+        // Recipients: own groups (shipped), every opposing companion (Chorus of
+        // Doubt), or the clicked interactive target (Whispers of the West / Doubt).
+        const recipients: string[] = [];
+        if (e.scope === 'ownParty' || e.scope === 'ownCompanions') {
+          for (const ent of Object.values(g[lp].board)) {
+            if (!ent) continue;
+            if (e.scope === 'ownParty' ? (ent.kind === 'companion' || ent.kind === 'pc') : ent.kind === 'companion') recipients.push(ent.id);
+          }
+        } else if (e.scope === 'allEnemyCompanions') {
+          for (const ent of Object.values(g[opp].board)) if (ent?.kind === 'companion') recipients.push(ent.id);
+        } else if (isInteractiveSpec(e.scope) && targetId) {
+          recipients.push(targetId);
+        }
         let touched = 0;
-        for (const [slot, ent] of Object.entries(board) as [SlotId, BoardEntity | undefined][]) {
-          if (!ent) continue;
-          const inScope = e.scope === 'ownParty' ? (ent.kind === 'companion' || ent.kind === 'pc')
-            : e.scope === 'ownCompanions' ? ent.kind === 'companion' : false;
-          if (!inScope) continue;
-          board[slot] = { ...ent, buffs: [...(ent.buffs ?? []), {
+        for (const id of recipients) {
+          const loc = findEntityAnywhere(g, id);
+          if (!loc) continue;
+          // Duration anchors (Arc B, 2026-07-23): 'untilYourNextTurn' strips at the
+          // CASTER's next turn start; 'controllersNextTurn' is a WINDOW — dormant
+          // until the recipient's controller's next turn starts, live during it,
+          // stripped at its end (pendingUntilTurnOf guards an own-turn cast from
+          // its own turn's end-strip). EXTENSION POINT: Arc H skip-refresh / Arc I
+          // end-of-turn reversion add anchor kinds here — never a parallel system.
+          const timed = e.duration === 'untilYourNextTurn'
+            ? { until: { at: 'turnStart' as const, of: lp } }
+            : e.duration === 'controllersNextTurn'
+              ? { until: { at: 'turnEnd' as const, of: loc.player }, activeDuring: loc.player, pendingUntilTurnOf: loc.player }
+              : { until: 'endOfTurn' as const };
+          g = updateEntity(g, id, { buffs: [...(loc.ent.buffs ?? []), {
             ...(e.stat === 'atk' && e.amount != null ? { atk: e.amount } : {}),
             ...(e.grant ? { grant: e.grant } : {}),
             ...(e.modifiers ? { modifiers: e.modifiers } : {}),
-            until: 'endOfTurn' as const, source: sourceName,
-          }] };
+            ...timed, source: sourceName,
+          }] });
           touched++;
         }
-        g = { ...g, [lp]: { ...g[lp], board } };
         if (touched) {
-          const parts = [e.stat === 'atk' && e.amount != null ? `+${e.amount} attack` : null, ...(e.grant ?? []), ...(e.modifiers ?? [])].filter(Boolean);
-          msgs.push(`${parts.join(', ')} to ${touched} ${e.scope === 'ownParty' ? 'characters' : 'companions'} (until end of turn)`);
+          const amt = e.stat === 'atk' && e.amount != null ? `${e.amount > 0 ? '+' : ''}${e.amount} attack` : null;
+          const parts = [amt, ...(e.grant ?? []), ...(e.modifiers ?? [])].filter(Boolean);
+          const what = isInteractiveSpec(e.scope) ? (touched === 1 ? 'target' : 'targets')
+            : e.scope === 'ownParty' ? 'characters'
+            : e.scope === 'allEnemyCompanions' ? 'opposing companions' : 'companions';
+          const durLabel = e.duration === 'untilYourNextTurn' ? 'until the start of your next turn'
+            : e.duration === 'controllersNextTurn' ? "during its controller's next turn" : 'until end of turn';
+          msgs.push(`${parts.join(', ')} to ${touched} ${what} (${durLabel})`);
         }
         break;
       }

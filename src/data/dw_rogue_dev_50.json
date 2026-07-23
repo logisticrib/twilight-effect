@@ -401,7 +401,14 @@
       "text": "Companions in your opponent's Front Line have -1 attack.",
       "flavor": "",
       "dev": true,
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-07-22, Arc B): opposing-scope static debuff (buff op scopes cover own side only; no opposing-companions debuff aura exists)",
+      "effects": [
+        {
+          "trigger": "static",
+          "effects": [
+            { "op": "buff", "stat": "atk", "amount": -1, "scope": "allEnemyCompanions", "duration": "while", "where": { "line": "front" } }
+          ]
+        }
+      ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
       "updatedAt": "2026-07-22T00:00:00.000000Z"
     },
@@ -530,7 +537,14 @@
       "text": "Target opposing companion gets -2 attack until the start of your next turn.",
       "flavor": "",
       "dev": true,
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-07-22, Arc B): cross-turn duration ('until the start of your next turn' — only endOfTurn buffs exist) + targeted opposing debuff",
+      "effects": [
+        {
+          "trigger": "onPlay",
+          "effects": [
+            { "op": "buff", "stat": "atk", "amount": -2, "scope": "enemyCompanion", "duration": "untilYourNextTurn" }
+          ]
+        }
+      ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
       "updatedAt": "2026-07-22T00:00:00.000000Z"
     },
@@ -613,7 +627,14 @@
       "text": "Target companion cannot attack during its controller's next turn.",
       "flavor": "",
       "dev": true,
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-07-22, Arc B): cross-turn duration ('during its controller's next turn' — only endOfTurn buffs exist; cannotAttack modifier exists but has no cross-turn carrier)",
+      "effects": [
+        {
+          "trigger": "onPlay",
+          "effects": [
+            { "op": "buff", "modifiers": ["cannotAttack"], "scope": "anyCompanion", "duration": "controllersNextTurn" }
+          ]
+        }
+      ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
       "updatedAt": "2026-07-22T00:00:00.000000Z"
     },
@@ -682,7 +703,14 @@
       "text": "Opposing companions have -1 attack until the start of your next turn.",
       "flavor": "",
       "dev": true,
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-07-22, Arc B): opposing-scope debuff + cross-turn duration (one duration mechanism shared with Whispers of the West / Doubt)",
+      "effects": [
+        {
+          "trigger": "onPlay",
+          "effects": [
+            { "op": "buff", "stat": "atk", "amount": -1, "scope": "allEnemyCompanions", "duration": "untilYourNextTurn" }
+          ]
+        }
+      ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
       "updatedAt": "2026-07-22T00:00:00.000000Z"
     },
