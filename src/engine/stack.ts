@@ -21,6 +21,7 @@
 // store's `runStack` drives resolution (it owns finalizeAttack + the on-enter
 // machinery, which arm store-local prompts).
 import type { Trigger } from '../types/effects';
+import type { BoardEntity } from '../types/card';
 import { FRONT_SLOTS, BACK_SLOTS } from './geometry';
 import type { GameState, StackEntry, ReactiveStackEntry, PendingDeadPick, ArmorChoiceData } from './state';
 import { effectiveKeywords } from './stats';
@@ -63,6 +64,38 @@ export function gatherReactive(
     if (effectsOfCard(ent.name).some(c => c.trigger === trigger)) {
       out.push({ kind: 'reactive', sourceId: ent.id, sourceName: ent.name, controller: opp,
         trigger, subjectId: subject.id, subjectName: subject.name });
+    }
+  }
+  return out;
+}
+
+/**
+ * Item-hosted declaration-window triggers (Arc E, 2026-07-23 — Caltrop Pouch):
+ * gather 'onEquippedAttacked' clauses from the ATTACKED character's equipped items.
+ * The BEARER anchors the trigger — this reads the target's LIVE loadout, so a
+ * Kit-Master move carries the trigger with the item, and an unequipped/buried item
+ * fires nothing. Text-literal scope ("Whenever equipped character is attacked"):
+ * fires for ANY attacker and ANY attacked character (PC bearer included) — unlike
+ * the board-trap window's companion-vs-companion R4 scope. Entries are name-keyed
+ * like every reactive (resolveReactiveEntry resolves the ITEM card's clauses by
+ * sourceName); sourceId is the BEARER's entity id (the anchor for any 'self'-ish
+ * effect); controller = the bearer's side, so a mixed batch with Iron Spikes
+ * stays single-controller (batchOrderer's construction holds). One entry per
+ * carrying item — two pouches are two triggers, ordered by their owner (>1 arms
+ * the standing PendingTriggerOrder prompt).
+ */
+export function gatherEquippedAttacked(
+  target: BoardEntity, defenderSide: 'p1' | 'p2',
+  subject: { id: string; name: string },
+): ReactiveStackEntry[] {
+  const out: ReactiveStackEntry[] = [];
+  const lo = target.loadout;
+  if (!lo) return out;
+  for (const it of [lo.weapon, ...lo.gear]) {
+    if (!it) continue;
+    if (effectsOfCard(it.name).some(c => c.trigger === 'onEquippedAttacked')) {
+      out.push({ kind: 'reactive', sourceId: target.id, sourceName: it.name, controller: defenderSide,
+        trigger: 'onEquippedAttacked', subjectId: subject.id, subjectName: subject.name });
     }
   }
   return out;

@@ -20,7 +20,7 @@ import { ADJ, FRONT_SLOTS, BACK_SLOTS, isFront, findSlot, type SlotId, type Boar
          type PendingCoercion, type PendingDeadPick, type PendingDiscard,
          type AttackCtx, type ArmorChoiceData,
          type PendingItemTransfer, type StackEntry,
-         gatherParanoia, gatherReactive, gatherOwnPlay, pushStack, setStack, resolveReactiveEntry,
+         gatherParanoia, gatherReactive, gatherOwnPlay, gatherEquippedAttacked, pushStack, setStack, resolveReactiveEntry,
          orderedForStack, batchOrderer, resolveCombatTriggers, combatTriggerEffects,
          findEntityAnywhere, updateEntity, removeEntity,
          itemProfileOf, itemTransferCandidates, armNextItemTransfer,
@@ -221,9 +221,16 @@ function commitAttack(s: StackRunCtx, game: GameState, charId: string, targetEnt
   // queue order; since the 2026-07-22 Rules Note this is DERIVED from the general
   // rule (the active player's simultaneous triggers queue first, the non-active
   // player's above — theirs resolve first). Behavior byte-identical, code unchanged.
-  const declReactive = attacker.kind === 'companion' && tgtLoc.ent.kind === 'companion'
-    ? gatherReactive(newGame, 'oppCompanionAttacksCompanion', { id: charId, name: attacker.name, controller: attLoc.player })
-    : [];
+  // Board traps keep their R4 companion-vs-companion scope; item-hosted triggers
+  // (Arc E — Caltrop Pouch's 'onEquippedAttacked') gather from the ATTACKED
+  // character's live loadout, any attacker, PC bearer included (text-literal).
+  // Same controller (the defender) → one batch, batchOrderer's construction holds.
+  const declReactive = [
+    ...(attacker.kind === 'companion' && tgtLoc.ent.kind === 'companion'
+      ? gatherReactive(newGame, 'oppCompanionAttacksCompanion', { id: charId, name: attacker.name, controller: attLoc.player })
+      : []),
+    ...gatherEquippedAttacked(tgtLoc.ent, tgtLoc.player, { id: charId, name: attacker.name }),
+  ];
   const hasOwnAttack = combatTriggerEffects(attacker, 'onAttack').length > 0;
 
   if (!declReactive.length && !hasOwnAttack) {

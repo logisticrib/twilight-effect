@@ -39,6 +39,9 @@ export type Trigger =
                                     // NOT direct entry onto the front line (R4, owner 2026-07-12) (Pit Trap)
   | 'oppCompanionAttacksCompanion'  // an opposing companion declares an attack on one of YOUR companions
                                     // ("attacks" = declaration; resolves before damage — R2) (Iron Spikes)
+  | 'onEquippedAttacked'            // ITEM-hosted (Arc E 2026-07-23, Caltrop Pouch): the equipped character is
+                                    // the target of a DECLARED attack — fires in the declaration window (R2),
+                                    // any attacker, PC bearer included; gathered from the target's live loadout
   | 'oppCompanionFlees'             // an opposing companion FLEES (Ready Phase Willpower exit). NARROW is
                                     // OWNER-RULED (2026-07-23): "flees" means flees — never other sacrifices
                                     // (flee-is-a-sacrifice governs what a flee IS, not what "flees" wording

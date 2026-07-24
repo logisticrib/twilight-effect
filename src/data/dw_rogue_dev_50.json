@@ -1210,7 +1210,14 @@
       "text": "Whenever equipped character is attacked, deal 1 damage to the attacker.",
       "flavor": "",
       "dev": true,
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-07-22, Arc E): item-hosted reactive trigger (Iron Spikes' declaration window is gathered from board constructs, not from equipment)",
+      "effects": [
+        {
+          "trigger": "onEquippedAttacked",
+          "effects": [
+            { "op": "damage", "amount": 1, "target": "eventSubject" }
+          ]
+        }
+      ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
       "updatedAt": "2026-07-22T00:00:00.000000Z"
     },
