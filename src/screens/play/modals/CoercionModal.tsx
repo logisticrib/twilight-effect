@@ -1,7 +1,7 @@
 import { ModalShell, md } from './ModalShell';
 import { CardFace } from '../../../components/CardFace';
 import { CATALOG } from '../../../data/catalog';
-import { useGameStore } from '../../../store/gameStore';
+import { useGameStore, canBeSacrificed } from '../../../store/gameStore';
 import { TBL } from '../../../tokens';
 import type { BoardEntity } from '../../../types/card';
 
@@ -22,12 +22,14 @@ export function CoercionModal() {
   if (!co || !victimState || (!isSolo && co.victim !== localPlayer)) return null;
 
   const permanents = (Object.values(victimState.board) as (BoardEntity | undefined)[])
-    .filter((e): e is BoardEntity => !!e && e.kind !== 'pc');
+    .filter((e): e is BoardEntity => !!e && canBeSacrificed(e)); // the 2026-07-24 chokepoint (PC never offered)
 
   return (
-    <ModalShell glyph="⛓" eyebrow={`${co.source} · Coercion`}
+    <ModalShell glyph="⛓" eyebrow={co.generic ? co.source : `${co.source} · Coercion`}
       title="Discard a card or sacrifice a permanent"
-      sub="An enemy Coercion companion entered. Choose the price: click a hand card to discard it, or one of your permanents to sacrifice it.">
+      sub={co.generic
+        ? `${co.source} forces the choice. Pay the price: click a hand card to discard it, or one of your permanents to sacrifice it.`
+        : 'An enemy Coercion companion entered. Choose the price: click a hand card to discard it, or one of your permanents to sacrifice it.'}>
       {victimState.hand.length > 0 && (
         <>
           <div style={md.sectionLbl}>Discard from hand<span style={md.sectionLine} /></div>

@@ -128,6 +128,17 @@ export function fireSacrificeTriggers(
   return { game: g, msgs };
 }
 
+/** THE sacrifice-legality chokepoint (owner-ruled 2026-07-24; GRU §Game Zones, Dead
+ *  Zone Rules Notes): the Player Character can NEVER be chosen as a sacrifice to
+ *  ANY effect — an ability cost, a forced choice (Coercion, "each player
+ *  sacrifices…"), anything. PC death is the loss condition; offering it is a trap
+ *  option, not agency. Promotes the Coercion-specific 2026-07-04 ruling to the
+ *  general rule. Every site that enumerates sacrifice-legal permanents routes
+ *  through HERE — no per-effect copies. */
+export function canBeSacrificed(ent: BoardEntity): boolean {
+  return ent.kind !== 'pc';
+}
+
 /** Remove a destroyed/sacrificed entity from the board AND move its card (plus its
  *  equipped items') to its owner's Dead Zone; a tucked Oathsworn card returns to its
  *  owner's hand. Every destruction path must use this — bare `removeEntity` loses the

@@ -289,8 +289,16 @@ export interface PeekRequest {
  *  "Inactive Player Restrictions"). Their PC is not a legal sacrifice: a forced
  *  game loss is not a cost, so only companions/constructs qualify. */
 export interface PendingCoercion {
-  source: string;       // the Coercion companion's name
+  source: string;       // the Coercion companion's name (or the forcing Action's)
   victim: 'p1' | 'p2';  // who chooses and pays
+  /** Arc F (2026-07-24, Siege Rations): a symmetric effect chains the SAME choice
+   *  to the other player after this one resolves — that player's halves are
+   *  evaluated FRESH at chain time (per-event state, 2026-07-21). OPTIONAL —
+   *  absent for keyword Coercion (hash discipline). */
+  then?: 'p1' | 'p2';
+  /** Arc F: neutral modal copy for action-sourced forced choices (the shipped
+   *  Coercion copy names the keyword). Absent for keyword Coercion. */
+  generic?: true;
 }
 
 /** A Dead-Zone recovery prompt: pick one of `options` to return to hand (or skip if

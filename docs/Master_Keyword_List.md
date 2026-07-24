@@ -99,7 +99,7 @@ This document consolidates all keywords from Game Rules, Keyword Glossary, and C
 **COERCION** - When this companion enters, target opponent must discard a card or sacrifice a permanent.
 - Always triggers on entry
 - Choice preserves agency while guaranteeing loss
-- **Rules Note:** The Player Character cannot be chosen as the sacrificed permanent (owner ruling ratified 2026-07-04)
+- **Rules Note:** The Player Character cannot be chosen as the sacrificed permanent (owner ruling ratified 2026-07-04) *(Generalized 2026-07-24: the PC can never be chosen as a sacrifice to ANY effect — see Game_Rules_Updated, Dead Zone Rules Notes.)*
 
 **DISMAY** - As long as one or more permanents with Dismay are in the encounter under your control, your opponent is Dismayed.
 

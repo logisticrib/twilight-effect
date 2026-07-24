@@ -156,6 +156,11 @@ export type Effect =
   // 'toBottomDraw' the looker may choose a card — bottom of its owner's deck, then
   // that player draws (Mark the Pockets).
   | { op: 'revealHand'; pick?: 'toBottomDraw' }
+  // eachPlayerSacrificesOrDiscards (Arc F, 2026-07-24 — Siege Rations): each player
+  // sacrifices a permanent or discards a card, THEIR choice (the Coercion prompt,
+  // chained). Order: the non-active player's resolution first (2026-07-22 structural
+  // queue, Note-supported reading). PC never sacrifice-legal (owner-ruled 2026-07-24).
+  | { op: 'eachPlayerSacrificesOrDiscards' }
   // applyPoison (Arc D, 2026-07-23 — Poisoned Caltrops): effect-applied Poison
   // counters. Applies the SAME patch as the combat keyword (poisonHitPatch:
   // counter + POISONED status + exhaust — canon Poison always exhausts with the

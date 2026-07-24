@@ -10,7 +10,7 @@ import { CATALOG } from '../data/catalog';
 import { isFront } from './geometry';
 import type { GameState, PendingDeadPick, ArmorChoiceData } from './state';
 import { charsOf, companionIds, constructIds, findEntityAnywhere, updateEntity,
-         removeEntity, destroyEntity, setPcHp, pcIdOf, itemCardsOf, itemTransferOf } from './entities';
+         removeEntity, destroyEntity, setPcHp, pcIdOf, itemCardsOf, itemTransferOf, canBeSacrificed } from './entities';
 import { isPhysicalConstruct, currentWillpower, effectiveAttack, effectiveMaxHp, isImmuneToSplash, isCharacter, poisonHitPatch } from './stats';
 // Function-level cycle with combat.ts (resolveActionEffects deals damage; combat
 // triggers resolve effects). Safe: hoisted functions, called only at runtime.
@@ -632,6 +632,47 @@ export function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceNam
         for (let n = 0; n < e.count; n++) patched = { ...patched, ...poisonHitPatch(patched) };
         g = updateEntity(g, loc.ent.id, patched);
         msgs.push(`${loc.ent.name} is exhausted and takes ${e.count} Poison counter${e.count === 1 ? '' : 's'}`);
+        break;
+      }
+      case 'eachPlayerSacrificesOrDiscards': {
+        // Arc F (2026-07-24, Siege Rations): each player pays one of the two halves.
+        // ORDER: the NON-ACTIVE player's chosen resolution first — the 2026-07-22
+        // structural queue applied to one action's two chosen resolutions (the
+        // Note-supported reading; flagged to the owner in HANDOFF as not literally
+        // covered by the Note's trigger/state-event wording). Serialized prompts,
+        // never dual-hold: the second prompt arms when the first resolves (its
+        // halves evaluated FRESH at that moment — per-event state), via the
+        // pendingCoercion chain (`then`) in resolveCoercionDiscard/Sacrifice.
+        // DEGENERATES (owner 2026-07-24): neither half → unaffected, loud toast,
+        // no prompt. One half → the prompt offers only that half (the modal
+        // renders available sections; WHICH card/permanent stays the player's
+        // pick — owner agency, exactly Coercion's shipped handling).
+        // The caster's hand still holds the RESOLVING card here (playAction's
+        // immediate path resolves effects before burial) — it is on the stack,
+        // not in hand, so it never counts toward the caster's discard half.
+        // Name-keyed exclusion is safe: unique names are the identity rule.
+        const halvesOf = (side: 'p1' | 'p2') => ({
+          discard: g[side].hand.filter(c => !(side === lp && c.name === sourceName)).length > 0,
+          sac: (Object.values(g[side].board) as (BoardEntity | undefined)[]).some(x => !!x && canBeSacrificed(x)),
+        });
+        const note = (side: 'p1' | 'p2', h: { discard: boolean; sac: boolean }) =>
+          h.discard && h.sac ? `${g[side].name} chooses: sacrifice a permanent or discard a card`
+            : h.discard ? `${g[side].name} must discard a card (no permanent to sacrifice)`
+            : `${g[side].name} must sacrifice a permanent (no cards in hand)`;
+        const oppH = halvesOf(opp);
+        if (oppH.discard || oppH.sac) {
+          g = { ...g, pendingCoercion: { source: sourceName, victim: opp, generic: true as const, then: lp } };
+          msgs.push(note(opp, oppH));
+          break;
+        }
+        msgs.push(`${g[opp].name} is unaffected — nothing to discard or sacrifice`);
+        const lpH = halvesOf(lp);
+        if (lpH.discard || lpH.sac) {
+          g = { ...g, pendingCoercion: { source: sourceName, victim: lp, generic: true as const } };
+          msgs.push(note(lp, lpH));
+        } else {
+          msgs.push(`${g[lp].name} is unaffected — nothing to discard or sacrifice`);
+        }
         break;
       }
       case 'revealHand': {

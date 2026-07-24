@@ -48,7 +48,7 @@ export type _ExhaustiveTargets = AssertNever<Exclude<TargetSpec, (typeof TARGET_
 const OPS = [
   'damage', 'damageSelfPC', 'heal', 'buff', 'draw', 'discard', 'mill', 'shuffleHandRedraw',
   'deckPeek', 'returnFromDead', 'search', 'move', 'bounce', 'extraAttack', 'forceAttack',
-  'anchor', 'sacrifice', 'sacrificeItem', 'equipFromHand', 'animate', 'dieCheck', 'revealHand', 'applyPoison',
+  'anchor', 'sacrifice', 'sacrificeItem', 'equipFromHand', 'animate', 'dieCheck', 'revealHand', 'applyPoison', 'eachPlayerSacrificesOrDiscards',
   'attackDisarm', 'moveAnchor', 'attackBonus', 'magicDamageBonus', 'preventAnchorDecay',
   'lineWard', 'exhaustSelf', 'exhaust', 'modal', 'gainControl', 'suppressKeywords', 'counterAction',
   'grantKeywords', 'backLineAttack', 'preventDamage', 'firstMagicUncounterable', 'restrictAttack', 'restrictMove',
@@ -218,6 +218,7 @@ function validateEffect(e: Effect, path: string, p: (msg: string) => void, keywo
       if (!isInt(e.amount) || e.amount < 1) p(`${path}(${e.op}): amount must be an integer ≥ 1`);
       break;
     case 'preventAnchorDecay': case 'lineWard': case 'exhaustSelf': case 'counterAction':
+    case 'eachPlayerSacrificesOrDiscards':
       break; // no fields
     case 'modal':
       if (!Array.isArray(e.options) || !e.options.length) p(`${path}(modal): options required`);

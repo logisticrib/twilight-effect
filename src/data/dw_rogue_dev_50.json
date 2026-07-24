@@ -815,7 +815,14 @@
       "text": "Each player sacrifices a permanent or discards a card.",
       "flavor": "",
       "dev": true,
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-07-22, Arc F): symmetric cross-owner modal (each player chooses sacrifice-or-discard; resolve per the 2026-07-22 structural queue rule)",
+      "effects": [
+        {
+          "trigger": "onPlay",
+          "effects": [
+            { "op": "eachPlayerSacrificesOrDiscards" }
+          ]
+        }
+      ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
       "updatedAt": "2026-07-22T00:00:00.000000Z"
     },

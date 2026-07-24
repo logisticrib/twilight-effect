@@ -22,7 +22,7 @@ import { ADJ, FRONT_SLOTS, BACK_SLOTS, isFront, findSlot, type SlotId, type Boar
          type PendingItemTransfer, type StackEntry,
          gatherParanoia, gatherReactive, gatherOwnPlay, gatherEquippedAttacked, pushStack, setStack, resolveReactiveEntry,
          orderedForStack, batchOrderer, resolveCombatTriggers, combatTriggerEffects,
-         findEntityAnywhere, updateEntity, removeEntity,
+         findEntityAnywhere, updateEntity, removeEntity, canBeSacrificed,
          itemProfileOf, itemTransferCandidates, armNextItemTransfer,
          setPcHp, payPcHp, pcIdOf, charsOf,
          ownPhysicalConstructIds,
@@ -263,13 +263,33 @@ function commitAttack(s: StackRunCtx, game: GameState, charId: string, targetEnt
  * the owner's resolution (the owner's modal already serializes their own side).
  * Returns the blocking source name, or null. The owner is never held by their own pick.
  */
+/** Arc F (2026-07-24, Siege Rations): a resolved forced choice carrying `then`
+ *  chains the SAME choice to the other player — that player's halves are evaluated
+ *  FRESH here (per-event state, 2026-07-21: the second resolution reads the board
+ *  the first one left behind). Neither half → unaffected, loud toast, no prompt
+ *  (owner ruling 2026-07-24). Keyword Coercion carries no `then` — untouched. */
+function chainForcedChoice(g: GameState, co: PendingCoercion, msgs: string[]): { game: GameState } {
+  if (!co.then) return { game: g };
+  const side = co.then;
+  const discard = g[side].hand.length > 0;
+  const sac = (Object.values(g[side].board) as (BoardEntity | undefined)[]).some(x => !!x && canBeSacrificed(x));
+  if (!discard && !sac) {
+    msgs.push(`${g[side].name} is unaffected — nothing to discard or sacrifice`);
+    return { game: g };
+  }
+  msgs.push(discard && sac ? `${g[side].name} chooses: sacrifice a permanent or discard a card`
+    : discard ? `${g[side].name} must discard a card (no permanent to sacrifice)`
+    : `${g[side].name} must sacrifice a permanent (no cards in hand)`);
+  return { game: { ...g, pendingCoercion: { source: co.source, victim: side, generic: true } } };
+}
+
 export function reactiveHold(game: GameState, localPlayer: 'p1' | 'p2'): string | null {
   const dp = game.pendingDeadPick;
   if (dp && dp.lp !== localPlayer) return dp.source;
   // A Coercion prompt is the VICTIM's decision — the player who played the coercer
   // (and anyone else) waits for it.
   const co = game.pendingCoercion;
-  if (co && co.victim !== localPlayer) return `${co.source} (Coercion)`;
+  if (co && co.victim !== localPlayer) return `${co.source}${co.generic ? ' (forced choice)' : ' (Coercion)'}`; // labeled per kind (the Doubt lesson)
   // A forced discard is the DISCARDING player's choice (Arc A 2026-07-22, the
   // Coercion pattern) — whoever forced it waits.
   const pd = game.pendingDiscard;
@@ -446,7 +466,7 @@ function runOnEnter(
   let pendingCoercion: PendingCoercion | null = null;
   if (isCompanion && card.keywords.includes('Coercion')) {
     const canDiscard = g[opp].hand.length > 0;
-    const canSacrifice = Object.values(g[opp].board).some(e => e && e.kind !== 'pc');
+    const canSacrifice = Object.values(g[opp].board).some(e => e && canBeSacrificed(e)); // the 2026-07-24 chokepoint (behavior-identical)
     if (canDiscard || canSacrifice) {
       pendingCoercion = { source: card.name, victim: opp };
       enterMsg = `${card.name}: Coercion — opponent must discard a card or sacrifice a permanent.`;
@@ -1696,7 +1716,7 @@ export const useGameStore = create<GameStoreState>()(
     if (heldBy) return heldRefusal(s, heldBy);
     if (gameIsOver(s.game)) return s;
     const loc = findEntityAnywhere(s.game, entityId);
-    if (!loc || loc.ent.kind === 'pc') return s; // never the PC (losing it ends the game)
+    if (!loc || !canBeSacrificed(loc.ent)) return s; // never the PC — the 2026-07-24 chokepoint
     const name = loc.ent.name;
     const deadSink: PendingDeadPick[] = [];
     const armorSink: ArmorChoiceData[] = [];
@@ -2902,11 +2922,14 @@ export const useGameStore = create<GameStoreState>()(
     const ps = s.game[co.victim];
     const card = ps.hand.find(c => c.id === cardId);
     if (!card) return s;
-    const g: GameState = { ...s.game, pendingCoercion: null,
+    let g: GameState = { ...s.game, pendingCoercion: null,
       [co.victim]: { ...ps, hand: ps.hand.filter(c => c.id !== cardId), dead: [...ps.dead, card] } };
+    const chainMsgs: string[] = [];
+    ({ game: g } = chainForcedChoice(g, co, chainMsgs)); // Arc F: a symmetric effect arms the other player next
     const id = ++toastId;
     setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 4000);
-    return { game: g, toasts: [...s.toasts, { id, msg: `${co.source}: ${card.name} discarded (Coercion)` }] };
+    return { game: g, toasts: [...s.toasts,
+      { id, msg: `${co.source}: ${card.name} discarded${co.generic ? '' : ' (Coercion)'}` }, ...mkToasts(chainMsgs)] };
   }),
 
   resolveCoercionSacrifice: (entityId) => set(s => {
@@ -2917,17 +2940,21 @@ export const useGameStore = create<GameStoreState>()(
     const loc = findEntityAnywhere(s.game, entityId);
     // Only the victim's own permanents qualify, and never the PC (a forced game
     // loss is not a cost).
-    if (!loc || loc.player !== co.victim || loc.ent.kind === 'pc') return s;
+    if (!loc || loc.player !== co.victim || !canBeSacrificed(loc.ent)) return s; // PC never legal — the 2026-07-24 chokepoint
     const deadSink: PendingDeadPick[] = [];
     const armorSink: ArmorChoiceData[] = [];
     // Sacrifice IS a death (ruled 2026-07-08) — destroyEntity fires the triggers.
     const d = destroyEntity({ ...s.game, pendingCoercion: null }, entityId, deadSink, armorSink, 'sacrifice');
-    const g = d.game;
-    const msgs = [`${loc.ent.name} is sacrificed (Coercion)`, ...d.msgs];
+    let g = recomputeStatics(armPrompts(d.game, deadSink, armorSink));
+    const msgs = [`${loc.ent.name} is sacrificed${co.generic ? '' : ' (Coercion)'}`, ...d.msgs];
+    // Arc F: chain AFTER the destruction fully resolved — the next player's halves
+    // read the post-event state (per-event evaluation, 2026-07-21).
+    const chainMsgs: string[] = [];
+    ({ game: g } = chainForcedChoice(g, co, chainMsgs));
     const id = ++toastId;
     setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 4000);
-    return { game: recomputeStatics(armPrompts(g, deadSink, armorSink)),
-      toasts: [...s.toasts, { id, msg: `${co.source}: ${msgs.join(' | ')}` }] };
+    return { game: g,
+      toasts: [...s.toasts, { id, msg: `${co.source}: ${msgs.join(' | ')}` }, ...mkToasts(chainMsgs)] };
   }),
 
   // ── HP nudge ──────────────────────────────────────────────────────────────
