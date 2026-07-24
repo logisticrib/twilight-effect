@@ -153,6 +153,14 @@ export type Effect =
   // 'toBottomDraw' the looker may choose a card — bottom of its owner's deck, then
   // that player draws (Mark the Pockets).
   | { op: 'revealHand'; pick?: 'toBottomDraw' }
+  // applyPoison (Arc D, 2026-07-23 — Poisoned Caltrops): effect-applied Poison
+  // counters. Applies the SAME patch as the combat keyword (poisonHitPatch:
+  // counter + POISONED status + exhaust — canon Poison always exhausts with the
+  // counter, so "exhaust it and put a Poison counter on it" is this ONE op).
+  // Provenance canon (RULED 2026-07-22): the ready-phase check cannot tell the
+  // entry points apart. Choiceless — no prompt. Engine-supported target:
+  // eventSubject (trap windows).
+  | { op: 'applyPoison'; count: number; target: TargetSpec }
   // itemKind narrows an Item recovery to Weapon/Armor/Trinket ("return target Weapon" —
   // Fence's Ledger, dev deck 2026-07-22); optional makes the pick skippable ("you may").
   | { op: 'returnFromDead'; cardType?: string; itemKind?: string; optional?: boolean; to: 'hand' | 'encounter' }

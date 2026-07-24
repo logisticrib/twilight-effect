@@ -229,8 +229,16 @@ export function effectiveMaxHp(ent: BoardEntity, game: GameState): number {
 
 /** Combat keywords an equipped item grants to its bearer (rules: "Equipped
  *  character has CLEAVE/RANGED/…"). Excludes item-bookkeeping keywords like
- *  Armor X and the equip-variant Kit-Master. */
-const ITEM_GRANTED_KEYWORDS = new Set(['Cleave', 'Ranged', 'Hit & Run', 'Guardian', 'Evasive', 'Reckless', 'Zealous', 'Acrobatics']);
+ *  Armor X and the equip-variant Kit-Master. Poison added Arc D (2026-07-23,
+ *  Venom-Slicked Dagger — the combat hook already reads effectiveKeywords, so
+ *  the whitelist was the only blocker). */
+const ITEM_GRANTED_KEYWORDS = new Set(['Cleave', 'Ranged', 'Hit & Run', 'Guardian', 'Evasive', 'Reckless', 'Zealous', 'Acrobatics', 'Poison']);
+
+/** Whitelist membership incl. the ONE parameterized form (Arc D, 2026-07-23):
+ *  "[NAME]'s Bane" cannot live in an exact-match set — the prefix allowance
+ *  passes the FULL string through, so parseBanes keeps the prey name
+ *  (Wolfsbane Knife's "Druid's Bane" reaches isBaneTarget intact). */
+const isItemGrantedKeyword = (k: string) => ITEM_GRANTED_KEYWORDS.has(k) || /'s Bane$/.test(k);
 
 /** Is this companion under an opposing keyword-suppression aura (Binding Sigil)? */
 function isKeywordSuppressed(ent: BoardEntity, game: GameState): boolean {
@@ -308,7 +316,7 @@ export function effectiveKeywords(ent: BoardEntity, game: GameState): string[] {
     for (const it of [lo.weapon, ...lo.gear]) {
       if (!it) continue;
       const card = CATALOG.find(c => c.name === it.name);
-      card?.keywords.forEach(k => { if (ITEM_GRANTED_KEYWORDS.has(k)) set.add(k); });
+      card?.keywords.forEach(k => { if (isItemGrantedKeyword(k)) set.add(k); });
     }
   }
   auraGrantedKeywords(ent, game).forEach(k => set.add(k));

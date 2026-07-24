@@ -11,7 +11,7 @@ import { isFront } from './geometry';
 import type { GameState, PendingDeadPick, ArmorChoiceData } from './state';
 import { charsOf, companionIds, constructIds, findEntityAnywhere, updateEntity,
          removeEntity, destroyEntity, setPcHp, pcIdOf, itemCardsOf, itemTransferOf } from './entities';
-import { isPhysicalConstruct, currentWillpower, effectiveAttack, effectiveMaxHp, isImmuneToSplash } from './stats';
+import { isPhysicalConstruct, currentWillpower, effectiveAttack, effectiveMaxHp, isImmuneToSplash, isCharacter, poisonHitPatch } from './stats';
 // Function-level cycle with combat.ts (resolveActionEffects deals damage; combat
 // triggers resolve effects). Safe: hoisted functions, called only at runtime.
 import { applyDamage } from './combat';
@@ -617,6 +617,21 @@ export function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceNam
             : { ...g, pendingDiscard: pd };
         }
         msgs.push(`${g[victim].name} must discard ${e.count === 1 ? 'a card' : `${e.count} cards`}`);
+        break;
+      }
+      case 'applyPoison': {
+        // Arc D (2026-07-23 — Poisoned Caltrops): effect-applied Poison counters.
+        // Provenance canon (RULED 2026-07-22): counters are counters — this applies
+        // the SAME patch the combat keyword applies (poisonHitPatch: counter +
+        // POISONED status + exhaust), so the ready-phase check cannot tell the two
+        // entry points apart. Choiceless: no prompt, no hold.
+        if (e.target !== 'eventSubject' || !ctx?.subjectId) break; // engine-supported scope only (validator-enforced)
+        const loc = findEntityAnywhere(g, ctx.subjectId);
+        if (!loc || !isCharacter(loc.ent)) break; // subject left / not a character — nothing to poison
+        let patched = loc.ent;
+        for (let n = 0; n < e.count; n++) patched = { ...patched, ...poisonHitPatch(patched) };
+        g = updateEntity(g, loc.ent.id, patched);
+        msgs.push(`${loc.ent.name} is exhausted and takes ${e.count} Poison counter${e.count === 1 ? '' : 's'}`);
         break;
       }
       case 'revealHand': {

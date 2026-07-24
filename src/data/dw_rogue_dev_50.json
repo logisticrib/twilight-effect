@@ -934,7 +934,6 @@
           ]
         }
       ],
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-07-22, Arc D): item-granted POISON is blocked by the ITEM_GRANTED_KEYWORDS whitelist (stats.ts) — the printed keyword does not reach the bearer's effectiveKeywords",
       "createdAt": "2026-07-22T00:00:00.000000Z",
       "updatedAt": "2026-07-22T00:00:00.000000Z"
     },
@@ -1129,7 +1128,6 @@
           ]
         }
       ],
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-07-22, Arc D): item-granted BANE is blocked by the ITEM_GRANTED_KEYWORDS whitelist (stats.ts) — and \"X's Bane\" is parameterized, so the whitelist's exact-match .has() also needs a prefix allowance",
       "createdAt": "2026-07-22T00:00:00.000000Z",
       "updatedAt": "2026-07-22T00:00:00.000000Z"
     },
@@ -1182,7 +1180,14 @@
       "text": "Whenever an opposing companion moves into the front line, exhaust it and put a Poison counter on it.",
       "flavor": "",
       "dev": true,
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-07-22, Arc D): effect-applied Poison counters (no op sets poison; the only application path is the combat keyword). OPEN QUESTION for owner: do effect-applied counters behave identically to keyword-applied at the ready-phase check?",
+      "effects": [
+        {
+          "trigger": "oppCompanionMovesToFront",
+          "effects": [
+            { "op": "applyPoison", "count": 1, "target": "eventSubject" }
+          ]
+        }
+      ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
       "updatedAt": "2026-07-22T00:00:00.000000Z"
     },

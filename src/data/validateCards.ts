@@ -48,7 +48,7 @@ export type _ExhaustiveTargets = AssertNever<Exclude<TargetSpec, (typeof TARGET_
 const OPS = [
   'damage', 'damageSelfPC', 'heal', 'buff', 'draw', 'discard', 'mill', 'shuffleHandRedraw',
   'deckPeek', 'returnFromDead', 'search', 'move', 'bounce', 'extraAttack', 'forceAttack',
-  'anchor', 'sacrifice', 'sacrificeItem', 'equipFromHand', 'animate', 'dieCheck', 'revealHand',
+  'anchor', 'sacrifice', 'sacrificeItem', 'equipFromHand', 'animate', 'dieCheck', 'revealHand', 'applyPoison',
   'attackDisarm', 'moveAnchor', 'attackBonus', 'magicDamageBonus', 'preventAnchorDecay',
   'lineWard', 'exhaustSelf', 'exhaust', 'modal', 'gainControl', 'suppressKeywords', 'counterAction',
   'grantKeywords', 'backLineAttack', 'preventDamage', 'firstMagicUncounterable', 'restrictAttack', 'restrictMove',
@@ -174,6 +174,11 @@ function validateEffect(e: Effect, path: string, p: (msg: string) => void, keywo
     }
     case 'revealHand':
       if (e.pick !== undefined && e.pick !== 'toBottomDraw') p(`${path}(revealHand): bad pick "${String(e.pick)}"`);
+      break;
+    case 'applyPoison':
+      count('count');
+      // Engine-supported scope only (Arc D 2026-07-23; the preventDamage precedent).
+      if (e.target !== 'eventSubject') p(`${path}(applyPoison): target must be eventSubject (trap windows)`);
       break;
     case 'returnFromDead':
       if (e.to !== 'hand' && e.to !== 'encounter') p(`${path}(returnFromDead): bad to "${String(e.to)}"`);
