@@ -637,16 +637,18 @@ export function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceNam
       case 'eachPlayerSacrificesOrDiscards': {
         // Arc F (2026-07-24, Siege Rations): each player pays one of the two halves.
         // ORDER: the NON-ACTIVE player's chosen resolution first — the 2026-07-22
-        // structural queue applied to one action's two chosen resolutions (the
-        // Note-supported reading; flagged to the owner in HANDOFF as not literally
-        // covered by the Note's trigger/state-event wording). Serialized prompts,
-        // never dual-hold: the second prompt arms when the first resolves (its
-        // halves evaluated FRESH at that moment — per-event state), via the
-        // pendingCoercion chain (`then`) in resolveCoercionDiscard/Sacrifice.
-        // DEGENERATES (owner 2026-07-24): neither half → unaffected, loud toast,
-        // no prompt. One half → the prompt offers only that half (the modal
-        // renders available sections; WHICH card/permanent stays the player's
-        // pick — owner agency, exactly Coercion's shipped handling).
+        // structural queue applied to one action's two chosen resolutions.
+        // RATIFIED (owner 2026-07-24, per the Arc G brief; stamped 2026-08-04): opponent-first for "one action,
+        // both players choose" is settled — no longer merely the Note-supported
+        // reading. Serialized prompts, never dual-hold: the second prompt arms when
+        // the first resolves (its halves evaluated FRESH at that moment — per-event
+        // state), via the pendingCoercion chain (`then`) in
+        // resolveCoercionDiscard/Sacrifice.
+        // DEGENERATES (owner 2026-07-24, RATIFIED as built per the Arc G brief; stamped 2026-08-04):
+        // neither half → unaffected, loud toast, no prompt. One half → the
+        // WHICH-HALF choice auto-resolves (the modal renders the one available
+        // section); WHICH card/permanent stays the player's pick — owner agency,
+        // exactly Coercion's shipped handling.
         // The caster's hand still holds the RESOLVING card here (playAction's
         // immediate path resolves effects before burial) — it is on the stack,
         // not in hand, so it never counts toward the caster's discard half.
@@ -684,6 +686,29 @@ export function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceNam
         if (g.pendingHandReveal) break; // single slot — no consumer arms two in one resolution
         g = { ...g, pendingHandReveal: { source: sourceName, lp, handSide: other, ...(e.pick ? { pick: e.pick } : {}) } };
         msgs.push(`Look at ${g[other].name}'s hand`);
+        break;
+      }
+      case 'deckPeek': {
+        // Arc G (2026-08-04): the REACTIVE-clause path (Echo-Keeper's own-play
+        // listener). Every other consumer special-cases deckPeek UPSTREAM (playAction,
+        // activateAbility, runOnEnter) before effects reach this resolver, so this
+        // case is shipped-neutral by construction. Arms the standing PendingPeek for
+        // the clause's controller; if a peek is already up (an earlier trigger's —
+        // e.g. Paranoia's, still pausing the stack), the request joins the
+        // start-of-turn peek queue, whose activation RE-SLICES the deck (stale-proof).
+        const peekSide: 'p1' | 'p2' = e.deck === 'opp' ? (lp === 'p1' ? 'p2' : 'p1') : lp;
+        if (g.pendingPeek) {
+          g = { ...g, pendingPeekQueue: [...g.pendingPeekQueue,
+            { source: sourceName, lp, deckSide: peekSide, look: e.look, dests: e.dests,
+              maxHand: e.maxHand, ...(e.reorder ? { reorder: true as const } : {}) }] };
+          msgs.push(`${sourceName}: deck look queued`);
+          break;
+        }
+        const cards = g[peekSide].deck.slice(0, e.look);
+        if (!cards.length) { msgs.push(`${sourceName} — the deck is empty`); break; }
+        g = { ...g, pendingPeek: { source: sourceName, lp, deckSide: peekSide, cards,
+          dests: e.dests, maxHand: e.maxHand, ...(e.reorder ? { reorder: true as const } : {}) } };
+        msgs.push(`Look at the top of ${peekSide === lp ? 'your' : `${g[peekSide].name}'s`} deck`);
         break;
       }
       // Remaining ops (move slot-pick, two-target attacks, sacrificeItem, deckPeek…) — later slices.

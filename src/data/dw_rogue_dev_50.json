@@ -72,9 +72,8 @@
           ]
         }
       ],
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-07-22, Arc G-adjacent): revealHand machinery EXISTS (Arc A), but Coercion claims the single-pending enter window (runOnEnter's !pendingCoercion guard) so this authored clause is DROPPED — same-owner enter-trigger ordering needed, and the order is information-relevant (hand seen pre- vs post-coercion), so no auto-order may be guessed",
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-08-04T00:00:00.000000Z"
     },
     {
       "id": "dd000004",
@@ -333,9 +332,16 @@
       "text": "Whenever you play a Companion, look at the top card of your deck. You may put that card on the bottom of your deck.",
       "flavor": "",
       "dev": true,
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-07-22, Arc G): own-Companion-play listener — collides with opposing Paranoia in the same play window, forcing the 2026-07-22 structural queue (mixed-owner batch, per-owner prompts)",
+      "effects": [
+        {
+          "trigger": "ownPlaysCompanion",
+          "effects": [
+            { "op": "deckPeek", "look": 1, "dests": ["top", "bottom"] }
+          ]
+        }
+      ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-08-04T00:00:00.000000Z"
     },
     {
       "id": "dd000015",
@@ -1015,9 +1021,8 @@
           ]
         }
       ],
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-07-22, Arc G-adjacent): keyword trigger + structured onEnter on ONE card — placeCard's enter window is single-pending (the !scavengerPick guard at the structured-onEnter branch), so Scavenger claims the enter and this authored return clause is DROPPED. Same-owner simultaneous enter triggers need the owner-ordering treatment; effects stay authored for that arc.",
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-08-04T00:00:00.000000Z"
     },
     {
       "id": "dd000040",

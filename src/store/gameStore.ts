@@ -19,9 +19,9 @@ import { ADJ, FRONT_SLOTS, BACK_SLOTS, isFront, findSlot, type SlotId, type Boar
          type Phase, type GameState,
          type PendingCoercion, type PendingDeadPick, type PendingDiscard,
          type AttackCtx, type ArmorChoiceData,
-         type PendingItemTransfer, type StackEntry,
+         type PendingItemTransfer, type StackEntry, type ReactiveStackEntry,
          gatherParanoia, gatherReactive, gatherOwnPlay, gatherEquippedAttacked, pushStack, setStack, resolveReactiveEntry,
-         orderedForStack, batchOrderer, resolveCombatTriggers, combatTriggerEffects,
+         orderedForStack, batchOrderer, segmentBatch, resolveCombatTriggers, combatTriggerEffects,
          findEntityAnywhere, updateEntity, removeEntity, canBeSacrificed,
          itemProfileOf, itemTransferCandidates, armNextItemTransfer,
          setPcHp, payPcHp, pcIdOf, charsOf,
@@ -267,7 +267,11 @@ function commitAttack(s: StackRunCtx, game: GameState, charId: string, targetEnt
  *  chains the SAME choice to the other player — that player's halves are evaluated
  *  FRESH here (per-event state, 2026-07-21: the second resolution reads the board
  *  the first one left behind). Neither half → unaffected, loud toast, no prompt
- *  (owner ruling 2026-07-24). Keyword Coercion carries no `then` — untouched. */
+ *  (owner ruling 2026-07-24). Keyword Coercion carries no `then` — untouched.
+ *  RATIFIED (owner 2026-07-24, Arc G brief): opponent-first resolution for "one
+ *  action, both players choose" is settled canon, and the degenerate handling as
+ *  built (which-HALF auto-resolves when forced; which-CARD always the player's) is
+ *  confirmed — both formerly ⚠ flags, closed with no engine change. */
 function chainForcedChoice(g: GameState, co: PendingCoercion, msgs: string[]): { game: GameState } {
   if (!co.then) return { game: g };
   const side = co.then;
@@ -281,6 +285,25 @@ function chainForcedChoice(g: GameState, co: PendingCoercion, msgs: string[]): {
     : discard ? `${g[side].name} must discard a card (no permanent to sacrifice)`
     : `${g[side].name} must sacrifice a permanent (no cards in hand)`);
   return { game: { ...g, pendingCoercion: { source: co.source, victim: side, generic: true } } };
+}
+
+/** Arc G (2026-08-04): a resolved game-level prompt may have been PAUSING the
+ *  multi-pending enter window — when the stack now rests on an 'enterUnit' and no
+ *  blocking prompt remains, the next unit resolves (fresh, per-event). NARROW by
+ *  construction: shipped stacks never hold enterUnit entries, so every shipped
+ *  resolver path returns unchanged. Declared here (above the store) and driven from
+ *  resolveDeadPick / cancelDeadPick / resolveCoercionDiscard / resolveCoercionSacrifice /
+ *  resolveHandReveal — the four prompt kinds an enter unit can arm (peeks already
+ *  re-enter via resolvePeek's standing stack resumption). */
+function resumeEnterUnits(g: GameState, s: StackRunCtx):
+  { game: GameState; local: Partial<GameStoreState>; msgs: string[] } {
+  const top = g.triggerStack?.[g.triggerStack.length - 1];
+  if (top?.kind !== 'enterUnit') return { game: g, local: {}, msgs: [] };
+  if (g.pendingDeadPick || g.pendingCoercion || g.pendingHandReveal || g.pendingPeek
+    || g.pendingDiscard || g.pendingTriggerOrder || g.pendingArmor || g.pendingPreventOrder
+    || g.pendingItemTransfer || g.pendingPoison) return { game: g, local: {}, msgs: [] };
+  const r = runStack(g, s);
+  return { game: r.game, local: r.local, msgs: r.toastMsgs };
 }
 
 export function reactiveHold(game: GameState, localPlayer: 'p1' | 'p2'): string | null {
@@ -326,6 +349,12 @@ export function reactiveHold(game: GameState, localPlayer: 'p1' | 'p2'): string 
   // machinery arms store-local prompts, so only the controller's client resolves it).
   const head = game.triggerStack?.[game.triggerStack.length - 1];
   if (head?.kind === 'ownEnter' && head.controller !== localPlayer) return `${head.card.name} (entering)`;
+  // Arc G note (2026-08-04): an 'enterUnit'-headed stack needs NO clause of its own —
+  // every enterUnit pause has a game-level prompt armed (runStack breaks only after
+  // arming one), and each prompt's clause above already holds exactly the right
+  // party (a Coercion unit must hold the placer, not its victim — the shipped
+  // Coercion UX). Transient no-prompt gaps never sync: reducers drain the stack
+  // synchronously before broadcasting.
   return null;
 }
 
@@ -567,6 +596,111 @@ function runOnEnter(
 }
 
 /**
+ * Arm a segmented simultaneous window (Arc G 2026-08-04, the 2026-07-22 structural
+ * queue implemented): segments arrive in PUSH order (segmentBatch — the active
+ * player's first, the non-active player's second/above). A ≤1 segment pushes
+ * directly (no arbitrary orderings exist); a >1 segment pauses for its OWNER's
+ * ordering pick, chaining any later segment via PendingTriggerOrder.next —
+ * serialized per-owner prompts, never dual-hold. `paused` = a prompt now gates the
+ * window; the caller returns without running the stack (resolveTriggerOrder
+ * resumes). Single-owner windows produce exactly today's arming shape.
+ */
+function armSegmentedWindow(
+  g: GameState, segments: { controller: 'p1' | 'p2'; items: ReactiveStackEntry[] }[],
+): { game: GameState; paused: boolean } {
+  let out = g;
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments[i];
+    if (seg.items.length <= 1) { out = pushStack(out, seg.items); continue; }
+    const rest = segments[i + 1]; // at most one later segment (two owners)
+    out = { ...out, pendingTriggerOrder: { lp: seg.controller, items: seg.items, picked: [],
+      ...(rest ? { next: { lp: rest.controller, items: rest.items } } : {}) } };
+    return { game: out, paused: true };
+  }
+  return { game: out, paused: false };
+}
+
+/**
+ * The GAME-LEVEL enter triggers a card statically carries (Arc G 2026-08-04, the
+ * multi-pending enter window). A card with >1 splits into owner-ordered 'enterUnit'
+ * stack entries instead of letting the first claimant drop the rest (the Phase-1
+ * Gutter Fence finding). Kinds whose prompts are STORE-local (Reinforce/Dismantle,
+ * Kit-Master, Animate Magic, equip-from-hand, two-step / targeted onEnter) are not
+ * queueable — a card mixing one of those with another enter trigger fails loudly
+ * (detection over enumeration; extend armEnterUnit when a card needs it). No
+ * shipped card carries more than one unit (Scavenger and Coercion have zero shipped
+ * carriers), so every shipped enter runs the pre-Arc-G path byte-identically.
+ */
+function enterUnitsOf(card: Card): ('scavenger' | 'coercion' | 'structured')[] {
+  const isCompanion = card.type === 'Companion';
+  const units: ('scavenger' | 'coercion' | 'structured')[] = [];
+  if (isCompanion && card.keywords.includes('Scavenger')) units.push('scavenger');
+  if (isCompanion && card.keywords.includes('Coercion')) units.push('coercion');
+  const onEnter = (card.effects ?? []).filter(c => c.trigger === 'onEnter').flatMap(c => c.effects);
+  if (onEnter.length > 0) units.push('structured');
+  if (units.length > 1) {
+    const unsupported = [
+      parseEnterTrigger(card.keywords) ? 'Reinforce/Dismantle' : null,
+      card.keywords.includes('Kit-Master') ? 'Kit-Master' : null,
+      parseAnimateMagic(card.keywords) != null ? 'Animate Magic' : null,
+      card.keywords.includes('Oathsworn') ? 'Oathsworn' : null,
+      onEnter.some(e => e.op === 'equipFromHand') ? 'equipFromHand' : null,
+      twoStepKind(onEnter) ? 'two-step targeting' : null,
+      actionTargetSpec(onEnter) ? 'targeted onEnter' : null,
+    ].filter(Boolean);
+    if (unsupported.length) {
+      throw new Error(
+        `multi-pending enter window: ${card.name} mixes ${unsupported.join(', ')} with other ` +
+        `enter triggers — only game-level prompt kinds (Scavenger / Coercion / no-target ` +
+        `structured) are queueable (Arc G 2026-08-04). Extend armEnterUnit before shipping this card.`);
+    }
+  }
+  return units;
+}
+
+/**
+ * Resolve ONE queued enter trigger (Arc G 'enterUnit') — evaluated FRESH as of now
+ * (per-event state, 2026-07-21): an earlier unit's outcome (an item attached, a card
+ * discarded) is visible to later ones. Each block mirrors its runOnEnter twin; a
+ * unit with nothing to do fizzles loudly and the stack continues (mandatory triggers
+ * fire even when their effects no-op — R4). Declining an OPTIONAL unit's prompt
+ * never eats the units beneath it (they are separate stack entries).
+ */
+function armEnterUnit(
+  game: GameState, entry: Extract<ReactiveStackEntry, { kind: 'enterUnit' }>,
+  deadSink: PendingDeadPick[], armorSink: ArmorChoiceData[],
+): { game: GameState; msg: string } {
+  let g = game;
+  const lp = entry.controller;
+  const opp: 'p1' | 'p2' = lp === 'p1' ? 'p2' : 'p1';
+  const name = entry.sourceName;
+  if (entry.unit === 'scavenger') {
+    const options = g[lp].dead.map((c, idx) => ({ card: c, idx })).filter(o => o.card.type === 'Item');
+    if (!options.length) return { game: g, msg: `${name} — no item in the Dead Zone (Scavenger).` };
+    const pick: PendingDeadPick = { source: name, lp, options, postEffects: [], optional: true,
+      attachTo: { id: entry.entId, name } };
+    g = g.pendingDeadPick
+      ? { ...g, pendingDeadPickQueue: [...g.pendingDeadPickQueue, pick] }
+      : { ...g, pendingDeadPick: pick };
+    return { game: g, msg: `${name}: Scavenger — you may return an item from your Dead Zone.` };
+  }
+  if (entry.unit === 'coercion') {
+    const canDiscard = g[opp].hand.length > 0;
+    const canSacrifice = Object.values(g[opp].board).some(e => e && canBeSacrificed(e)); // the 2026-07-24 chokepoint
+    if (!canDiscard && !canSacrifice) return { game: g, msg: `${name} — the opponent has nothing to coerce.` };
+    return { game: { ...g, pendingCoercion: { source: name, victim: opp } },
+      msg: `${name}: Coercion — opponent must discard a card or sacrifice a permanent.` };
+  }
+  // 'structured': the card's authored onEnter clauses — no-target ops only
+  // (enterUnitsOf refuses the rest), resolved through the interpreter. The dead
+  // sink defers returnFromDead to the player-facing picker; revealHand/deckPeek
+  // arm their game-level prompts directly.
+  const onEnter = (entry.card.effects ?? []).filter(c => c.trigger === 'onEnter').flatMap(c => c.effects);
+  const r = resolveActionEffects(g, lp, name, onEnter, undefined, entry.entId, undefined, deadSink, armorSink);
+  return { game: r.game, msg: r.msgs.length ? `${name}: ${r.msgs.join(' | ')}` : '' };
+}
+
+/**
  * Drive the trigger stack (GameState.triggerStack, top = last) until it drains or
  * PAUSES: on a Paranoia peek (the controller decides), on a simultaneous-trigger
  * ordering pick (the triggers' owner decides — 2026-07-22), on a mid-combat Armor choice, or on an
@@ -600,6 +734,7 @@ function runStack(game: GameState, s: StackRunCtx):
 
     if (top.kind === 'reactive') {
       g = setStack(g, stack.slice(0, -1));
+      const peekBefore = g.pendingPeek;
       const r = resolveReactiveEntry(g, top, deadSink, armorSink);
       g = r.game;
       toastMsgs.push(r.toast);
@@ -608,6 +743,33 @@ function runStack(game: GameState, s: StackRunCtx):
       // resolution and completes before anything beneath it (LIFO), in particular
       // before the entering companion's own ownEnter. resolveDiscard re-enters.
       if (g.pendingDiscard) break;
+      // Arc G (2026-08-04): a reactive clause that ARMS a deck peek (Echo-Keeper's
+      // own-play listener → the interpreter's deckPeek) pauses like the Paranoia
+      // branch — the owner's decision completes before anything beneath (LIFO).
+      // Transition check, not presence check: no shipped reactive arms a peek, so
+      // every shipped path is byte-identical. resolvePeek/cancelPeek re-enter.
+      if (g.pendingPeek && g.pendingPeek !== peekBefore) break;
+      continue;
+    }
+
+    if (top.kind === 'enterUnit') {
+      // Multi-pending enter window (Arc G 2026-08-04): one of an entered card's
+      // OWN simultaneous enter triggers, in the owner's chosen order. Evaluated
+      // FRESH here (per-event state, 2026-07-21). A unit that armed a prompt (or
+      // deferred a dead pick into the sink) pauses the stack — its resolution
+      // completes before the next unit is evaluated; the prompt's own resolver
+      // re-enters (resolveDeadPick / resolveCoercion* / resolveHandReveal /
+      // resolvePeek, narrow: only when the stack rests on an enterUnit). A
+      // fizzled unit falls through to the next.
+      g = setStack(g, stack.slice(0, -1));
+      const sinkBefore = deadSink.length;
+      const before = { dp: g.pendingDeadPick, co: g.pendingCoercion, hr: g.pendingHandReveal, pk: g.pendingPeek };
+      const r = armEnterUnit(g, top, deadSink, armorSink);
+      g = r.game;
+      if (r.msg) toastMsgs.push(r.msg);
+      if (deadSink.length > sinkBefore || g.pendingDeadPick !== before.dp
+        || g.pendingCoercion !== before.co || g.pendingHandReveal !== before.hr
+        || g.pendingPeek !== before.pk) break;
       continue;
     }
 
@@ -681,6 +843,23 @@ function runStack(game: GameState, s: StackRunCtx):
     // controller's client may resolve it — everyone else leaves it on the stack
     // (reactiveHold covers them; the controller's client resumes via resumeStack).
     if (sCtx.conn.mode !== 'solo' && top.controller !== sCtx.localPlayer) break;
+    // Multi-pending enter window (Arc G 2026-08-04): a card with MORE THAN ONE
+    // game-level enter trigger no longer lets the first claimant drop the rest
+    // (the Phase-1 Gutter Fence finding — the single-pending guard). Its enter
+    // splits into per-trigger 'enterUnit' entries, ordered by their OWNER (Rules
+    // Note 2026-07-22: each player orders their own simultaneous triggers — the
+    // information-relevant case Arc A refused to auto-order) via the standing
+    // ordering prompt, then resolved LIFO with fresh per-unit evaluation. ≤1 unit
+    // → the pre-Arc-G runOnEnter path, byte-identical (no shipped card carries two).
+    const units = enterUnitsOf(top.card);
+    if (units.length > 1) {
+      g = setStack(g, stack.slice(0, -1));
+      toastMsgs.push(`${top.card.name} enters the field!`);
+      const items: ReactiveStackEntry[] = units.map(u => ({ kind: 'enterUnit', unit: u,
+        entId: top.entId, sourceName: top.card.name, card: top.card, controller: top.controller }));
+      g = { ...g, pendingTriggerOrder: { lp: top.controller, items, picked: [] } };
+      break; // PAUSE — resolveTriggerOrder pushes them in the chosen order and resumes
+    }
     g = setStack(g, stack.slice(0, -1));
     const r = runOnEnter(g, top.card, top.entId, top.controller, sCtx, deadSink, armorSink);
     g = r.game;
@@ -1760,7 +1939,18 @@ export const useGameStore = create<GameStoreState>()(
     }
     // Order complete (the last unpicked item is implied) — the triggers go on the
     // stack in the chosen order and it runs.
-    const g = pushStack({ ...s.game, pendingTriggerOrder: undefined }, orderedForStack(po.items, picked));
+    let g = pushStack({ ...s.game, pendingTriggerOrder: undefined }, orderedForStack(po.items, picked));
+    // Arc G (2026-08-04): a segmented mixed-owner window chains the OTHER owner's
+    // segment — pushed ABOVE the segment just ordered (structural queue: theirs
+    // resolve first when they are the non-active side). >1 → their own ordering
+    // prompt (serialized, never dual-hold — the hold flips to the new orderer);
+    // a singleton needs no prompt and pushes directly.
+    if (po.next) {
+      if (po.next.items.length > 1) {
+        return { game: { ...g, pendingTriggerOrder: { lp: po.next.lp, items: po.next.items, picked: [] } } };
+      }
+      g = pushStack(g, po.next.items);
+    }
     const r = runStack(g, s);
     return { ...r.local, game: r.game, toasts: [...s.toasts, ...mkToasts(r.toastMsgs)] };
   }),
@@ -1772,6 +1962,11 @@ export const useGameStore = create<GameStoreState>()(
     if (!top) return s;
     if (s.game.pendingTriggerOrder || s.game.pendingPeek || s.game.pendingArmor || s.game.pendingPreventOrder
       || s.game.pendingDiscard || s.game.pendingHandReveal) return s; // paused on a prompt, not a hand-off
+    // Arc G (2026-08-04): an enterUnit-headed stack also pauses on the game-level
+    // prompts the global list doesn't cover — narrow to the new kind, so shipped
+    // ownEnter resumption (which can legitimately coexist with a dead pick) is
+    // byte-identical.
+    if (top.kind === 'enterUnit' && (s.game.pendingDeadPick || s.game.pendingCoercion || s.game.pendingItemTransfer)) return s;
     if (top.kind === 'ownEnter' && s.conn.mode !== 'solo' && top.controller !== s.localPlayer) return s;
     const r = runStack(s.game, s);
     return { ...r.local, game: r.game, toasts: [...s.toasts, ...mkToasts(r.toastMsgs)] };
@@ -1911,7 +2106,8 @@ export const useGameStore = create<GameStoreState>()(
     const card = liveIdx >= 0 ? ps.dead[liveIdx] : undefined;
     if (!card) { // the card is no longer in the Dead Zone — skip and advance the queue
       const [next, ...rest] = s.game.pendingDeadPickQueue;
-      return { game: armNextItemTransfer({ ...s.game, pendingDeadPick: next ?? null, pendingDeadPickQueue: rest }) };
+      const ru = resumeEnterUnits(armNextItemTransfer({ ...s.game, pendingDeadPick: next ?? null, pendingDeadPickQueue: rest }), s);
+      return { ...ru.local, game: ru.game, toasts: [...s.toasts, ...mkToasts(ru.msgs)] };
     }
     const taken: GameState = { ...s.game, [dp.lp]: { ...ps, dead: ps.dead.filter((_, i) => i !== liveIdx), hand: [...ps.hand, card] } };
     let g = taken;
@@ -1925,7 +2121,8 @@ export const useGameStore = create<GameStoreState>()(
       const { isWeapon, isHeavy } = itemProfileOf(card);
       if (!wearer || !canHoldItem(wearer.ent, isWeapon, isHeavy)) {
         const [next, ...rest] = s.game.pendingDeadPickQueue;
-        return { game: armNextItemTransfer({ ...s.game, pendingDeadPick: next ?? null, pendingDeadPickQueue: rest }) };
+        const ru = resumeEnterUnits(armNextItemTransfer({ ...s.game, pendingDeadPick: next ?? null, pendingDeadPickQueue: rest }), s);
+        return { ...ru.local, game: ru.game, toasts: [...s.toasts, ...mkToasts(ru.msgs)] };
       }
       g = equipOnto(taken, dp.lp, dp.attachTo.id, card);
       msgs.push(`Returned ${card.name} from the Dead Zone — attached to ${wearer.ent.name}`);
@@ -1938,7 +2135,9 @@ export const useGameStore = create<GameStoreState>()(
     setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 4000);
     // Advance to the next queued prompt, if any (e.g. a Cleave that killed two bearers).
     const [next, ...rest] = s.game.pendingDeadPickQueue;
-    return { game: armNextItemTransfer({ ...g, pendingDeadPick: next ?? null, pendingDeadPickQueue: rest }), toasts: [...s.toasts, { id, msg: `${dp.source}: ${msgs.join(' | ')}` }] };
+    // Arc G: a resolved pick may have been pausing the multi-pending enter window.
+    const ru = resumeEnterUnits(armNextItemTransfer({ ...g, pendingDeadPick: next ?? null, pendingDeadPickQueue: rest }), s);
+    return { ...ru.local, game: ru.game, toasts: [...s.toasts, { id, msg: `${dp.source}: ${msgs.join(' | ')}` }, ...mkToasts(ru.msgs)] };
   }),
 
   cancelDeadPick: () => set(s => {
@@ -1948,7 +2147,10 @@ export const useGameStore = create<GameStoreState>()(
     // opponent's recovery pick. (The owner keeps the escape-hatch cancel.)
     if (s.conn.mode !== 'solo' && dp.lp !== s.localPlayer) return s;
     const [next, ...rest] = s.game.pendingDeadPickQueue;
-    return { game: armNextItemTransfer({ ...s.game, pendingDeadPick: next ?? null, pendingDeadPickQueue: rest }) };
+    // Arc G: declining an OPTIONAL pick must not eat the units queued beneath it —
+    // the enter window resumes exactly as it does after a taken pick.
+    const ru = resumeEnterUnits(armNextItemTransfer({ ...s.game, pendingDeadPick: next ?? null, pendingDeadPickQueue: rest }), s);
+    return { ...ru.local, game: ru.game, toasts: [...s.toasts, ...mkToasts(ru.msgs)] };
   }),
 
   // ── Equip from hand (Veteran of the Ashgrove on-enter) ────────────────────
@@ -2765,28 +2967,34 @@ export const useGameStore = create<GameStoreState>()(
       [lp]: { ...game[lp], hand: newHand, classZone: newCZ, willpower: newWillpower },
     };
     const paranoia = isCompanion ? gatherParanoia(paidGame, lp) : [];
-    // On-play listeners (arc 4, owner 2026-07-15): "When you play a Magical
-    // Construct…" — own-side listeners, from-hand plays ONLY (this reducer IS the
-    // from-hand path; conversions/placements never emit a play event, R1). A
-    // companion play can only queue Paranoia, a construct play only on-play
-    // listeners — the two windows never coexist in one play.
+    // On-play listeners (arc 4, owner 2026-07-15; extended Arc G 2026-08-04):
+    // "When you play a …" — own-side listeners, from-hand plays ONLY (this reducer
+    // IS the from-hand path; conversions/placements never emit a play event, R1).
+    // Gathered from the PRE-ENTER board (paidGame — the entity is still on the
+    // stack), so a companion entering from this very play never hears itself
+    // (per-event evaluation, 2026-07-21). A companion play queues Paranoia AND
+    // own 'ownPlaysCompanion' listeners (Echo-Keeper) — the first MIXED-owner
+    // window; a construct play queues own-play listeners only.
     const onPlay = isConstruct && card.subtype === 'Incantation'
       ? gatherOwnPlay(paidGame, 'ownPlaysMagicalConstruct', { id: newEnt.id, name: card.name, controller: lp })
-      : [];
+      : isCompanion
+        ? gatherOwnPlay(paidGame, 'ownPlaysCompanion', { id: newEnt.id, name: card.name, controller: lp })
+        : [];
     const playWindow = [...paranoia, ...onPlay];
     const g = pushStack(paidGame, [{ kind: 'enter', ent: newEnt, card, slot, controller: lp }]);
-    if (playWindow.length > 1) {
-      // >1 simultaneous play-window trigger — their CONTROLLER orders them (Rules
-      // Note 2026-07-22): multi-Paranoia → the Paranoia controller (not the placer);
-      // multi-own-play listeners → the placer (unchanged there — owner IS the
-      // placer). The batch is single-controller by construction (see batchOrderer:
-      // Paranoia fires on companion plays, ownPlaysMagicalConstruct on construct
-      // plays — one card is one type; a future cross-owner window needs the
-      // structural queue order + per-owner prompts, flag before building).
-      return { pendingPlay: null, pendingTrigger: null, pendingKit: null,
-        game: { ...g, pendingTriggerOrder: { lp: batchOrderer(playWindow), items: playWindow, picked: [] } } };
+    // Structural queue (Rules Note 2026-07-22, IMPLEMENTED Arc G 2026-08-04 —
+    // supersedes the batchOrderer fail-loudly guard for this window): segment the
+    // window by controller — the placer's (active player's) triggers queue onto the
+    // stack first, the opponent's above them, so theirs resolve first (LIFO:
+    // Paranoia's peek before Echo-Keeper's — consistent with R3 "peek first").
+    // Each owner orders their own segment when it holds >1 trigger; two prompts
+    // serialize via PendingTriggerOrder.next (never dual-hold, the Arc F
+    // discipline). Single-owner windows arm byte-identically to the pre-Arc-G path.
+    const armed = armSegmentedWindow(g, segmentBatch(playWindow, lp));
+    if (armed.paused) {
+      return { pendingPlay: null, pendingTrigger: null, pendingKit: null, game: armed.game };
     }
-    const r = runStack(pushStack(g, playWindow), s);
+    const r = runStack(armed.game, s);
     return {
       pendingPlay: null,
       pendingTrigger: null,
@@ -2908,9 +3116,11 @@ export const useGameStore = create<GameStoreState>()(
       g = { ...g, [hr.handSide]: { ...bottomed, deck: bottomed.deck.slice(1), hand: [...bottomed.hand, drawn] } };
       msg = `${hr.source}: ${card.name} put on the bottom of ${vs.name}'s deck — they draw a card`;
     }
+    // Arc G: the reveal may have been pausing the multi-pending enter window.
+    const ru = resumeEnterUnits(armNextItemTransfer(g), s);
     const id = ++toastId;
     setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 4000);
-    return { game: armNextItemTransfer(g), toasts: [...s.toasts, { id, msg }] };
+    return { ...ru.local, game: ru.game, toasts: [...s.toasts, { id, msg }, ...mkToasts(ru.msgs)] };
   }),
 
   // ── Coercion resolution (the VICTIM's choice: discard or sacrifice) ────────
@@ -2926,10 +3136,11 @@ export const useGameStore = create<GameStoreState>()(
       [co.victim]: { ...ps, hand: ps.hand.filter(c => c.id !== cardId), dead: [...ps.dead, card] } };
     const chainMsgs: string[] = [];
     ({ game: g } = chainForcedChoice(g, co, chainMsgs)); // Arc F: a symmetric effect arms the other player next
+    const ru = resumeEnterUnits(g, s); // Arc G: the coercion may have been pausing the enter window
     const id = ++toastId;
     setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 4000);
-    return { game: g, toasts: [...s.toasts,
-      { id, msg: `${co.source}: ${card.name} discarded${co.generic ? '' : ' (Coercion)'}` }, ...mkToasts(chainMsgs)] };
+    return { ...ru.local, game: ru.game, toasts: [...s.toasts,
+      { id, msg: `${co.source}: ${card.name} discarded${co.generic ? '' : ' (Coercion)'}` }, ...mkToasts([...chainMsgs, ...ru.msgs])] };
   }),
 
   resolveCoercionSacrifice: (entityId) => set(s => {
@@ -2951,10 +3162,11 @@ export const useGameStore = create<GameStoreState>()(
     // read the post-event state (per-event evaluation, 2026-07-21).
     const chainMsgs: string[] = [];
     ({ game: g } = chainForcedChoice(g, co, chainMsgs));
+    const ru = resumeEnterUnits(g, s); // Arc G: the coercion may have been pausing the enter window
     const id = ++toastId;
     setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 4000);
-    return { game: g,
-      toasts: [...s.toasts, { id, msg: `${co.source}: ${msgs.join(' | ')}` }, ...mkToasts(chainMsgs)] };
+    return { ...ru.local, game: ru.game,
+      toasts: [...s.toasts, { id, msg: `${co.source}: ${msgs.join(' | ')}` }, ...mkToasts([...chainMsgs, ...ru.msgs])] };
   }),
 
   // ── HP nudge ──────────────────────────────────────────────────────────────

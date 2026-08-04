@@ -245,21 +245,22 @@ describe('Litany of Endings — anchor −2 (Demolish family)', () => {
 });
 
 describe('Gutter Fence — Scavenger + structured onEnter on ONE card (the collision it was built to find)', () => {
-  // ⚠ DEBT PIN (2026-07-22): placeCard's enter window is SINGLE-PENDING — the
-  // structured-onEnter branch is guarded by !scavengerPick (gameStore placeCard),
-  // so Scavenger claims the enter and the authored hand-return clause is DROPPED.
-  // Card 39 carries a DEV NOT-IMPLEMENTED flag for exactly this. When the
-  // same-owner enter-collision arc lands (owner orders their OWN simultaneous
-  // triggers, Rules Note 2026-07-22), RETIRE this pin and rewrite it dated to
-  // assert BOTH picks arm.
-  it('CURRENT behavior: only the Scavenger attach pick arms; the return clause is dropped (flagged debt)', () => {
+  // RETIRED + REWRITTEN 2026-08-04 (Arc G): the old debt pin asserted the
+  // single-pending enter window — Scavenger claimed the enter, the authored
+  // hand-return clause was DROPPED (exactly one dead pick armed). The window is
+  // now a queue: both enter triggers become owner-ordered 'enterUnit' stack
+  // entries (Rules Note 2026-07-22), serialized so each evaluates FRESH. Full
+  // choreography pins live in dev_deck_arcG.test.ts; this pin keeps the Phase-1
+  // regression seat: the collision surfaces as an ordering prompt, nothing drops.
+  it('REWRITTEN: both enter triggers queue — the owner orders, the return clause is no longer dropped', () => {
     const itemA = CATALOG.find(c => c.type === 'Item')!;
     const itemB = CATALOG.filter(c => c.type === 'Item')[1]!;
     seedP1({ cls: 'Rogue', board: { b3: mkPc('pc-1') }, dead: [itemA, itemB, CATALOG.find(c => c.type === 'Companion')!] });
     place(dc('Gutter Fence'), 'b1');
-    const picks = [g().pendingDeadPick, ...(g().pendingDeadPickQueue ?? [])].filter(Boolean);
-    expect(picks.length, 'single-pending enter window: exactly ONE pick (the debt this pin documents)').toBe(1);
-    expect(picks[0]!.attachTo?.name, 'and it is the Scavenger attach pick').toBe('Gutter Fence');
+    const po = g().pendingTriggerOrder;
+    expect(po?.lp, 'the OWNER orders their own enter triggers').toBe('p1');
+    expect(po?.items.length, 'both triggers pending — neither dropped').toBe(2);
+    expect(g().pendingDeadPick, 'no pick arms until the order is chosen (queue-time-blind)').toBeFalsy();
   });
 });
 

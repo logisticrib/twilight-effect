@@ -161,7 +161,21 @@ export type ReactiveStackEntry =
   /** A Paranoia play-window trigger: the controller peeks the placer's deck BEFORE
    *  the companion enters (R3, re-ruled 2026-07-12 — "Peek first 100%"). Resolution
    *  arms a PendingPeek owned by the controller and PAUSES the stack. */
-  | { kind: 'paranoia'; sourceName: string; controller: 'p1' | 'p2'; deckSide: 'p1' | 'p2' };
+  | { kind: 'paranoia'; sourceName: string; controller: 'p1' | 'p2'; deckSide: 'p1' | 'p2' }
+  /** One of an entered permanent's OWN simultaneous enter triggers (Arc G 2026-08-04,
+   *  the multi-pending enter window): a card with >1 enter trigger splits into one
+   *  entry per trigger, ordered by their OWNER via the standing PendingTriggerOrder
+   *  prompt (Rules Note 2026-07-22) and resolved LIFO off the stack. Each unit is
+   *  evaluated FRESH at resolution (per-event state, 2026-07-21) — an earlier unit's
+   *  outcome (an item taken, a card discarded) is visible to later ones. Supported
+   *  units are the GAME-level prompt kinds only: 'scavenger' (the keyword's optional
+   *  Dead-Zone attach), 'coercion' (the keyword's victim modal), 'structured' (the
+   *  card's authored onEnter clauses, no-target ops only). entId anchors self-ish
+   *  effects and the Scavenger attach; `card` carries the played card (the ownEnter
+   *  discipline — read the hand card, never a catalog lookup); sourceName = card.name
+   *  (labels, hold banners). */
+  | { kind: 'enterUnit'; unit: 'scavenger' | 'coercion' | 'structured';
+      entId: string; sourceName: string; card: Card; controller: 'p1' | 'p2' };
 
 export type StackEntry =
   /** The played card itself, waiting on the stack (R1): resolving it ENTERS the
@@ -194,6 +208,14 @@ export interface PendingTriggerOrder {
   lp: 'p1' | 'p2';
   items: ReactiveStackEntry[];
   picked: number[];
+  /** Arc G (2026-08-04, mixed-owner play window): the OTHER owner's segment of a
+   *  structurally-queued batch, awaiting its own ordering AFTER this one completes
+   *  (Rules Note 2026-07-22: the active player's triggers queue first, the
+   *  non-active player's above — so the active segment is ordered/pushed first and
+   *  `next` holds the non-active one). Serialized per-owner prompts, never dual-hold
+   *  (the Arc F discipline). OPTIONAL — absent for every single-owner batch (hash
+   *  discipline). */
+  next?: { lp: 'p1' | 'p2'; items: ReactiveStackEntry[] };
 }
 
 // ─── Damage prevention (arc 2, owner-ratified 2026-07-14) ──────────────────────

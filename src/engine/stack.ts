@@ -174,9 +174,21 @@ export function resolveReactiveEntry(
 
 /** Display label for a queued reactive trigger (the ordering prompt's option rows). */
 export function reactiveLabel(e: ReactiveStackEntry): string {
-  return e.kind === 'paranoia'
-    ? `${e.sourceName} (Paranoia peek)`
-    : `${e.sourceName} → ${e.subjectName}`;
+  if (e.kind === 'paranoia') return `${e.sourceName} (Paranoia peek)`;
+  if (e.kind === 'enterUnit') {
+    // Same-owner enter triggers (Arc G): name WHAT each choice is — the order can be
+    // information-relevant (hand seen pre- vs post-Coercion), so the rows must say
+    // more than the card name.
+    if (e.unit === 'scavenger') return `${e.sourceName} — Scavenger (attach an item from your Dead Zone)`;
+    if (e.unit === 'coercion') return `${e.sourceName} — Coercion (opponent discards or sacrifices)`;
+    const ops = effectsOfCard(e.sourceName)
+      .filter(c => c.trigger === 'onEnter').flatMap(c => c.effects).map(x => x.op);
+    const what = ops.includes('revealHand') ? "look at the opponent's hand"
+      : ops.includes('returnFromDead') ? 'return a card from your Dead Zone'
+      : 'enter ability';
+    return `${e.sourceName} — ${what}`;
+  }
+  return `${e.sourceName} → ${e.subjectName}`;
 }
 
 /**
@@ -195,25 +207,49 @@ export function orderedForStack(items: ReactiveStackEntry[], picked: number[]): 
  * The orderer for a simultaneous-trigger batch (Rules Note 2026-07-22): each player
  * orders their OWN simultaneous triggers, so the ordering prompt goes to the batch's
  * CONTROLLER — not the active player (supersedes the 2026-07-12/13 active-player
- * notes and Rules_Taxonomy Tier 5 #9 / Tier 3 #18's tiebreaker). Every gather site
- * produces a single-controller batch by construction today: gatherReactive/
- * gatherParanoia scan only the subject's OPPONENT, gatherOwnPlay only the subject's
- * own side, and the placeCard play window is type-exclusive per play (Paranoia =
- * companion plays; ownPlaysMagicalConstruct = construct plays — one card is one
- * type). That construction is GUARDED here, not assumed (detection over
- * enumeration, 2026-07-22 follow-up): a mixed-owner batch fails loudly by name.
+ * notes and Rules_Taxonomy Tier 5 #9 / Tier 3 #18's tiebreaker). Mixed-owner windows
+ * are handled UPSTREAM since Arc G (2026-08-04): the play window segments its batch
+ * by controller via `segmentBatch` (the active player's segment queues onto the
+ * stack first, the non-active player's above — theirs resolve first), with
+ * serialized per-owner ordering prompts (PendingTriggerOrder.next). Every OTHER
+ * gather site stays single-controller by construction (gatherReactive/gatherParanoia
+ * scan only the subject's opponent; gatherOwnPlay only the subject's own side).
+ * A mixed batch REACHING this function is therefore a construction bug — it still
+ * fails loudly by name (detection over enumeration, 2026-07-22 follow-up): route
+ * mixed windows through segmentBatch, never through a single prompt.
  */
 export function batchOrderer(items: ReactiveStackEntry[]): 'p1' | 'p2' {
   const owner = items[0].controller;
   const stray = items.find(it => it.controller !== owner);
   if (stray) {
     throw new Error(
-      `batchOrderer: MIXED-OWNER simultaneous-trigger batch — unsupported. ` +
-      `A single ordering prompt cannot serve two owners. Implement the 2026-07-22 ` +
-      `Rules Note's structural queue order (the active player's triggers queue onto ` +
-      `the stack first, the non-active player's above them — theirs resolve first) ` +
-      `with a per-owner ordering prompt before shipping a card that creates this ` +
-      `case. Batch: ${items.map(it => `${it.sourceName ?? it.kind}@${it.controller}`).join(', ')}`);
+      `batchOrderer: MIXED-OWNER simultaneous-trigger batch reached a single-owner ` +
+      `ordering prompt — a construction bug since Arc G (2026-08-04). Segment the ` +
+      `window by controller first (segmentBatch: the active player's triggers queue ` +
+      `onto the stack first, the non-active player's above them — theirs resolve ` +
+      `first; per-owner prompts serialized via PendingTriggerOrder.next). ` +
+      `Batch: ${items.map(it => `${it.sourceName ?? it.kind}@${it.controller}`).join(', ')}`);
   }
   return owner;
+}
+
+/**
+ * Segment a (possibly mixed-owner) simultaneous-trigger window into the 2026-07-22
+ * structural queue order (Arc G 2026-08-04, first mixer: Echo-Keeper's own-play
+ * listener sharing a companion play with opposing Paranoia). Returns segments in
+ * PUSH order: the ACTIVE player's triggers queue onto the stack first, the
+ * non-active player's above them — theirs resolve first (LIFO). Within a segment
+ * the owner orders when it holds >1 trigger; a singleton needs no prompt. Empty
+ * segments are omitted, so a single-owner window returns exactly one segment —
+ * byte-identical arming to the pre-Arc-G path.
+ */
+export function segmentBatch(
+  items: ReactiveStackEntry[], active: 'p1' | 'p2',
+): { controller: 'p1' | 'p2'; items: ReactiveStackEntry[] }[] {
+  const mine = items.filter(it => it.controller === active);
+  const theirs = items.filter(it => it.controller !== active);
+  const out: { controller: 'p1' | 'p2'; items: ReactiveStackEntry[] }[] = [];
+  if (mine.length) out.push({ controller: active, items: mine });
+  if (theirs.length) out.push({ controller: active === 'p1' ? 'p2' : 'p1', items: theirs });
+  return out;
 }

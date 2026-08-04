@@ -54,6 +54,12 @@ export type Trigger =
   // sequential events — Trigger Stack note 2026-07-12).
   | 'ownPlaysMagicalConstruct'      // YOU (the listener's controller) play a Magical
                                     // (Incantation) Construct from hand (Patient Conjurer)
+  | 'ownPlaysCompanion'             // YOU (the listener's controller) play a COMPANION
+                                    // from hand (Arc G 2026-08-04, Echo-Keeper). Same
+                                    // play-window discipline; per-event evaluation
+                                    // (2026-07-21) means the listener must be on the
+                                    // board AS OF the play — a companion entering from
+                                    // this very play never hears itself.
   // On-sacrifice window (arc 5, owner-ratified 2026-07-15). Fires on every event
   // canon words as SACRIFICE — anchor decay reaching zero, Dismantle, sacrifice
   // costs, trap self-sacrifice, Coercion, and (re-rule 2026-07-20) companion

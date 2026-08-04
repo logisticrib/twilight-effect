@@ -22,7 +22,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { gs, freshGame, mkComp, mkConstruct, mkCz } from './helpers';
 import { reactiveHold } from '../store/gameStore';
-import { orderedForStack, batchOrderer } from '../engine';
+import { orderedForStack, batchOrderer, segmentBatch } from '../engine';
 import type { ReactiveStackEntry } from '../engine';
 import { CATALOG } from '../data/catalog';
 import type { Card } from '../types/card';
@@ -157,19 +157,29 @@ describe('R4 / Pit Trap — "When an opposing companion moves into the front lin
     expect(g.p2.board.f2?.name, 'Pit Trap did not fire').toBe('Pit Trap');
   });
 
-  it('batchOrderer GUARD: a mixed-owner batch fails loudly by name (chokepoint, not a comment — 2026-07-22 follow-up)', () => {
+  // RETIRED + REWRITTEN 2026-08-04 (Arc G): the old pin asserted the mixed-owner
+  // batch THROWS by name — the fail-loudly guard has converted to the implemented
+  // 2026-07-22 structural queue (segmentBatch + per-owner prompts serialized via
+  // PendingTriggerOrder.next). The end-to-end resolution-order pin (opposing
+  // Paranoia resolves before the placer's Echo-Keeper, asserted through observable
+  // deck state) lives in dev_deck_arcG.test.ts; this pin covers the structural
+  // segmentation itself.
+  it('segmentBatch: the active player\'s segment queues FIRST, the non-active player\'s above (2026-07-22 structural queue, implemented Arc G 2026-08-04)', () => {
     const entry = (id: string, controller: 'p1' | 'p2') => ({
       kind: 'reactive', sourceId: id, sourceName: 'Synthetic Trap', controller,
       trigger: 'oppCompanionEnters', subjectId: 'x', subjectName: 'X',
     }) as never;
-    // Homogeneous batch: returns the batch's controller (the 2026-07-22 chooser).
+    // Homogeneous batch: one segment, batchOrderer still names its controller.
     expect(batchOrderer([entry('a', 'p2'), entry('b', 'p2')] as never)).toBe('p2');
-    // Mixed-owner batch: no shipped card can create one (gathers are single-side by
-    // construction) — if a future card does, the guard names the missing machinery
-    // (the 2026-07-22 structural queue order + per-owner prompts) instead of
-    // silently handing one owner's triggers to the other.
-    expect(() => batchOrderer([entry('a', 'p1'), entry('b', 'p2')] as never))
-      .toThrow(/MIXED-OWNER.*2026-07-22|2026-07-22.*MIXED-OWNER|MIXED-OWNER[\s\S]*2026-07-22/);
+    expect(segmentBatch([entry('a', 'p2'), entry('b', 'p2')] as never, 'p1').map(s => s.controller)).toEqual(['p2']);
+    // Mixed batch, p1 active: p1's segment first (queues onto the stack first),
+    // p2's second (queues above — theirs resolve first, LIFO).
+    const segs = segmentBatch([entry('a', 'p2'), entry('b', 'p1'), entry('c', 'p2')] as never, 'p1');
+    expect(segs.map(s => s.controller)).toEqual(['p1', 'p2']);
+    expect(segs[0].items.map(i => (i as { sourceId: string }).sourceId)).toEqual(['b']);
+    expect(segs[1].items.map(i => (i as { sourceId: string }).sourceId)).toEqual(['a', 'c']);
+    // Flipped active player: the segments swap push order.
+    expect(segmentBatch([entry('a', 'p2'), entry('b', 'p1')] as never, 'p2').map(s => s.controller)).toEqual(['p2', 'p1']);
   });
 
   // RETIRED + REWRITTEN 2026-07-22: the old pin asserted lp 'p1' per the superseded

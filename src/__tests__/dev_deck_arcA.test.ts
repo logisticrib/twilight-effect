@@ -4,11 +4,10 @@
 // discard), Tripline of Bells (45, trap discard — PAUSES the stack so the trap's
 // resolution completes before the enterer's own triggers), Mark the Pockets (50,
 // hand reveal + pick-to-bottom), Recite the Ledger (24, opponent-deck reorder
-// peek), Herald of Despair (5, own-deck reorder peek). Voice of the Bargain (3)
-// stays flagged: revealHand EXISTS but Coercion claims the single-pending enter
-// window — same-owner enter-trigger ordering is Arc G-adjacent debt, and the order
-// is information-relevant (no auto-order may be guessed). Pinned below as CURRENT
-// behavior; retire + rewrite dated when that arc lands.
+// peek), Herald of Despair (5, own-deck reorder peek). Voice of the Bargain (3):
+// originally left flagged (Coercion claimed the single-pending enter window) —
+// LIVE since Arc G (2026-08-04, the multi-pending enter window); its debt pin
+// below was retired + rewritten dated, full choreography in dev_deck_arcG.test.ts.
 import { describe, it, expect } from 'vitest';
 import { gs, freshGame, mkComp, mkPc, mkConstruct, mkItem, mkCz } from './helpers';
 import { reactiveHold } from '../store/gameStore';
@@ -172,18 +171,22 @@ describe('Mark the Pockets (50) — hand reveal with pick-to-bottom', () => {
   });
 });
 
-describe('Voice of the Bargain (3) — DEBT PIN: Coercion claims the single-pending enter window', () => {
-  // ⚠ CURRENT behavior (flagged on the card, Arc G-adjacent): the revealHand
-  // machinery exists, but runOnEnter's structured-onEnter branch is guarded by
-  // !pendingCoercion — the authored reveal clause is DROPPED. The order of the two
-  // same-owner enter triggers is information-relevant (hand seen pre- vs
-  // post-coercion), so no auto-order may be guessed. RETIRE this pin and rewrite it
-  // dated when same-owner enter-trigger ordering lands.
-  it('CURRENT: Coercion arms, the reveal does not', () => {
+describe('Voice of the Bargain (3) — the multi-pending enter window (debt pin RETIRED + REWRITTEN 2026-08-04, Arc G)', () => {
+  // RETIRED + REWRITTEN 2026-08-04 (Arc G): the old debt pin asserted Coercion
+  // claimed the single-pending enter window and the authored reveal clause was
+  // DROPPED. The window is now a queue: both enter triggers become owner-ordered
+  // 'enterUnit' stack entries (Rules Note 2026-07-22 — the owner orders their own
+  // simultaneous triggers; the order stays information-relevant, hand seen pre- vs
+  // post-coercion, so it is PROMPTED, never auto-ordered). Full choreography pins
+  // live in dev_deck_arcG.test.ts; this pin keeps the Arc A regression seat: the
+  // reveal clause is no longer dropped.
+  it('REWRITTEN: both enter triggers queue — the owner orders, nothing is dropped', () => {
     seedP1({ board: { b3: mkPc('pc-1') } }, { hand: [CATALOG[5]] });
     place(dc('Voice of the Bargain'), 'b1');
-    expect(g().pendingCoercion?.victim, 'Coercion claimed the enter').toBe('p2');
-    expect(g().pendingHandReveal, 'the reveal clause is dropped (flagged debt)').toBeFalsy();
+    const po = g().pendingTriggerOrder;
+    expect(po?.lp, 'the OWNER orders their own enter triggers').toBe('p1');
+    expect(po?.items.length, 'both triggers pending — neither dropped').toBe(2);
+    expect(po?.items.every(it => it.kind === 'enterUnit')).toBe(true);
   });
 });
 
