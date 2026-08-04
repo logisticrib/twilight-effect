@@ -125,6 +125,10 @@ export function effectTargetSpec(e: Effect): TargetSpec | null {
     case 'anchor':
     case 'sacrificeItem':
     case 'animate':
+    // Arc H (2026-08-04, Whispered Accusation): an interactive exhaust is a targeted
+    // pick. Shipped exhaust targets (self / eventSubject) are not interactive → null,
+    // exactly as before.
+    case 'exhaust':
     case 'forceAttack': return isInteractiveSpec(e.target) ? e.target : null;
     case 'dieCheck': {
       // The branch effects choose the target up-front (declared before the roll).
@@ -137,6 +141,21 @@ export function effectTargetSpec(e: Effect): TargetSpec | null {
     case 'buff': return isInteractiveSpec(e.scope) ? e.scope : null;
     default: return null;
   }
+}
+
+/**
+ * Op-level eligibility narrowing BEYOND the TargetSpec (Arc H 2026-08-04: bounce's
+ * hpAtMost gate, Shade Puppeteer). Applied wherever a spec's eligibleTargets arm an
+ * interactive pick, and re-checked at resolution (per-event state). No shipped card
+ * carries a narrowing field, so every shipped arm site returns `ids` unchanged.
+ */
+export function filterEligibleByEffects(game: GameState, ids: string[], effects: Effect[]): string[] {
+  const cap = effects.find((e): e is Extract<Effect, { op: 'bounce' }> => e.op === 'bounce' && e.hpAtMost != null);
+  if (!cap) return ids;
+  return ids.filter(id => {
+    const loc = findEntityAnywhere(game, id);
+    return !!loc && loc.ent.hp <= cap.hpAtMost!;
+  });
 }
 
 /** Extra context threaded into the interpreter (combat triggers, Magic-Action mods,
@@ -293,13 +312,20 @@ export function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceNam
           // CASTER's next turn start; 'controllersNextTurn' is a WINDOW — dormant
           // until the recipient's controller's next turn starts, live during it,
           // stripped at its end (pendingUntilTurnOf guards an own-turn cast from
-          // its own turn's end-strip). EXTENSION POINT: Arc H skip-refresh / Arc I
-          // end-of-turn reversion add anchor kinds here — never a parallel system.
+          // its own turn's end-strip). EXTENSION POINT (used by Arc H below): Arc I
+          // end-of-turn reversion adds anchor kinds here — never a parallel system.
+          // Arc H (2026-08-04, Whispered Accusation): 'controllersNextTurnStart' =
+          // the same dormancy + turnEnd expiry but deliberately NO activeDuring —
+          // runReadyPhase runs BEFORE endTurn flips activePlayer, so a Doubt-shaped
+          // window is not yet live at the ready step it must govern; the armed
+          // entry stays inertly live for the rest of that turn instead.
           const timed = e.duration === 'untilYourNextTurn'
             ? { until: { at: 'turnStart' as const, of: lp } }
             : e.duration === 'controllersNextTurn'
               ? { until: { at: 'turnEnd' as const, of: loc.player }, activeDuring: loc.player, pendingUntilTurnOf: loc.player }
-              : { until: 'endOfTurn' as const };
+              : e.duration === 'controllersNextTurnStart'
+                ? { until: { at: 'turnEnd' as const, of: loc.player }, pendingUntilTurnOf: loc.player }
+                : { until: 'endOfTurn' as const };
           g = updateEntity(g, id, { buffs: [...(loc.ent.buffs ?? []), {
             ...(e.stat === 'atk' && e.amount != null ? { atk: e.amount } : {}),
             ...(e.grant ? { grant: e.grant } : {}),
@@ -417,6 +443,13 @@ export function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceNam
         for (const id of ids) {
           const loc = findEntityAnywhere(g, id);
           if (!loc || loc.ent.kind === 'pc') continue; // can't bounce the Player Character
+          // Arc H (2026-08-04, Shade Puppeteer): the hp gate reads CURRENT hp at
+          // RESOLUTION (per-event state) — eligibility already filtered at arm time
+          // (filterEligibleByEffects); this re-check fizzles loudly, never silently.
+          if (e.hpAtMost != null && loc.ent.hp > e.hpAtMost) {
+            msgs.push(`${loc.ent.name} has more than ${e.hpAtMost} HP — not returned`);
+            continue;
+          }
           const owner = loc.player;
           // Manifest (animated construct): sacrificed instead of returning to hand.
           // Via destroyEntity so its card AND any equipped items reach the Dead Zone

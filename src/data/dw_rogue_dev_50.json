@@ -309,9 +309,16 @@
       "text": "When this enters, return target opposing companion with 2 or less HP to its owner's hand.",
       "flavor": "",
       "dev": true,
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-07-22, Arc H): bounce with an HP-conditioned eligibility filter (bounce op exists; '2 or less HP' target constraint does not)",
+      "effects": [
+        {
+          "trigger": "onEnter",
+          "effects": [
+            { "op": "bounce", "target": "enemyCompanion", "hpAtMost": 2 }
+          ]
+        }
+      ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-08-04T00:00:00.000000Z"
     },
     {
       "id": "dd000014",
@@ -542,9 +549,16 @@
       "text": "Opposing companions cannot attack unless their controller sacrifices a permanent for each attacking companion.",
       "flavor": "",
       "dev": true,
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-07-22, Arc H): pay-to-break attack restriction (declaration-time sacrifice gate)",
+      "effects": [
+        {
+          "trigger": "static",
+          "effects": [
+            { "op": "attackToll", "scope": "oppCompanions" }
+          ]
+        }
+      ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-08-04T00:00:00.000000Z"
     },
     {
       "id": "dd000022",
@@ -708,9 +722,17 @@
       "text": "Exhaust target opposing companion. It does not ready at the start of its controller's next turn.",
       "flavor": "",
       "dev": true,
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-07-22, Arc H): skip-refresh flag (exhaust op exists; 'does not ready at its controller's next start' persistence does not)",
+      "effects": [
+        {
+          "trigger": "onPlay",
+          "effects": [
+            { "op": "exhaust", "target": "enemyCompanion" },
+            { "op": "buff", "modifiers": ["doesNotReady"], "scope": "enemyCompanion", "duration": "controllersNextTurnStart" }
+          ]
+        }
+      ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-08-04T00:00:00.000000Z"
     },
     {
       "id": "dd000028",

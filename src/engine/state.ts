@@ -97,6 +97,14 @@ export interface GameState {
   /** Pre-attack optional ability prompt (Mara: "you may pay HP from your PC: +N damage").
    *  Routed to the attacker; combat commits once they choose via `resolveAttackChoice`. */
   pendingAttackChoice: PendingAttackChoice | null;
+  /** Attack-toll prompt (Arc H 2026-08-04, The Final Word): the declared attack COSTS
+   *  the attacker's controller one sacrifice, chosen by them (owner agency; the
+   *  canBeSacrificed chokepoint — PC never offerable), paid before the attack
+   *  proceeds. Decline → the attack simply doesn't happen (no declaration triggers,
+   *  no partial state). Routed to the payer; the opponent is held (reactiveHold).
+   *  OPTIONAL and reset to `undefined` when cleared — toll-free games keep their
+   *  exact pre-arc canonical replay hash (the triggerStack discipline). */
+  pendingAttackToll?: PendingAttackToll | null;
   /** Deferred start-of-turn modal choice (Pyre) — the controller picks a mode (or
    *  declines, for "you may" clauses); the clause cost is paid at resolution. */
   pendingModalChoice: PendingModalChoice | null;
@@ -423,4 +431,16 @@ export interface PendingAttackChoice {
   sourceName: string;    // the ability's source (for the prompt)
   payHP: number;
   bonus: number;
+}
+
+/** An attack-toll payment prompt (Arc H 2026-08-04, The Final Word): captures the
+ *  declared attack so it can proceed once the cost is paid — or be called off.
+ *  The payment is a REAL sacrifice event (destroyEntity 'sacrifice': death triggers
+ *  + on-sacrifice listeners fire, per-event, before the attack proceeds — cost
+ *  precedes effect). */
+export interface PendingAttackToll {
+  lp: 'p1' | 'p2';       // the attacker's controller — who chooses the sacrifice
+  charId: string;        // the attacker
+  targetId: string;      // the attack's target
+  sourceName: string;    // the toll construct (prompt/refusal label)
 }

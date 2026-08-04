@@ -4,6 +4,11 @@ import type { GameState, PlayerState } from './state';
 import type { SlotId } from './geometry';
 import { isFront } from './geometry';
 import { CATALOG } from '../data/catalog';
+// Function-level cycle with entities.ts (entities imports character predicates from
+// here; the toll gate below consults the canBeSacrificed CHOKEPOINT — never a local
+// copy of the predicate). Safe: hoisted functions, called only at runtime (the
+// interpreter↔combat precedent).
+import { canBeSacrificed } from './entities';
 
 /**
  * Keyword effect engine.
@@ -437,6 +442,39 @@ export function attackRestrictedBy(game: GameState, ent: BoardEntity, controller
         if (e.where?.line && (e.where.line === 'front') !== isFront(slot)) continue;
         return `${src.name} (opposing aura)`;
       }
+    }
+  }
+  // Arc H (2026-08-04, The Final Word): a CONDITIONAL restriction with a payment
+  // escape — payable tolls do NOT restrict (resolveAttack arms the pay prompt at
+  // declaration); an UNPAYABLE toll is an ordinary labeled refusal, so all three
+  // consumers inherit it. DEFENSIVELY UNREACHABLE today: with text-literal
+  // self-sacrifice legal (flagged for owner ratification, HANDOFF 2026-08-04) the
+  // attacking companion is itself always a payable permanent — this branch goes
+  // live only if that reading is overruled or a can't-be-sacrificed state ships.
+  const toll = attackTollBy(game, ent, controller);
+  if (toll && !Object.values(game[controller].board).some(e => e && canBeSacrificed(e))) {
+    return `${toll} (no permanent to pay its attack toll)`;
+  }
+  return null;
+}
+
+/**
+ * The opposing static toll source gating `ent`'s attack (Arc H 2026-08-04, The
+ * Final Word): each attack declaration by an opposing companion costs its
+ * controller one sacrifice, chosen by them and paid BEFORE the attack proceeds.
+ * Returns the source card's name (the prompt/refusal label), or null.
+ * NON-STACKING (the Dismay precedent): the first source found names the toll —
+ * multiple sources still demand ONE sacrifice per attack ("for each attacking
+ * companion" scales the cost with attackers, not with copies; flagged in HANDOFF).
+ */
+export function attackTollBy(game: GameState, ent: BoardEntity, controller: 'p1' | 'p2'): string | null {
+  if (ent.kind !== 'companion') return null; // engine-supported scope: opposing COMPANIONS
+  const opp: 'p1' | 'p2' = controller === 'p1' ? 'p2' : 'p1';
+  for (const src of Object.values(game[opp].board)) {
+    if (!src) continue;
+    for (const ce of effectsOf(src.name) ?? []) {
+      if (ce.trigger !== 'static') continue;
+      if (ce.effects.some(e => e.op === 'attackToll')) return src.name;
     }
   }
   return null;

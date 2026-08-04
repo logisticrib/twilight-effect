@@ -13,7 +13,7 @@ import type { GameState, PlayerState, PendingItemTransfer, PendingDeadPick,
               PendingModalChoice, PeekRequest, ArmorChoiceData } from './state';
 import type { Board, SlotId } from './geometry';
 import { FRONT_SLOTS, BACK_SLOTS } from './geometry';
-import { HIT_RUN_STATUS, currentWillpower, isPhysicalConstruct, hasAnchorCounters, recomputeStatics } from './stats';
+import { HIT_RUN_STATUS, currentWillpower, isPhysicalConstruct, hasAnchorCounters, recomputeStatics, hasModifier } from './stats';
 import { deadCardsOf, itemTransferOf, fireSacrificeTriggers } from './entities';
 import { hasRemovalTrigger, resolveRemovalTriggers } from './combat';
 import { freshActs, computeWillpower, controlsPreventAnchorDecay, resolveStartOfTurn } from './lifecycle';
@@ -43,6 +43,15 @@ export function readyAndFlip(ps: PlayerState): PlayerState {
     // Poison check (PoisonModal → resolvePoison) decides whether it cleanses+
     // readies or stays exhausted, so its tap/exhaust state is left for that check.
     const poisoned = (ent.poison ?? 0) > 0;
+    // Skip-refresh (Arc H 2026-08-04, Whispered Accusation): a live 'doesNotReady'
+    // modifier holds the CHARACTER's tap/exhaust exactly like Poison does — items
+    // still ready alongside (the Poison discipline: the hold is the character's,
+    // not the item's). No `game` arg: hasModifier without game conservatively skips
+    // DORMANT (pendingUntilTurnOf) entries — correct here, since a dormant window
+    // belongs to a LATER turn start; the entry governing THIS ready step was armed
+    // by the buff-boundary pass that ran just before this phase. Consumption is the
+    // anchor's own expiry (turnEnd of this controller) — nothing is mutated here.
+    const skipReady = hasModifier(ent, 'doesNotReady');
     // Items ready alongside their controller's characters (Rules Note 2026-07-15).
     // Hash discipline: only items actually exhausted are touched — the exhausted
     // key is REMOVED (never written false), so exhaustion-free games keep their
@@ -58,8 +67,8 @@ export function readyAndFlip(ps: PlayerState): PlayerState {
       : lo;
     newBoard[slot as SlotId] = {
       ...ent, fresh: false, acts: freshActs(),
-      tapped: poisoned ? ent.tapped : 'none' as TapState,
-      exhausted: poisoned ? ent.exhausted : false,
+      tapped: poisoned || skipReady ? ent.tapped : 'none' as TapState,
+      exhausted: poisoned || skipReady ? ent.exhausted : false,
       ...(readiedLoadout !== lo ? { loadout: readiedLoadout } : {}),
       statuses: ent.statuses.filter(st => st !== HIT_RUN_STATUS && !st.startsWith('ability-used:')),
     };

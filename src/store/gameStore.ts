@@ -9,7 +9,7 @@ import { recomputeStatics, isImmuneToSplash, HIT_RUN_STATUS,
          isCharacter, firstItemOf, allItemsOf, canHoldItem, effectiveAttack, effectiveKeywords, effectiveMaxHp, wardedLines,
          canPlayActionCard, specialActionActor, minorActionReason, actionTypeOf, currentWillpower, parseBanes,
          POISONED_STATUS, parseAnimateMagic,
-         attackRestrictedBy, moveRestrictedBy,
+         attackRestrictedBy, attackTollBy, moveRestrictedBy, hasModifier,
          canAttackFromPosition, isLegalAttackTarget, bindingGuardianIds, legalAttackTargetIds } from './keywords';
 
 // Everything relocated to the headless engine stays importable from this module —
@@ -26,7 +26,7 @@ import { ADJ, FRONT_SLOTS, BACK_SLOTS, isFront, findSlot, type SlotId, type Boar
          itemProfileOf, itemTransferCandidates, armNextItemTransfer,
          setPcHp, payPcHp, pcIdOf, charsOf,
          ownPhysicalConstructIds,
-         eligibleTargets, effectsWouldAffectSomething, actionTargetSpec, twoStepKind,
+         eligibleTargets, filterEligibleByEffects, effectsWouldAffectSomething, actionTargetSpec, twoStepKind,
          permanentEffects, gatherActivated, abilityUsedTag, magicCtx,
          destroyEntity, applyDamage, applyCombatHit, driveAttack, optionalAttackAbility,
          attackDamageBonus, resolveActionEffects, armPrompts, armNextArmorChoice,
@@ -333,6 +333,10 @@ export function reactiveHold(game: GameState, localPlayer: 'p1' | 'p2'): string 
   // The opponent's pre-attack pay-HP choice (Mara) — same clobber risk.
   const pac = game.pendingAttackChoice;
   if (pac && pac.lp !== localPlayer) return `${pac.sourceName} (attack choice)`;
+  // The opponent's attack-toll payment (Arc H, The Final Word) — the PAYER (the
+  // attacker's controller) chooses the sacrifice; everyone else waits.
+  const pat = game.pendingAttackToll;
+  if (pat && pat.lp !== localPlayer) return `${pat.sourceName} (attack toll)`;
   // The opponent's Item Transfer window (e.g. the defender rescuing a killed bearer's
   // items) — the active player waits so broadcasts don't clobber the resolution.
   const it = game.pendingItemTransfer;
@@ -553,7 +557,8 @@ function runOnEnter(
     }
     const spec = actionTargetSpec(onEnter);
     if (spec) {
-      const eligibleIds = eligibleTargets(g, lp, spec).filter(eid => eid !== entId);
+      // Arc H: op-level narrowing (bounce hpAtMost) — identity for shipped cards.
+      const eligibleIds = filterEligibleByEffects(g, eligibleTargets(g, lp, spec).filter(eid => eid !== entId), onEnter);
       if (eligibleIds.length > 0) {
         return {
           game: g,
@@ -984,6 +989,9 @@ interface GameStoreState {
   resolvePreventOrder: (idx: number) => void;
   /** Resolve Mara's pre-attack optional ability — pay HP for +damage, or decline; commits the attack. */
   resolveAttackChoice: (accept: boolean) => void;
+  /** Pay an attack toll (Arc H, The Final Word): sacrifice the chosen own permanent
+   *  (never the PC) and the declared attack proceeds — or `null` to call it off. */
+  resolveAttackToll: (entityId: string | null) => void;
 
   // Cancel any pending action
   cancelPending: () => void;
@@ -1478,7 +1486,8 @@ export const useGameStore = create<GameStoreState>()(
     const spec = actionTargetSpec(onPlay);
 
     if (spec) {
-      const eligibleIds = eligibleTargets(g0, lp, spec);
+      // Arc H: op-level narrowing (bounce hpAtMost) — identity for shipped cards.
+      const eligibleIds = filterEligibleByEffects(g0, eligibleTargets(g0, lp, spec), onPlay);
       const newHand = g0[lp].hand.filter(c => c.id !== handCardId);
       if (eligibleIds.length === 0) {
         // No legal target — fizzle to the Dead Zone rather than soft-lock.
@@ -1766,7 +1775,7 @@ export const useGameStore = create<GameStoreState>()(
     //    it doesn't have refuses up front (the old order paid first, so e.g. a Quill
     //    with no construct in play sacrificed itself for nothing). ────────────────
     const spec = actionTargetSpec(ability.effects);
-    if (spec && eligibleTargets(s.game, player, spec).filter(t => t !== entityId).length === 0) {
+    if (spec && filterEligibleByEffects(s.game, eligibleTargets(s.game, player, spec).filter(t => t !== entityId), ability.effects).length === 0) {
       return refuse(`${ability.sourceName} — no legal target.`);
     }
     // RULED 2026-07-08 (universal pre-cost refusal): an ability that would affect
@@ -1869,7 +1878,7 @@ export const useGameStore = create<GameStoreState>()(
       // Re-derive against the post-cost board (the pre-cost check above guarantees
       // this is non-empty except for the vanishing edge where paying the cost itself
       // removed the last target — then the toast below still names the outcome).
-      const eligibleIds = eligibleTargets(g, player, spec).filter(t => t !== entityId);
+      const eligibleIds = filterEligibleByEffects(g, eligibleTargets(g, player, spec).filter(t => t !== entityId), ability.effects);
       if (eligibleIds.length === 0) {
         return { game: armPrompts(g, deadSink, armorSink), toasts: [...s.toasts, toast(`${ability.sourceName} — no legal target left after paying the cost.`)] };
       }
@@ -2185,7 +2194,7 @@ export const useGameStore = create<GameStoreState>()(
     // RULED 2026-07-08 (universal pre-cost refusal): a mode that would affect nothing
     // cannot be chosen — the prompt stays up so another mode (or Decline) can be picked.
     const spec = actionTargetSpec(option.effects);
-    if (spec && eligibleTargets(s.game, pm.lp, spec).filter(t => t !== pm.sourceId).length === 0) {
+    if (spec && filterEligibleByEffects(s.game, eligibleTargets(s.game, pm.lp, spec).filter(t => t !== pm.sourceId), option.effects).length === 0) {
       return { toasts: [...s.toasts, toast(`${pm.sourceName}: that mode has no legal target.`)] };
     }
     if (!spec && !effectsWouldAffectSomething(s.game, pm.lp, option.effects, pm.sourceId)) {
@@ -2206,7 +2215,7 @@ export const useGameStore = create<GameStoreState>()(
     g = { ...g, pendingModalChoice: nextModal ?? null, pendingModalChoiceQueue: restModals };
 
     if (spec) {
-      const eligibleIds = eligibleTargets(g, pm.lp, spec).filter(t => t !== pm.sourceId);
+      const eligibleIds = filterEligibleByEffects(g, eligibleTargets(g, pm.lp, spec).filter(t => t !== pm.sourceId), option.effects);
       if (eligibleIds.length) {
         const id2 = ++toastId;
         setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id2) })), 4000);
@@ -2340,6 +2349,8 @@ export const useGameStore = create<GameStoreState>()(
       gameOver: sg.gameOver === 'p1' || sg.gameOver === 'p2' ? sg.gameOver : null,
       pendingPeek: null, pendingPeekQueue: [], pendingDeadPick: null, pendingDeadPickQueue: [], pendingPoison: null, pendingCoercion: null, pendingArmor: null, pendingAttackChoice: null,
       pendingDiscard: undefined, pendingDiscardQueue: undefined, pendingHandReveal: undefined,
+      // An unpaid toll is safe to drop: the attack was never declared (Arc H).
+      pendingAttackToll: undefined,
       // Transfer windows are safe to drop: the items already sit in the Dead Zone.
       // Modal choices too: the cost is unpaid until resolved, so nothing is lost.
       pendingItemTransfer: null, pendingItemTransferQueue: [],
@@ -2595,6 +2606,18 @@ export const useGameStore = create<GameStoreState>()(
       }
     }
 
+    // Attack toll (Arc H 2026-08-04, The Final Word): declaring this attack COSTS
+    // the attacker's controller one sacrifice — a LEGALITY-cost gate, so it arms
+    // after every legality check and BEFORE the declaration proceeds (cost precedes
+    // effect; declaration triggers must not fire on an unpaid attack).
+    // resolveAttackToll pays (a real sacrifice event) and continues into the Mara
+    // check + commit; decline calls the whole attack off (no partial state).
+    const toll = attackTollBy(game, attacker, attLoc.player);
+    if (toll) {
+      return { pending: null, game: { ...game, pendingAttackToll: {
+        lp: attLoc.player, charId: pending.charId, targetId: targetEntityId, sourceName: toll } } };
+    }
+
     // Optional on-attack ability (Mara): pause to ask the attacker whether to pay HP
     // for +damage. Decided BEFORE the attack resolves (the bonus rides the attack).
     const opt = optionalAttackAbility(attacker, game, attLoc.player);
@@ -2606,6 +2629,63 @@ export const useGameStore = create<GameStoreState>()(
 
     const r = commitAttack(s, game, pending.charId, targetEntityId, 0);
     return { pending: null, ...r.local, game: r.game, toasts: [...s.toasts, ...mkToasts(r.toastMsgs)] };
+  }),
+
+  // ── Attack toll (Arc H 2026-08-04, The Final Word): pay the sacrifice, or call
+  // the attack off ─────────────────────────────────────────────────────────────
+  resolveAttackToll: (entityId) => set(s => {
+    if (gameIsOver(s.game)) return s;
+    const pat = s.game.pendingAttackToll;
+    if (!pat) return s;
+    if (s.conn.mode !== 'solo' && pat.lp !== s.localPlayer) return s; // payer-only
+    const mkToast = (msg: string) => {
+      const id = ++toastId;
+      setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 4000);
+      return { id, msg };
+    };
+    if (entityId === null) {
+      // Decline: the attack simply doesn't happen — no sacrifice, no declaration,
+      // no partial state (the attacker's activation was never consumed).
+      return { game: { ...s.game, pendingAttackToll: undefined },
+        toasts: [...s.toasts, mkToast(`${pat.sourceName}: toll unpaid — the attack is called off.`)] };
+    }
+    const loc = findEntityAnywhere(s.game, entityId);
+    // Only the payer's own permanents qualify, never the PC (the 2026-07-24
+    // canBeSacrificed chokepoint). The attacking companion itself IS legal —
+    // text-literal "a permanent" (flagged for owner ratification, HANDOFF).
+    if (!loc || loc.player !== pat.lp || !canBeSacrificed(loc.ent)) return s;
+    const deadSink: PendingDeadPick[] = [];
+    const armorSink: ArmorChoiceData[] = [];
+    // The payment is a REAL sacrifice event (cost precedes effect): death triggers
+    // + on-sacrifice listeners fully resolve BEFORE the attack proceeds.
+    const d = destroyEntity({ ...s.game, pendingAttackToll: undefined }, entityId, deadSink, armorSink, 'sacrifice');
+    const g = recomputeStatics(armPrompts(d.game, deadSink, armorSink));
+    const paidMsgs = [`${pat.sourceName}: ${loc.ent.name} is sacrificed — the toll is paid`, ...d.msgs];
+    // The cost is paid — the attack proceeds IF it still can (per-event state).
+    // The attacker itself was a legal payment: with it gone the attack has no
+    // attacker and was never DECLARED — no declaration triggers fire (unlike the
+    // Glass Cannon fizzle, which happens after declaration). Same for a target
+    // removed by the sacrifice's own listeners.
+    const att = findEntityAnywhere(g, pat.charId);
+    if (!att) {
+      return { game: g, toasts: [...s.toasts,
+        mkToast(`${paidMsgs.join(' | ')} — the attack fizzles: the attacker left before it was declared.`)] };
+    }
+    if (!findEntityAnywhere(g, pat.targetId)) {
+      return { game: g, toasts: [...s.toasts,
+        mkToast(`${paidMsgs.join(' | ')} — the attack fizzles: the target left before the attack was declared.`)] };
+    }
+    // Mara's optional rides the attack itself — asked AFTER the cost is paid.
+    const opt = optionalAttackAbility(att.ent, g, pat.lp);
+    if (opt) {
+      return { game: { ...g, pendingAttackChoice: {
+        lp: pat.lp, charId: pat.charId, targetId: pat.targetId,
+        sourceName: opt.sourceName, payHP: opt.payHP, bonus: opt.bonus } },
+        toasts: [...s.toasts, mkToast(paidMsgs.join(' | '))] };
+    }
+    const r = commitAttack(s, g, pat.charId, pat.targetId, 0);
+    return { pending: null, ...r.local, game: r.game,
+      toasts: [...s.toasts, mkToast(paidMsgs.join(' | ')), ...mkToasts(r.toastMsgs)] };
   }),
 
   // ── Optional pre-attack ability (Mara): pay HP for +damage, or decline ─────────
@@ -3046,7 +3126,15 @@ export const useGameStore = create<GameStoreState>()(
       const loc = findEntityAnywhere(g, o.id);
       if (!loc || loc.player !== player) continue;
       if (o.cleansed) {
-        g = updateEntity(g, o.id, { poison: 0, statuses: loc.ent.statuses.filter(st => st !== POISONED_STATUS), exhausted: false, tapped: 'none' as TapState });
+        // Skip-refresh gate (Arc H 2026-08-04, Whispered Accusation): the cleanse
+        // ALWAYS clears counters+status (Poison canon governs the cleanse), but the
+        // ready half is part of "readying at the start of its controller's turn" —
+        // a live 'doesNotReady' modifier holds it, exactly as it held the ready
+        // step. The Poison check runs on the controller's own turn, so the armed
+        // window is live here (`g` supplied for the dormancy gate).
+        const skip = hasModifier(loc.ent, 'doesNotReady', g);
+        g = updateEntity(g, o.id, { poison: 0, statuses: loc.ent.statuses.filter(st => st !== POISONED_STATUS),
+          ...(skip ? {} : { exhausted: false, tapped: 'none' as TapState }) });
       } else {
         dmg += loc.ent.poison ?? 0; // failed check: the unit keeps its counters and stays exhausted
       }
@@ -3195,6 +3283,9 @@ export const useGameStore = create<GameStoreState>()(
     // Likewise an open prevention ordering / deferred prevention queue (R3, 2026-07-14).
     if (s.game.triggerStack?.length || s.game.pendingTriggerOrder) return s;
     if (s.game.pendingPreventOrder || s.game.preventOrderQueue?.length) return s;
+    // An unpaid attack toll holds the turn (Arc H — new field only, so shipped
+    // behavior is untouched): the payer must pay or call the attack off first.
+    if (s.game.pendingAttackToll) return s;
     const g = s.game;
     const nextPlayer: 'p1' | 'p2' = g.activePlayer === 'p1' ? 'p2' : 'p1';
     const nextTurn = nextPlayer === 'p1' ? g.turn + 1 : g.turn;

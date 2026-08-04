@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useGameStore, itemTransferCandidates, reactiveLabel } from '../store/gameStore';
+import { useGameStore, itemTransferCandidates, reactiveLabel, canBeSacrificed } from '../store/gameStore';
 import type { BoardEntity } from '../types/card';
 import { useMultiplayer } from '../lib/useMultiplayer';
 import { CardFace } from '../components/CardFace';
@@ -86,6 +86,7 @@ function GameView() {
       <ArmorModal />
       <PreventOrderModal />
       <AttackChoiceModal />
+      <AttackTollModal />
       <PoisonHost />
       <CoercionModal />
       <DiscardModal />
@@ -510,6 +511,39 @@ function AttackChoiceModal() {
       }>
       <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: TBL.ink }}>
         Pay {pac.payHP} HP from your Player Character to deal {pac.bonus} additional damage?
+      </div>
+    </ModalShell>
+  );
+}
+
+/** Attack toll (Arc H 2026-08-04, The Final Word): declaring the attack costs the
+ *  attacker's controller one sacrifice — their pick (the PC is never offerable,
+ *  canBeSacrificed chokepoint), or call the attack off. Paid BEFORE the attack
+ *  proceeds; declining leaves no partial state. */
+function AttackTollModal() {
+  const pat = useGameStore(s => s.game.pendingAttackToll);
+  const game = useGameStore(s => s.game);
+  const localPlayer = useGameStore(s => s.localPlayer);
+  const isSolo = useGameStore(s => s.conn.mode === 'solo');
+  const resolve = useGameStore(s => s.resolveAttackToll);
+  if (!pat || (!isSolo && pat.lp !== localPlayer)) return null;
+  const payables = Object.values(game[pat.lp].board)
+    .filter((e): e is NonNullable<typeof e> => !!e && canBeSacrificed(e));
+  return (
+    <ModalShell glyph="⚖" eyebrow={pat.sourceName} title="Pay the attack toll?"
+      sub="Declaring this attack costs a sacrifice — choose a permanent to sacrifice, or call the attack off."
+      footer={
+        <>
+          <div style={md.spacer} />
+          <button style={md.btn('ghost')} onClick={() => resolve(null)}>Call off the attack</button>
+        </>
+      }>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {payables.map(e => (
+          <button key={e.id} onClick={() => resolve(e.id)} style={md.btn('primary')}>
+            Sacrifice {e.name}
+          </button>
+        ))}
       </div>
     </ModalShell>
   );

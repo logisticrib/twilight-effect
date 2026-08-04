@@ -29,9 +29,12 @@ const dc = (name: string): Card => {
   if (!c) throw new Error(`dev card missing: ${name}`);
   return c;
 };
-// A vanilla companion (no keywords, no effects) — the play-event vehicle. Shade
-// Puppeteer's control-theft text is Arc I authoring debt; as a BOARD entity it is
-// inert, which is exactly what these pins need.
+// The play-event vehicle. Shade Puppeteer went LIVE in Arc H (2026-08-04: on-enter
+// bounce of an opposing companion with ≤2 CURRENT hp) — every board seeded in this
+// file uses the mkComp default of 5 hp (mkPc 20), so its enter fizzles silently
+// ("no legal target") in each scenario and these pins keep reading exactly as
+// written. If a seed here ever drops an opposing companion to ≤2 hp, the bounce
+// pick will arm — pick a different vehicle then.
 const plain = (): Card => dc('Shade Puppeteer');
 const czCards = CATALOG.slice(20, 25);
 const czFor = (cls: string, n = 5) => czCards.slice(0, n).map((c, i) => mkCz(c, cls, `cz-${i}`));

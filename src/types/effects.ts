@@ -144,7 +144,14 @@ export type Effect =
   // next turn start) · 'controllersNextTurn' (stamped WINDOW: dormant until the
   // target's controller's next turn, live during it, gone at its end — Doubt).
   // amount may be negative (debuffs); the value clamp lives in effectiveAttack.
-  | { op: 'buff'; stat?: 'atk' | 'hp'; amount?: number; grant?: string[]; modifiers?: Modifier[]; scope: TargetSpec; duration: 'endOfTurn' | 'while' | 'untilYourNextTurn' | 'controllersNextTurn'; where?: { line?: 'front' | 'back'; cls?: string } }
+  // Durations (Arc B anchors; Arc H addition): 'controllersNextTurnStart' covers the
+  // recipient's CONTROLLER's next turn-START window (the ready step + the Poison
+  // check) — dormancy + turnEnd expiry, deliberately NO activeDuring: runReadyPhase
+  // runs BEFORE endTurn flips activePlayer, so a Doubt-shaped activeDuring window is
+  // not yet live at the ready step (Arc H finding, 2026-08-04). The entry stays
+  // inertly live for the rest of that turn (nothing re-reads 'doesNotReady' after
+  // the turn-start window) and strips at its end.
+  | { op: 'buff'; stat?: 'atk' | 'hp'; amount?: number; grant?: string[]; modifiers?: Modifier[]; scope: TargetSpec; duration: 'endOfTurn' | 'while' | 'untilYourNextTurn' | 'controllersNextTurn' | 'controllersNextTurnStart'; where?: { line?: 'front' | 'back'; cls?: string } }
   // card / zone movement
   | { op: 'draw'; count: number; if?: Condition }
   // discard (Arc A, 2026-07-22): the DISCARDING player chooses the card (owner
@@ -181,7 +188,10 @@ export type Effect =
   | { op: 'search'; cardType: string }
   // board manipulation
   | { op: 'move'; target: TargetSpec; to: 'anySlot' | 'adjacent'; forced?: boolean }
-  | { op: 'bounce'; target: TargetSpec }                    // return permanent to hand
+  // hpAtMost (Arc H 2026-08-04, Shade Puppeteer): eligibility gate on CURRENT hp —
+  // applied when the pick arms (filterEligibleByEffects) AND re-checked at
+  // resolution (per-event state).
+  | { op: 'bounce'; target: TargetSpec; hpAtMost?: number } // return permanent to hand
   | { op: 'extraAttack'; target: TargetSpec }               // attack an additional time
   | { op: 'forceAttack'; attackers: TargetSpec; target: TargetSpec }
   | { op: 'anchor'; delta: number; target: TargetSpec }     // Reinforce/Dismantle/Shore Up/Demolish
@@ -220,6 +230,15 @@ export type Effect =
   // retroactive. Scope is the aura controller's OPPOSING companions only
   // (engine-supported scopes only; the controller's own side is never restricted).
   | { op: 'restrictAttack'; scope: 'oppCompanions'; where?: { line?: 'front' | 'back' } }  // Crystalline Sentinel
+  // attackToll (Arc H 2026-08-04, The Final Word): a CONDITIONAL restriction with a
+  // payment escape — each attack DECLARATION by an opposing companion costs its
+  // controller one sacrifice (owner agency picks which; canBeSacrificed chokepoint,
+  // PC never offerable), paid before the attack proceeds (cost precedes effect).
+  // Decline → the attack simply doesn't happen (no declaration triggers, no partial
+  // state). NON-STACKING reading (the Dismay precedent): multiple sources still
+  // demand ONE sacrifice per attack — "for each attacking companion" scales the
+  // cost with attackers, not with copies (flagged in HANDOFF 2026-08-04).
+  | { op: 'attackToll'; scope: 'oppCompanions' }  // The Final Word
   // 'lines' = between front and back. Covers ALL movement between them — chosen moves
   // and effect-driven repositioning alike (R3). Entering the encounter is not movement,
   // and lateral within-line repositioning is not "between" lines (R4 / 2026-07-13 note).

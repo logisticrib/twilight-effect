@@ -52,6 +52,7 @@ const OPS = [
   'attackDisarm', 'moveAnchor', 'attackBonus', 'magicDamageBonus', 'preventAnchorDecay',
   'lineWard', 'exhaustSelf', 'exhaust', 'modal', 'gainControl', 'suppressKeywords', 'counterAction',
   'grantKeywords', 'backLineAttack', 'preventDamage', 'firstMagicUncounterable', 'restrictAttack', 'restrictMove',
+  'attackToll',
 ] as const satisfies readonly Effect['op'][];
 export type _ExhaustiveOps = AssertNever<Exclude<Effect['op'], (typeof OPS)[number]>>;
 
@@ -131,12 +132,12 @@ function validateEffect(e: Effect, path: string, p: (msg: string) => void, keywo
       // (owner ruling 2026-06-22, re-confirmed 2026-07-03). No exceptions.
       if (e.stat === 'hp') p(`${path}(buff): +HP effects are BANNED — max HP is fixed, only healing exists`);
       else if (e.stat !== undefined && e.stat !== 'atk') p(`${path}(buff): bad stat "${String(e.stat)}"`);
-      if (!['endOfTurn', 'while', 'untilYourNextTurn', 'controllersNextTurn'].includes(e.duration)) p(`${path}(buff): bad duration "${String(e.duration)}"`);
-      // The timed durations (Arc B) are STAMPED — the contract only advertises the
-      // scopes the interpreter stamps (own groups, all enemy companions, or one
-      // interactive pick). 'while' stays aura-read; 'endOfTurn' keeps its shipped
-      // contract untouched.
-      if ((e.duration === 'untilYourNextTurn' || e.duration === 'controllersNextTurn')
+      if (!['endOfTurn', 'while', 'untilYourNextTurn', 'controllersNextTurn', 'controllersNextTurnStart'].includes(e.duration)) p(`${path}(buff): bad duration "${String(e.duration)}"`);
+      // The timed durations (Arc B; + the Arc H turn-start window) are STAMPED — the
+      // contract only advertises the scopes the interpreter stamps (own groups, all
+      // enemy companions, or one interactive pick). 'while' stays aura-read;
+      // 'endOfTurn' keeps its shipped contract untouched.
+      if ((e.duration === 'untilYourNextTurn' || e.duration === 'controllersNextTurn' || e.duration === 'controllersNextTurnStart')
         && !['ownParty', 'ownCompanions', 'allEnemyCompanions', 'anyCompanion', 'enemyCompanion', 'ownCompanion',
           'anyCharacter', 'enemyCharacter', 'ownCharacter', 'otherCharacter'].includes(e.scope)) {
         p(`${path}(buff): scope "${String(e.scope)}" is not stampable for a timed duration`);
@@ -196,7 +197,12 @@ function validateEffect(e: Effect, path: string, p: (msg: string) => void, keywo
       target('target');
       if (e.to !== 'anySlot' && e.to !== 'adjacent') p(`${path}(move): bad to "${String(e.to)}"`);
       break;
-    case 'bounce': case 'extraAttack': case 'sacrifice': case 'sacrificeItem': case 'equipFromHand':
+    case 'bounce':
+      target('target');
+      // Arc H (2026-08-04, Shade Puppeteer): current-HP eligibility gate.
+      if (e.hpAtMost !== undefined && (!isInt(e.hpAtMost) || e.hpAtMost < 1)) p(`${path}(bounce): hpAtMost must be an integer ≥ 1`);
+      break;
+    case 'extraAttack': case 'sacrifice': case 'sacrificeItem': case 'equipFromHand':
     case 'exhaust':
       target('target'); break;
     case 'forceAttack': target('attackers'); target('target'); break;
@@ -255,6 +261,11 @@ function validateEffect(e: Effect, path: string, p: (msg: string) => void, keywo
     case 'restrictMove':
       if (e.scope !== 'oppCompanions') p(`${path}(restrictMove): scope must be oppCompanions`);
       if (e.between !== 'lines') p(`${path}(restrictMove): between must be "lines"`);
+      break;
+    case 'attackToll':
+      // Arc H (2026-08-04, The Final Word): engine-supported scope only — the
+      // declaration gate scans for opposing companions (restrictAttack's discipline).
+      if (e.scope !== 'oppCompanions') p(`${path}(attackToll): scope must be oppCompanions`);
       break;
   }
 }
