@@ -39,6 +39,10 @@ export type Trigger =
                                     // NOT direct entry onto the front line (R4, owner 2026-07-12) (Pit Trap)
   | 'oppCompanionAttacksCompanion'  // an opposing companion declares an attack on one of YOUR companions
                                     // ("attacks" = declaration; resolves before damage — R2) (Iron Spikes)
+  | 'oppCompanionAttacks'           // an opposing companion declares an attack on ANY of your characters —
+                                    // PC included (owner rewording 2026-08-11, The Final Word: "whenever an
+                                    // opposing companion attacks" carries no target scope; the R4
+                                    // companion-vs-companion reading stays with the trap window above)
   | 'onEquippedAttacked'            // ITEM-hosted (Arc E 2026-07-23, Caltrop Pouch): the equipped character is
                                     // the target of a DECLARED attack — fires in the declaration window (R2),
                                     // any attacker, PC bearer included; gathered from the target's live loadout
@@ -230,15 +234,19 @@ export type Effect =
   // retroactive. Scope is the aura controller's OPPOSING companions only
   // (engine-supported scopes only; the controller's own side is never restricted).
   | { op: 'restrictAttack'; scope: 'oppCompanions'; where?: { line?: 'front' | 'back' } }  // Crystalline Sentinel
-  // attackToll (Arc H 2026-08-04, The Final Word): a CONDITIONAL restriction with a
-  // payment escape — each attack DECLARATION by an opposing companion costs its
-  // controller one sacrifice (owner agency picks which; canBeSacrificed chokepoint,
-  // PC never offerable), paid before the attack proceeds (cost precedes effect).
-  // Decline → the attack simply doesn't happen (no declaration triggers, no partial
-  // state). NON-STACKING reading (the Dismay precedent): multiple sources still
-  // demand ONE sacrifice per attack — "for each attacking companion" scales the
-  // cost with attackers, not with copies (flagged in HANDOFF 2026-08-04).
-  | { op: 'attackToll'; scope: 'oppCompanions' }  // The Final Word
+  // forcedSacrifice (owner rewording 2026-08-11, The Final Word — supersedes the
+  // Arc H 'attackToll' pay-to-break gate, removed same session): a TRIGGERED
+  // mandatory cost carried by a reactive clause ("whenever an opposing companion
+  // attacks, they must sacrifice a permanent" — literal). The event subject's
+  // CONTROLLER must sacrifice a permanent of their choice (owner agency; the
+  // canBeSacrificed chokepoint — PC never offerable). No decline exists: the only
+  // escape is not attacking. Mandatory triggers fire even when the payer has
+  // nothing left to sacrifice (R4 — the clause no-ops loudly). Resolves in the
+  // declaration window (canon: "attacks" = declaration), so a payer who
+  // sacrifices the ATTACKER itself leaves a DECLARED attack that fizzles at the
+  // damage step — the stock Glass Cannon precedent, no special case. Per-copy:
+  // each source's trigger fires (two Final Words = two sacrifices per attack).
+  | { op: 'forcedSacrifice'; chooser: 'eventSubjectController' }  // The Final Word
   // 'lines' = between front and back. Covers ALL movement between them — chosen moves
   // and effect-driven repositioning alike (R3). Entering the encounter is not movement,
   // and lateral within-line repositioning is not "between" lines (R4 / 2026-07-13 note).

@@ -710,6 +710,31 @@ export function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceNam
         }
         break;
       }
+      case 'forcedSacrifice': {
+        // Owner rewording 2026-08-11 (The Final Word): the event subject's
+        // CONTROLLER must sacrifice a permanent — their pick, no decline (the only
+        // escape was not attacking). Arms the payer-owned prompt; the calling
+        // stack driver PAUSES on it (the Arc A trap-discard pattern) so the
+        // sacrifice fully resolves before anything beneath — in particular before
+        // the queued attack's damage step. Mandatory triggers fire even when the
+        // effect no-ops (R4): a payer with nothing sacrificeable is noted loudly
+        // and the clause passes through. Single slot: a second demand (another
+        // Final Word copy) is its own stack entry and arms after this one resolves.
+        if (e.chooser !== 'eventSubjectController' || !ctx?.subjectId) break;
+        // The subject's controller — read from the live board, falling back to the
+        // listener's OPPONENT when the subject already died (an earlier-ordered
+        // Iron Spikes killing a glass-cannon attacker): for this trigger family the
+        // subject is always an opposing companion, so its controller IS `opp`. The
+        // queued demand still resolves (R1) and must surface loudly, never break
+        // silently (no-silent-outcomes, 2026-07-12).
+        const payer = findEntityAnywhere(g, ctx.subjectId)?.player ?? opp;
+        const canPay = (Object.values(g[payer].board) as (BoardEntity | undefined)[]).some(x => !!x && canBeSacrificed(x));
+        if (!canPay) { msgs.push(`${g[payer].name} has nothing left to sacrifice`); break; }
+        if (g.pendingForcedSacrifice) break; // single slot — serialized by the stack pause
+        g = { ...g, pendingForcedSacrifice: { lp: payer, sourceName } };
+        msgs.push(`${g[payer].name} must sacrifice a permanent`);
+        break;
+      }
       case 'revealHand': {
         // Arc A (2026-07-22): the acting player looks at the opponent's hand. Both
         // clients hold full game state (established info model) — the prompt is UI

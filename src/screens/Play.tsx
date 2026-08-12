@@ -86,7 +86,7 @@ function GameView() {
       <ArmorModal />
       <PreventOrderModal />
       <AttackChoiceModal />
-      <AttackTollModal />
+      <ForcedSacrificeModal />
       <PoisonHost />
       <CoercionModal />
       <DiscardModal />
@@ -372,7 +372,7 @@ function StackResumeDriver() {
     const s = useGameStore.getState();
     if ((s.conn.mode === 'solo' || head.controller === s.localPlayer)
       && !s.game.pendingPeek && !s.game.pendingTriggerOrder && !s.game.pendingArmor && !s.game.pendingPreventOrder
-      && !s.game.pendingDiscard && !s.game.pendingHandReveal) {
+      && !s.game.pendingDiscard && !s.game.pendingHandReveal && !s.game.pendingForcedSacrifice) {
       s.resumeStack();
     }
   }, [head]);
@@ -516,28 +516,22 @@ function AttackChoiceModal() {
   );
 }
 
-/** Attack toll (Arc H 2026-08-04, The Final Word): declaring the attack costs the
- *  attacker's controller one sacrifice — their pick (the PC is never offerable,
- *  canBeSacrificed chokepoint), or call the attack off. Paid BEFORE the attack
- *  proceeds; declining leaves no partial state. */
-function AttackTollModal() {
-  const pat = useGameStore(s => s.game.pendingAttackToll);
+/** Forced sacrifice (The Final Word, owner rewording 2026-08-11): the attack was
+ *  declared, so the sacrifice is OWED — the payer picks which permanent (the PC is
+ *  never offerable, canBeSacrificed chokepoint). MANDATORY: no decline exists; the
+ *  only escape was not attacking. The paused declaration window resumes on pick. */
+function ForcedSacrificeModal() {
+  const pfs = useGameStore(s => s.game.pendingForcedSacrifice);
   const game = useGameStore(s => s.game);
   const localPlayer = useGameStore(s => s.localPlayer);
   const isSolo = useGameStore(s => s.conn.mode === 'solo');
-  const resolve = useGameStore(s => s.resolveAttackToll);
-  if (!pat || (!isSolo && pat.lp !== localPlayer)) return null;
-  const payables = Object.values(game[pat.lp].board)
+  const resolve = useGameStore(s => s.resolveForcedSacrifice);
+  if (!pfs || (!isSolo && pfs.lp !== localPlayer)) return null;
+  const payables = Object.values(game[pfs.lp].board)
     .filter((e): e is NonNullable<typeof e> => !!e && canBeSacrificed(e));
   return (
-    <ModalShell glyph="⚖" eyebrow={pat.sourceName} title="Pay the attack toll?"
-      sub="Declaring this attack costs a sacrifice — choose a permanent to sacrifice, or call the attack off."
-      footer={
-        <>
-          <div style={md.spacer} />
-          <button style={md.btn('ghost')} onClick={() => resolve(null)}>Call off the attack</button>
-        </>
-      }>
+    <ModalShell glyph="⚖" eyebrow={pfs.sourceName} title="You must sacrifice a permanent"
+      sub="Your companion attacked — the sacrifice is owed (forced choice). The attack continues once it is paid.">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {payables.map(e => (
           <button key={e.id} onClick={() => resolve(e.id)} style={md.btn('primary')}>

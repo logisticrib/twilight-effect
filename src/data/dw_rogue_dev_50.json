@@ -546,19 +546,19 @@
       "actionPM": "",
       "itemKind": "",
       "keywords": [],
-      "text": "Opposing companions cannot attack unless their controller sacrifices a permanent for each attacking companion.",
+      "text": "Whenever an opposing companion attacks, they must sacrifice a permanent.",
       "flavor": "",
       "dev": true,
       "effects": [
         {
-          "trigger": "static",
+          "trigger": "oppCompanionAttacks",
           "effects": [
-            { "op": "attackToll", "scope": "oppCompanions" }
+            { "op": "forcedSacrifice", "chooser": "eventSubjectController" }
           ]
         }
       ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-08-04T00:00:00.000000Z"
+      "updatedAt": "2026-08-11T00:00:00.000000Z"
     },
     {
       "id": "dd000022",

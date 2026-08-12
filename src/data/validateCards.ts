@@ -29,7 +29,7 @@ const TRIGGERS = [
   'onKill', 'onDeath', 'onDestroy', 'onLeave', 'startOfTurn', 'endOfTurn',
   'onOpponentAction', 'activated',
   // Reactive trap windows (trigger-stack arc, owner-ratified 2026-07-12).
-  'oppCompanionEnters', 'oppCompanionMovesToFront', 'oppCompanionAttacksCompanion', 'oppCompanionFlees',
+  'oppCompanionEnters', 'oppCompanionMovesToFront', 'oppCompanionAttacksCompanion', 'oppCompanionAttacks', 'oppCompanionFlees',
   'ownPlaysMagicalConstruct', 'ownPlaysCompanion', 'ownPhysicalConstructSacrificed', 'onEquippedPlaysMagicAction', 'onEquippedAttacked',
 ] as const satisfies readonly Trigger[];
 export type _ExhaustiveTriggers = AssertNever<Exclude<Trigger, (typeof TRIGGERS)[number]>>;
@@ -52,7 +52,7 @@ const OPS = [
   'attackDisarm', 'moveAnchor', 'attackBonus', 'magicDamageBonus', 'preventAnchorDecay',
   'lineWard', 'exhaustSelf', 'exhaust', 'modal', 'gainControl', 'suppressKeywords', 'counterAction',
   'grantKeywords', 'backLineAttack', 'preventDamage', 'firstMagicUncounterable', 'restrictAttack', 'restrictMove',
-  'attackToll',
+  'forcedSacrifice',
 ] as const satisfies readonly Effect['op'][];
 export type _ExhaustiveOps = AssertNever<Exclude<Effect['op'], (typeof OPS)[number]>>;
 
@@ -262,10 +262,11 @@ function validateEffect(e: Effect, path: string, p: (msg: string) => void, keywo
       if (e.scope !== 'oppCompanions') p(`${path}(restrictMove): scope must be oppCompanions`);
       if (e.between !== 'lines') p(`${path}(restrictMove): between must be "lines"`);
       break;
-    case 'attackToll':
-      // Arc H (2026-08-04, The Final Word): engine-supported scope only — the
-      // declaration gate scans for opposing companions (restrictAttack's discipline).
-      if (e.scope !== 'oppCompanions') p(`${path}(attackToll): scope must be oppCompanions`);
+    case 'forcedSacrifice':
+      // Owner rewording 2026-08-11 (The Final Word): engine-supported chooser only —
+      // the event subject's controller pays (the declaration-window gather binds
+      // the subject; no other chooser is modeled).
+      if (e.chooser !== 'eventSubjectController') p(`${path}(forcedSacrifice): chooser must be eventSubjectController`);
       break;
   }
 }

@@ -1,19 +1,20 @@
-// DEV deck — Arc H (pay-to-break gate, skip-refresh, companion bounce), 2026-08-04.
+// DEV deck — Arc H (forced sacrifice on attack, skip-refresh, companion bounce),
+// 2026-08-04; The Final Word REWORKED 2026-08-11 per the owner's rewording.
 // Three cards convert from DEV NOT-IMPLEMENTED to live, three independent mechanisms:
-// The Final Word (21, attackToll — a conditional restriction with a payment escape:
-// each attack DECLARATION by an opposing companion costs its controller one
-// sacrifice, paid before the attack proceeds; cost precedes effect), Whispered
+// The Final Word (21 — owner-reworded text "Whenever an opposing companion attacks,
+// they must sacrifice a permanent", LITERAL: a TRIGGERED mandatory cost riding the
+// declaration window ('oppCompanionAttacks', any target incl. the PC), NOT the
+// original pay-to-break gate — no decline exists, the only escape is not attacking;
+// self-sacrifice is legal and resolves via the stock Glass Cannon precedent
+// (declared → fizzles at the damage step, declaration triggers HAVING fired);
+// per-copy: each source's trigger demands its own sacrifice), Whispered
 // Accusation (27, exhaust + 'doesNotReady' window riding the Arc B buff anchors —
 // NEW anchor kind 'controllersNextTurnStart': dormancy + turnEnd expiry, NO
 // activeDuring, because runReadyPhase runs BEFORE endTurn flips activePlayer), and
 // Shade Puppeteer (13, on-enter bounce with the hpAtMost CURRENT-hp gate — filtered
 // at arm time AND re-checked at resolution).
-//
-// OPEN QUESTION flagged for the owner (implemented text-literal, HANDOFF 2026-08-04):
-// the toll's "a permanent" includes the ATTACKING companion itself — paying with it
-// leaves the attack with no attacker, so the attack was never DECLARED (unlike the
-// Glass Cannon fizzle, which is post-declaration): no declaration triggers fire.
-// Iron Spikes is the observable: the attacker takes its 1 damage IFF declared.
+// Iron Spikes is the declaration observable throughout: it fires IFF the attack
+// was declared (and it always is, under the reworded text).
 import { describe, it, expect } from 'vitest';
 import { gs, freshGame, mkComp, mkPc, mkConstruct, mkCz } from './helpers';
 import { reactiveHold, POISONED_STATUS } from '../store/gameStore';
@@ -59,105 +60,141 @@ const nextTurn = () => {
 };
 const roundTrips = () => expect(JSON.parse(JSON.stringify(g()))).toEqual(g());
 
-// ─── The Final Word (21) — the attack toll ──────────────────────────────────────
-describe('The Final Word (21) — each opposing attack declaration costs a sacrifice (cost precedes effect)', () => {
+// ─── The Final Word (21) — forced sacrifice on attack (owner rewording 2026-08-11,
+// supersedes the same-session pay-to-break gate + its pins) ──────────────────────
+describe('The Final Word (21) — "Whenever an opposing companion attacks, they must sacrifice a permanent" (literal: triggered mandatory cost, declaration window)', () => {
   const finalWord = () => mkConstruct('tfw', 'The Final Word', 5, { subtype: 'Utterance' });
   const seedCombat = (p1extra: Record<string, ReturnType<typeof mkComp>> = {}, p2extra: Record<string, ReturnType<typeof mkComp>> = {}) => {
     seedP1({ board: { f1: mkComp('att', 'Attacker', { fresh: false, atk: 3 }), ...p1extra } },
       { board: { f2: finalWord(), f1: mkComp('def', 'Defender', { hp: 9, maxHp: 9 }), ...p2extra } });
   };
 
-  it('payment: the sacrifice is a REAL sacrifice event — listeners fire BEFORE the attack proceeds, then the attack lands (declaration triggers included)', () => {
+  it('the demand fires ON declaration: the attack is legal to declare, the sacrifice is then OWED — a real sacrifice event (listeners fire) while the attack waits on the stack, then it proceeds', () => {
     seedCombat(
       { b1: mkConstruct('pay', 'Watch Post', 3, { subtype: 'Fortification' }), b2: mkConstruct('sw', 'Siegeworks', 3, { subtype: 'Fortification' }) },
-      { b2: mkConstruct('spikes', 'Iron Spikes', 2, { subtype: 'Trap' }) });
+      {});
     armAttack('att');
     gs.getState().resolveAttack('def');
-    const pat = g().pendingAttackToll;
-    expect(pat?.lp, "the ATTACKER's controller pays").toBe('p1');
-    expect(pat?.sourceName).toBe('The Final Word');
-    expect(g().p2.board.f1?.hp, 'nothing has happened yet — the toll gates the declaration').toBe(9);
-    expect(reactiveHold(g(), 'p2'), 'the opponent waits while the payer chooses').toMatch(/The Final Word \(attack toll\)/);
+    const pfs = g().pendingForcedSacrifice;
+    expect(pfs?.lp, "the ATTACKING companion's controller pays").toBe('p1');
+    expect(pfs?.sourceName).toBe('The Final Word');
+    expect(g().triggerStack?.some(e => e.kind === 'attackDamage'), 'the declared attack WAITS beneath the pause').toBe(true);
+    expect(g().p2.board.f1?.hp, 'no damage yet').toBe(9);
+    expect(reactiveHold(g(), 'p2'), 'the opponent waits while the payer chooses').toMatch(/The Final Word \(forced sacrifice\)/);
     expect(reactiveHold(g(), 'p1'), 'the payer is never held by their own prompt').toBeNull();
-    // The turn cannot end around an unpaid toll.
     gs.getState().endTurn();
-    expect(g().activePlayer, 'endTurn refused while the toll is unpaid').toBe('p1');
+    expect(g().activePlayer, 'endTurn refused while the sacrifice is owed').toBe('p1');
     roundTrips();
     const handBefore = g().p1.hand.length;
-    gs.getState().resolveAttackToll('pay');
+    gs.getState().resolveForcedSacrifice('pay');
     // Synthetic name — assert board exit, never burial (the arc-C lesson); the
     // Siegeworks draw below is the proof the sacrifice EVENT was real.
-    expect(g().p1.board.b1, 'the payment left the board').toBeUndefined();
-    expect(g().p1.hand.length, "Siegeworks heard its owner's sacrifice (listener fired before the attack)").toBe(handBefore + 1);
-    expect(g().p2.board.f1?.hp, 'then the attack landed').toBe(6);
-    expect(g().p1.board.f1?.hp, 'Iron Spikes fired — the attack WAS declared').toBe(4);
+    expect(g().p1.board.b1, 'the sacrifice left the board').toBeUndefined();
+    expect(g().p1.hand.length, "Siegeworks heard its owner's sacrifice (listener resolved inside the pause)").toBe(handBefore + 1);
+    expect(g().p2.board.f1?.hp, 'the stack resumed — the attack landed').toBe(6);
     expect(g().p1.board.f1?.exhausted, 'the attacker spent its attack').toBe(true);
-    expect(g().pendingAttackToll ?? null, 'prompt cleared').toBeFalsy();
+    expect(g().pendingForcedSacrifice ?? null, 'prompt cleared').toBeFalsy();
+    expect(g().triggerStack ?? null, 'stack drained').toBeFalsy();
   });
 
-  it('decline: no sacrifice, no attack, NO declaration triggers (Iron Spikes silent), no partial state — the attacker may try again', () => {
-    seedCombat({ b1: mkConstruct('pay', 'Watch Post', 3, { subtype: 'Fortification' }) },
-      { b2: mkConstruct('spikes', 'Iron Spikes', 2, { subtype: 'Trap' }) });
-    armAttack('att');
-    gs.getState().resolveAttack('def');
-    expect(g().pendingAttackToll).toBeTruthy();
-    gs.getState().resolveAttackToll(null);
-    expect(g().pendingAttackToll ?? null, 'prompt cleared').toBeFalsy();
-    expect(g().p1.board.b1?.name, 'nothing sacrificed').toBe('Watch Post');
-    expect(g().p2.board.f1?.hp, 'no attack').toBe(9);
-    expect(g().p1.board.f1?.hp, 'Iron Spikes never fired — the attack was never declared').toBe(5);
-    expect(g().p1.board.f1?.exhausted, 'no activation consumed').toBe(false);
-    expect(g().p1.board.f1?.acts.major).toBe(false);
-    expect(lastToasts()).toMatch(/toll unpaid|called off/i);
-    // The attack can simply be declared again (and pays this time).
-    armAttack('att');
-    gs.getState().resolveAttack('def');
-    expect(g().pendingAttackToll, 'the toll re-arms on the next declaration').toBeTruthy();
-  });
-
-  it("text-literal self-payment (⚠ flagged for owner): the attacking companion is itself a legal payment — the attack then has no attacker, was never DECLARED, and fizzles", () => {
-    // The attacker is p1's ONLY permanent — beginAttack must NOT refuse (the
-    // attacker itself is always payable, so the cannot-pay refusal is unreachable
-    // for companion attackers under the text-literal reading).
+  it('MANDATORY — no decline exists: invalid picks (the PC, an opposing permanent) leave the prompt armed and the attack waiting', () => {
     seedP1({ board: { f1: mkComp('att', 'Attacker', { fresh: false, atk: 3 }), b3: mkPc('pc-1') } },
-      { board: { f2: finalWord(), f1: mkComp('def', 'Defender', { hp: 9, maxHp: 9 }), b2: mkConstruct('spikes', 'Iron Spikes', 2, { subtype: 'Trap' }) } });
-    gs.setState(s => ({ game: { ...s.game, currentPhase: 'action' as const } }));
-    gs.getState().beginAttack('att');
-    expect(gs.getState().pending?.action, 'beginAttack proceeds — a payable toll is not a restriction').toBe('attack');
+      { board: { f2: finalWord(), f1: mkComp('def', 'Defender', { hp: 9, maxHp: 9 }) } });
+    armAttack('att');
     gs.getState().resolveAttack('def');
-    const before = g().p1.board.f1;
-    expect(before, 'attacker still on board while the toll is unpaid').toBeTruthy();
-    gs.getState().resolveAttackToll('att');
-    expect(g().p1.board.f1, 'the attacker paid with itself').toBeUndefined();
-    expect(g().p1.dead.some(c => c.name === 'Attacker'), 'a real sacrifice').toBe(false); // synthetic name — assert board exit, not burial (the arc-C lesson)
-    expect(g().p2.board.f1?.hp, 'the attack never happened').toBe(9);
-    expect(lastToasts()).toMatch(/fizzles.*attacker left before it was declared/i);
-    expect(g().pendingAttackToll ?? null).toBeFalsy();
-    expect(g().triggerStack ?? null, 'nothing queued — no declaration window ever opened').toBeFalsy();
+    expect(g().pendingForcedSacrifice).toBeTruthy();
+    gs.getState().resolveForcedSacrifice('pc-1');   // the PC is never a legal sacrifice (2026-07-24 chokepoint)
+    expect(g().pendingForcedSacrifice, 'PC refused — still owed').toBeTruthy();
+    gs.getState().resolveForcedSacrifice('def');    // not the payer's permanent
+    expect(g().pendingForcedSacrifice, "opponent's permanent refused — still owed").toBeTruthy();
+    expect(g().triggerStack?.some(e => e.kind === 'attackDamage'), 'the attack still waits').toBe(true);
+    expect(g().p2.board.f1?.hp).toBe(9);
+    // The only way through is a real payment — here, the attacker itself.
+    gs.getState().resolveForcedSacrifice('att');
+    expect(g().pendingForcedSacrifice ?? null).toBeFalsy();
   });
 
-  it("the construct restricts but does not fight: it is not attackable, and the toll dies with it", () => {
+  it('self-sacrifice is the literal reading and rides the STOCK Glass Cannon precedent: declared (Iron Spikes fires first), attacker sacrificed, damage step fizzles', () => {
+    seedCombat({}, { b2: mkConstruct('spikes', 'Iron Spikes', 2, { subtype: 'Trap' }) });
+    armAttack('att');
+    gs.getState().resolveAttack('def');
+    // Two defender-side declaration triggers → their OWNER orders (2026-07-22).
+    const po = g().pendingTriggerOrder;
+    expect(po?.lp, 'the defender orders their simultaneous declaration triggers').toBe('p2');
+    const spikesIdx = po!.items.findIndex(it => it.kind === 'reactive' && it.sourceName === 'Iron Spikes');
+    gs.getState().resolveTriggerOrder(spikesIdx); // Spikes first, The Final Word after
+    expect(g().p1.board.f1?.hp, 'Iron Spikes fired — the attack WAS declared').toBe(4);
+    expect(g().pendingForcedSacrifice?.lp, 'then the demand arms').toBe('p1');
+    gs.getState().resolveForcedSacrifice('att');  // pay with the attacker itself
+    expect(g().p1.board.f1, 'the attacker sacrificed itself').toBeUndefined();
+    expect(g().p2.board.f1?.hp, 'no damage — the attack fizzled at the damage step').toBe(9);
+    expect(lastToasts()).toMatch(/fizzles — it left the encounter before dealing damage/i);
+    expect(g().triggerStack ?? null, 'stack drained through the fizzle').toBeFalsy();
+  });
+
+  it('any target counts — an attack on the PC also triggers the demand (the reworded text carries no target scope)', () => {
+    seedP1({ board: { f1: mkComp('att', 'Attacker', { fresh: false, atk: 2 }) } },
+      { board: { f2: finalWord(), b3: mkPc('pc-2') } });
+    armAttack('att');
+    gs.getState().resolveAttack('pc-2');
+    expect(g().pendingForcedSacrifice?.lp, 'attacking the PC still owes the sacrifice').toBe('p1');
+    gs.getState().resolveForcedSacrifice('att'); // only permanent — pay with the attacker; the PC hit fizzles
+    expect(g().p2.board.b3?.hp, 'the fizzled attack never reached the PC').toBe(20);
+  });
+
+  it('PER-COPY (the literal "whenever"): two Final Words demand two sacrifices for one attack', () => {
+    seedCombat(
+      { b1: mkConstruct('payA', 'Watch Post', 3, { subtype: 'Fortification' }), b2: mkConstruct('payB', 'Signal Tower', 3, { subtype: 'Fortification' }) },
+      { b1: mkConstruct('tfw2', 'The Final Word', 5, { subtype: 'Utterance' }) });
+    armAttack('att');
+    gs.getState().resolveAttack('def');
+    // Two identical demands — still actively ordered by their owner (2026-07-13).
+    expect(g().pendingTriggerOrder?.lp).toBe('p2');
+    gs.getState().resolveTriggerOrder(0);
+    expect(g().pendingForcedSacrifice, 'first demand').toBeTruthy();
+    gs.getState().resolveForcedSacrifice('payA');
+    expect(g().pendingForcedSacrifice, 'second demand arms after the first resolves (serialized on the stack)').toBeTruthy();
+    gs.getState().resolveForcedSacrifice('payB');
+    expect(g().p1.board.b1 ?? g().p1.board.b2, 'both payments gone').toBeUndefined();
+    expect(g().p2.board.f1?.hp, 'then the attack landed once').toBe(6);
+    expect(g().triggerStack ?? null).toBeFalsy();
+  });
+
+  it('R4 — the mandatory demand fires even with nothing left to pay: a glass-cannon attacker dies to Iron Spikes first, the demand no-ops LOUDLY, the attack fizzles', () => {
+    seedP1({ board: { f1: mkComp('att', 'Glass Attacker', { fresh: false, atk: 3, hp: 1, maxHp: 1 }), b3: mkPc('pc-1') } },
+      { board: { f2: finalWord(), f1: mkComp('def', 'Defender', { hp: 9, maxHp: 9 }), b2: mkConstruct('spikes', 'Iron Spikes', 2, { subtype: 'Trap' }) } });
+    armAttack('att');
+    gs.getState().resolveAttack('def');
+    const po = g().pendingTriggerOrder;
+    const spikesIdx = po!.items.findIndex(it => it.kind === 'reactive' && it.sourceName === 'Iron Spikes');
+    gs.getState().resolveTriggerOrder(spikesIdx); // Spikes first: the 1-hp attacker dies pre-demand
+    expect(g().p1.board.f1, 'the attacker died to the declaration trap').toBeUndefined();
+    expect(g().pendingForcedSacrifice ?? null, 'nothing sacrificeable remains (PC never counts) — the mandatory demand no-ops').toBeFalsy();
+    expect(lastToasts()).toMatch(/nothing left to sacrifice/i);
+    expect(g().p2.board.f1?.hp, 'and the attack fizzled (Glass Cannon)').toBe(9);
+    expect(g().triggerStack ?? null).toBeFalsy();
+  });
+
+  it("the construct itself does not fight (not attackable), the demand dies with it, and the controller's OWN companions attack freely", () => {
     seedCombat();
     armAttack('att');
     gs.getState().resolveAttack('tfw');
     expect(lastToasts()).toMatch(/Constructs cannot be attacked/i);
-    expect(g().pendingAttackToll ?? null, 'no toll armed by a refused declaration').toBeFalsy();
+    expect(g().pendingForcedSacrifice ?? null, 'a refused declaration owes nothing').toBeFalsy();
     // Remove The Final Word — the same attack now commits promptless.
     gs.setState(s => ({ game: { ...s.game, p2: { ...s.game.p2, board: { ...s.game.p2.board, f2: undefined } } } }));
     armAttack('att');
     gs.getState().resolveAttack('def');
-    expect(g().pendingAttackToll ?? null, 'no source — no toll').toBeFalsy();
+    expect(g().pendingForcedSacrifice ?? null, 'no source — no demand').toBeFalsy();
     expect(g().p2.board.f1?.hp, 'attack landed directly').toBe(6);
-  });
-
-  it("the controller's OWN companions attack toll-free (scope: opposing companions only)", () => {
+    // Own side: the Final Word's controller attacks toll-free (opposing scope).
     seedP1({ board: { f1: mkComp('mine', 'P1 Defender', { hp: 8, maxHp: 8 }) } },
       { board: { f2: finalWord(), f1: mkComp('p2att', 'P2 Attacker', { fresh: false, atk: 2 }) } });
     gs.setState(s => ({ localPlayer: 'p2' as const,
       pending: { action: 'attack', charId: 'p2att' },
       game: { ...s.game, activePlayer: 'p2' as const, currentPhase: 'action' as const } }));
     gs.getState().resolveAttack('mine');
-    expect(g().pendingAttackToll ?? null, "the Final Word's own side pays nothing").toBeFalsy();
+    expect(g().pendingForcedSacrifice ?? null, "the Final Word's own side owes nothing").toBeFalsy();
     expect(g().p1.board.f1?.hp, 'attack landed').toBe(6);
   });
 });

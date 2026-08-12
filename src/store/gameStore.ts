@@ -9,7 +9,7 @@ import { recomputeStatics, isImmuneToSplash, HIT_RUN_STATUS,
          isCharacter, firstItemOf, allItemsOf, canHoldItem, effectiveAttack, effectiveKeywords, effectiveMaxHp, wardedLines,
          canPlayActionCard, specialActionActor, minorActionReason, actionTypeOf, currentWillpower, parseBanes,
          POISONED_STATUS, parseAnimateMagic,
-         attackRestrictedBy, attackTollBy, moveRestrictedBy, hasModifier,
+         attackRestrictedBy, moveRestrictedBy, hasModifier,
          canAttackFromPosition, isLegalAttackTarget, bindingGuardianIds, legalAttackTargetIds } from './keywords';
 
 // Everything relocated to the headless engine stays importable from this module —
@@ -229,6 +229,14 @@ function commitAttack(s: StackRunCtx, game: GameState, charId: string, targetEnt
     ...(attacker.kind === 'companion' && tgtLoc.ent.kind === 'companion'
       ? gatherReactive(newGame, 'oppCompanionAttacksCompanion', { id: charId, name: attacker.name, controller: attLoc.player })
       : []),
+    // 'oppCompanionAttacks' (owner rewording 2026-08-11, The Final Word): ANY
+    // attack by an opposing companion — PC targets included ("whenever an opposing
+    // companion attacks" carries no target scope; the R4 companion-vs-companion
+    // reading stays with the trap window above). Same controller as the other
+    // defender-side entries — the batch construction holds.
+    ...(attacker.kind === 'companion'
+      ? gatherReactive(newGame, 'oppCompanionAttacks', { id: charId, name: attacker.name, controller: attLoc.player })
+      : []),
     ...gatherEquippedAttacked(tgtLoc.ent, tgtLoc.player, { id: charId, name: attacker.name }),
   ];
   const hasOwnAttack = combatTriggerEffects(attacker, 'onAttack').length > 0;
@@ -301,7 +309,7 @@ function resumeEnterUnits(g: GameState, s: StackRunCtx):
   if (top?.kind !== 'enterUnit') return { game: g, local: {}, msgs: [] };
   if (g.pendingDeadPick || g.pendingCoercion || g.pendingHandReveal || g.pendingPeek
     || g.pendingDiscard || g.pendingTriggerOrder || g.pendingArmor || g.pendingPreventOrder
-    || g.pendingItemTransfer || g.pendingPoison) return { game: g, local: {}, msgs: [] };
+    || g.pendingItemTransfer || g.pendingPoison || g.pendingForcedSacrifice) return { game: g, local: {}, msgs: [] };
   const r = runStack(g, s);
   return { game: r.game, local: r.local, msgs: r.toastMsgs };
 }
@@ -333,10 +341,10 @@ export function reactiveHold(game: GameState, localPlayer: 'p1' | 'p2'): string 
   // The opponent's pre-attack pay-HP choice (Mara) — same clobber risk.
   const pac = game.pendingAttackChoice;
   if (pac && pac.lp !== localPlayer) return `${pac.sourceName} (attack choice)`;
-  // The opponent's attack-toll payment (Arc H, The Final Word) — the PAYER (the
-  // attacker's controller) chooses the sacrifice; everyone else waits.
-  const pat = game.pendingAttackToll;
-  if (pat && pat.lp !== localPlayer) return `${pat.sourceName} (attack toll)`;
+  // The opponent's forced sacrifice (The Final Word, owner rewording 2026-08-11) —
+  // the PAYER (the attacking companion's controller) chooses; everyone else waits.
+  const pfs = game.pendingForcedSacrifice;
+  if (pfs && pfs.lp !== localPlayer) return `${pfs.sourceName} (forced sacrifice)`;
   // The opponent's Item Transfer window (e.g. the defender rescuing a killed bearer's
   // items) — the active player waits so broadcasts don't clobber the resolution.
   const it = game.pendingItemTransfer;
@@ -754,6 +762,12 @@ function runStack(game: GameState, s: StackRunCtx):
       // Transition check, not presence check: no shipped reactive arms a peek, so
       // every shipped path is byte-identical. resolvePeek/cancelPeek re-enter.
       if (g.pendingPeek && g.pendingPeek !== peekBefore) break;
+      // The Final Word (owner rewording 2026-08-11): a reactive clause that demands
+      // a FORCED SACRIFICE pauses the stack — the payment (a real sacrifice event,
+      // listeners included) completes before anything beneath, in particular before
+      // the queued attack's damage step. resolveForcedSacrifice re-enters. New
+      // field — no shipped path can see it.
+      if (g.pendingForcedSacrifice) break;
       continue;
     }
 
@@ -989,9 +1003,10 @@ interface GameStoreState {
   resolvePreventOrder: (idx: number) => void;
   /** Resolve Mara's pre-attack optional ability — pay HP for +damage, or decline; commits the attack. */
   resolveAttackChoice: (accept: boolean) => void;
-  /** Pay an attack toll (Arc H, The Final Word): sacrifice the chosen own permanent
-   *  (never the PC) and the declared attack proceeds — or `null` to call it off. */
-  resolveAttackToll: (entityId: string | null) => void;
+  /** Forced sacrifice (The Final Word, owner rewording 2026-08-11): sacrifice the
+   *  chosen own permanent (never the PC) — MANDATORY, no decline; the paused
+   *  declaration window resumes after. */
+  resolveForcedSacrifice: (entityId: string) => void;
 
   // Cancel any pending action
   cancelPending: () => void;
@@ -1970,7 +1985,7 @@ export const useGameStore = create<GameStoreState>()(
     const top = stack?.[stack.length - 1];
     if (!top) return s;
     if (s.game.pendingTriggerOrder || s.game.pendingPeek || s.game.pendingArmor || s.game.pendingPreventOrder
-      || s.game.pendingDiscard || s.game.pendingHandReveal) return s; // paused on a prompt, not a hand-off
+      || s.game.pendingDiscard || s.game.pendingHandReveal || s.game.pendingForcedSacrifice) return s; // paused on a prompt, not a hand-off
     // Arc G (2026-08-04): an enterUnit-headed stack also pauses on the game-level
     // prompts the global list doesn't cover — narrow to the new kind, so shipped
     // ownEnter resumption (which can legitimately coexist with a dead pick) is
@@ -2349,8 +2364,9 @@ export const useGameStore = create<GameStoreState>()(
       gameOver: sg.gameOver === 'p1' || sg.gameOver === 'p2' ? sg.gameOver : null,
       pendingPeek: null, pendingPeekQueue: [], pendingDeadPick: null, pendingDeadPickQueue: [], pendingPoison: null, pendingCoercion: null, pendingArmor: null, pendingAttackChoice: null,
       pendingDiscard: undefined, pendingDiscardQueue: undefined, pendingHandReveal: undefined,
-      // An unpaid toll is safe to drop: the attack was never declared (Arc H).
-      pendingAttackToll: undefined,
+      // A pending forced sacrifice rides the trigger stack, which a save never
+      // resumes mid-window — drop it with the rest of the transient prompts.
+      pendingForcedSacrifice: undefined,
       // Transfer windows are safe to drop: the items already sit in the Dead Zone.
       // Modal choices too: the cost is unpaid until resolved, so nothing is lost.
       pendingItemTransfer: null, pendingItemTransferQueue: [],
@@ -2606,17 +2622,9 @@ export const useGameStore = create<GameStoreState>()(
       }
     }
 
-    // Attack toll (Arc H 2026-08-04, The Final Word): declaring this attack COSTS
-    // the attacker's controller one sacrifice — a LEGALITY-cost gate, so it arms
-    // after every legality check and BEFORE the declaration proceeds (cost precedes
-    // effect; declaration triggers must not fire on an unpaid attack).
-    // resolveAttackToll pays (a real sacrifice event) and continues into the Mara
-    // check + commit; decline calls the whole attack off (no partial state).
-    const toll = attackTollBy(game, attacker, attLoc.player);
-    if (toll) {
-      return { pending: null, game: { ...game, pendingAttackToll: {
-        lp: attLoc.player, charId: pending.charId, targetId: targetEntityId, sourceName: toll } } };
-    }
+    // (The Final Word rides the DECLARATION WINDOW as a reactive trigger since the
+    // owner's rewording 2026-08-11 — see the declaration gather; the same-session
+    // Arc H pay-to-break gate that sat here was removed with it.)
 
     // Optional on-attack ability (Mara): pause to ask the attacker whether to pay HP
     // for +damage. Decided BEFORE the attack resolves (the bonus rides the attack).
@@ -2631,61 +2639,44 @@ export const useGameStore = create<GameStoreState>()(
     return { pending: null, ...r.local, game: r.game, toasts: [...s.toasts, ...mkToasts(r.toastMsgs)] };
   }),
 
-  // ── Attack toll (Arc H 2026-08-04, The Final Word): pay the sacrifice, or call
-  // the attack off ─────────────────────────────────────────────────────────────
-  resolveAttackToll: (entityId) => set(s => {
+  // ── Forced sacrifice (owner rewording 2026-08-11, The Final Word): the demanded
+  // sacrifice resolves while the trigger stack is PAUSED on it; the declared
+  // attack sits beneath and resumes after — fizzling at the damage step if the
+  // attacker itself was the sacrifice (the Glass Cannon precedent, R2). MANDATORY:
+  // there is no decline path; an invalid pick leaves the prompt armed. ──────────
+  resolveForcedSacrifice: (entityId) => set(s => {
     if (gameIsOver(s.game)) return s;
-    const pat = s.game.pendingAttackToll;
-    if (!pat) return s;
-    if (s.conn.mode !== 'solo' && pat.lp !== s.localPlayer) return s; // payer-only
+    const pfs = s.game.pendingForcedSacrifice;
+    if (!pfs) return s;
+    if (s.conn.mode !== 'solo' && pfs.lp !== s.localPlayer) return s; // payer-only
+    const loc = findEntityAnywhere(s.game, entityId);
+    // Only the payer's own permanents qualify, never the PC (the 2026-07-24
+    // canBeSacrificed chokepoint). The attacking companion itself IS legal — the
+    // owner's literal "a permanent" (2026-08-11).
+    if (!loc || loc.player !== pfs.lp || !canBeSacrificed(loc.ent)) return s;
     const mkToast = (msg: string) => {
       const id = ++toastId;
       setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 4000);
       return { id, msg };
     };
-    if (entityId === null) {
-      // Decline: the attack simply doesn't happen — no sacrifice, no declaration,
-      // no partial state (the attacker's activation was never consumed).
-      return { game: { ...s.game, pendingAttackToll: undefined },
-        toasts: [...s.toasts, mkToast(`${pat.sourceName}: toll unpaid — the attack is called off.`)] };
-    }
-    const loc = findEntityAnywhere(s.game, entityId);
-    // Only the payer's own permanents qualify, never the PC (the 2026-07-24
-    // canBeSacrificed chokepoint). The attacking companion itself IS legal —
-    // text-literal "a permanent" (flagged for owner ratification, HANDOFF).
-    if (!loc || loc.player !== pat.lp || !canBeSacrificed(loc.ent)) return s;
     const deadSink: PendingDeadPick[] = [];
     const armorSink: ArmorChoiceData[] = [];
-    // The payment is a REAL sacrifice event (cost precedes effect): death triggers
-    // + on-sacrifice listeners fully resolve BEFORE the attack proceeds.
-    const d = destroyEntity({ ...s.game, pendingAttackToll: undefined }, entityId, deadSink, armorSink, 'sacrifice');
-    const g = recomputeStatics(armPrompts(d.game, deadSink, armorSink));
-    const paidMsgs = [`${pat.sourceName}: ${loc.ent.name} is sacrificed — the toll is paid`, ...d.msgs];
-    // The cost is paid — the attack proceeds IF it still can (per-event state).
-    // The attacker itself was a legal payment: with it gone the attack has no
-    // attacker and was never DECLARED — no declaration triggers fire (unlike the
-    // Glass Cannon fizzle, which happens after declaration). Same for a target
-    // removed by the sacrifice's own listeners.
-    const att = findEntityAnywhere(g, pat.charId);
-    if (!att) {
-      return { game: g, toasts: [...s.toasts,
-        mkToast(`${paidMsgs.join(' | ')} — the attack fizzles: the attacker left before it was declared.`)] };
+    // A REAL sacrifice event: death triggers + on-sacrifice listeners fully
+    // resolve before the stack (and the attack beneath) resumes.
+    const d = destroyEntity({ ...s.game, pendingForcedSacrifice: undefined }, entityId, deadSink, armorSink, 'sacrifice');
+    let g = recomputeStatics(armPrompts(d.game, deadSink, armorSink));
+    const msgs = [`${pfs.sourceName}: ${loc.ent.name} is sacrificed`, ...d.msgs];
+    // Resume the paused declaration window (the resolveDiscard pattern): the
+    // remaining entries — another copy's demand, the attacker's own onAttack
+    // clauses, the damage step — run now.
+    let local: Partial<GameStoreState> = {};
+    const stackMsgs: string[] = [];
+    if (!g.pendingForcedSacrifice && g.triggerStack?.length) {
+      const r = runStack(g, s);
+      g = r.game; local = r.local; stackMsgs.push(...r.toastMsgs);
     }
-    if (!findEntityAnywhere(g, pat.targetId)) {
-      return { game: g, toasts: [...s.toasts,
-        mkToast(`${paidMsgs.join(' | ')} — the attack fizzles: the target left before the attack was declared.`)] };
-    }
-    // Mara's optional rides the attack itself — asked AFTER the cost is paid.
-    const opt = optionalAttackAbility(att.ent, g, pat.lp);
-    if (opt) {
-      return { game: { ...g, pendingAttackChoice: {
-        lp: pat.lp, charId: pat.charId, targetId: pat.targetId,
-        sourceName: opt.sourceName, payHP: opt.payHP, bonus: opt.bonus } },
-        toasts: [...s.toasts, mkToast(paidMsgs.join(' | '))] };
-    }
-    const r = commitAttack(s, g, pat.charId, pat.targetId, 0);
-    return { pending: null, ...r.local, game: r.game,
-      toasts: [...s.toasts, mkToast(paidMsgs.join(' | ')), ...mkToasts(r.toastMsgs)] };
+    return { ...local, game: g,
+      toasts: [...s.toasts, mkToast(msgs.join(' | ')), ...mkToasts(stackMsgs)] };
   }),
 
   // ── Optional pre-attack ability (Mara): pay HP for +damage, or decline ─────────
@@ -3283,9 +3274,10 @@ export const useGameStore = create<GameStoreState>()(
     // Likewise an open prevention ordering / deferred prevention queue (R3, 2026-07-14).
     if (s.game.triggerStack?.length || s.game.pendingTriggerOrder) return s;
     if (s.game.pendingPreventOrder || s.game.preventOrderQueue?.length) return s;
-    // An unpaid attack toll holds the turn (Arc H — new field only, so shipped
-    // behavior is untouched): the payer must pay or call the attack off first.
-    if (s.game.pendingAttackToll) return s;
+    // An owed forced sacrifice holds the turn (new field only, so shipped behavior
+    // is untouched; the non-empty stack beneath it blocks endTurn anyway —
+    // defensive double-lock).
+    if (s.game.pendingForcedSacrifice) return s;
     const g = s.game;
     const nextPlayer: 'p1' | 'p2' = g.activePlayer === 'p1' ? 'p2' : 'p1';
     const nextTurn = nextPlayer === 'p1' ? g.turn + 1 : g.turn;
