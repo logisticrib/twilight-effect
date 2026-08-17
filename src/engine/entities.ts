@@ -160,10 +160,10 @@ export function destroyEntity(game: GameState, entityId: string, sink: PendingDe
   // (stolenFrom set) that dies on its CONTROLLER's board sends its card, its item
   // cards, its sworn card, and its Item Transfer window to the ORIGINAL OWNER —
   // zone ownership never moved. Every un-stolen entity: owner === loc.player,
-  // byte-identical to the pre-arc path. (FLAGGED deviation: §Items reads
-  // "controlling player" for the transfer window — the stolen case follows the
-  // OWNER because the claim machinery requires window side = dead-zone side;
-  // canon predates control theft.)
+  // byte-identical to the pre-arc path. (RATIFIED owner 2026-08-17 — GRU §Items
+  // Rules Note: when controller and owner differ, the Item Transfer window belongs
+  // to the OWNER; rescue and burial stay on the same side. Formerly a flagged
+  // deviation; the shipped owner-routing was confirmed correct, no change.)
   const owner: 'p1' | 'p2' = loc.ent.stolenFrom ?? loc.player;
   const dead = deadCardsOf(loc.ent);
   const sworn = loc.ent.sworn;
