@@ -232,7 +232,10 @@ function validateEffect(e: Effect, path: string, p: (msg: string) => void, keywo
       break;
     case 'gainControl':
       target('target');
-      if (e.duration !== 'while') p(`${path}(gainControl): duration must be "while"`);
+      // Arc I (2026-08-11): 'endOfTurn' = the implemented turn-bound theft (Command
+      // the Broken); 'while' stays declared for a future permanent-linked shape.
+      if (e.duration !== 'while' && e.duration !== 'endOfTurn') p(`${path}(gainControl): duration must be "while" or "endOfTurn"`);
+      if (e.hpAtMost !== undefined && (!isInt(e.hpAtMost) || e.hpAtMost < 1)) p(`${path}(gainControl): hpAtMost must be an integer ≥ 1`);
       break;
     case 'suppressKeywords':
       target('scope');

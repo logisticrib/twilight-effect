@@ -156,19 +156,29 @@ export function canBeSacrificed(ent: BoardEntity): boolean {
 export function destroyEntity(game: GameState, entityId: string, sink: PendingDeadPick[] | undefined, armorSink: ArmorChoiceData[] | undefined, cause: 'damage' | 'sacrifice'): { game: GameState; msgs: string[] } {
   const loc = findEntityAnywhere(game, entityId);
   if (!loc) return { game, msgs: [] };
+  // Arc I (2026-08-11, ruling 4): OWNERSHIP routes zones. A stolen companion
+  // (stolenFrom set) that dies on its CONTROLLER's board sends its card, its item
+  // cards, its sworn card, and its Item Transfer window to the ORIGINAL OWNER —
+  // zone ownership never moved. Every un-stolen entity: owner === loc.player,
+  // byte-identical to the pre-arc path. (FLAGGED deviation: §Items reads
+  // "controlling player" for the transfer window — the stolen case follows the
+  // OWNER because the claim machinery requires window side = dead-zone side;
+  // canon predates control theft.)
+  const owner: 'p1' | 'p2' = loc.ent.stolenFrom ?? loc.player;
   const dead = deadCardsOf(loc.ent);
   const sworn = loc.ent.sworn;
-  const transfer = itemTransferOf(loc.ent, loc.player);
+  const transfer = itemTransferOf(loc.ent, owner);
   // On-sacrifice listeners gather from the board AS OF the event (pre-removal) —
-  // the dying permanent's own listener is included (R3, owner 2026-07-15).
+  // the dying permanent's own listener is included (R3, owner 2026-07-15). The
+  // event stays on the CONTROLLER's board (where it died); only ZONES follow owner.
   const eventBoard = cause === 'sacrifice' ? game[loc.player].board : null;
   const removed = removeEntity(game, entityId);
   let g: GameState = { ...removed,
     pendingItemTransferQueue: transfer ? [...removed.pendingItemTransferQueue, transfer] : removed.pendingItemTransferQueue,
-    [loc.player]: {
-      ...removed[loc.player],
-      dead: dead.length ? [...removed[loc.player].dead, ...dead] : removed[loc.player].dead,
-      hand: sworn ? [...removed[loc.player].hand, sworn] : removed[loc.player].hand,
+    [owner]: {
+      ...removed[owner],
+      dead: dead.length ? [...removed[owner].dead, ...dead] : removed[owner].dead,
+      hand: sworn ? [...removed[owner].hand, sworn] : removed[owner].hand,
     } };
   const msgs: string[] = [];
   // Death triggers fire HERE, for every removal path uniformly. RULED 2026-07-08:
@@ -179,7 +189,10 @@ export function destroyEntity(game: GameState, entityId: string, sink: PendingDe
   // sacrifice but runs inside readyPlayer — no shipped construct carries a death
   // trigger, so wiring it there is deferred and FLAGGED, not silently skipped.)
   if (hasRemovalTrigger(loc.ent)) {
-    const rt = resolveRemovalTriggers(g, loc.ent, loc.player, sink, armorSink, cause);
+    // Removal triggers run for the OWNER's side (Arc I): a stolen Memory Stone
+    // bearer's recovery pick reads the owner's Dead Zone — where the card just
+    // went. Un-stolen: owner === loc.player, unchanged.
+    const rt = resolveRemovalTriggers(g, loc.ent, owner, sink, armorSink, cause);
     g = rt.game;
     msgs.push(...rt.msgs);
   }

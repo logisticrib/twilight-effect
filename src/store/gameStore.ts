@@ -26,7 +26,7 @@ import { ADJ, FRONT_SLOTS, BACK_SLOTS, isFront, findSlot, type SlotId, type Boar
          itemProfileOf, itemTransferCandidates, armNextItemTransfer,
          setPcHp, payPcHp, pcIdOf, charsOf,
          ownPhysicalConstructIds,
-         eligibleTargets, filterEligibleByEffects, effectsWouldAffectSomething, actionTargetSpec, twoStepKind,
+         eligibleTargets, filterEligibleByEffects, effectsWouldAffectSomething, actionTargetSpec, twoStepKind, isInteractiveSpec,
          permanentEffects, gatherActivated, abilityUsedTag, magicCtx,
          destroyEntity, applyDamage, applyCombatHit, driveAttack, optionalAttackAbility,
          attackDamageBonus, resolveActionEffects, armPrompts, armNextArmorChoice,
@@ -88,7 +88,7 @@ export interface PendingActionTarget {
   sourceId?: string; // present when source === 'enter' (for 'self' targeting)
   // Two-step (Tactical Reposition: char→slot; Disarming Blow: attacker→enemy;
   // Field Engineer: Physical Construct → Physical Construct anchor move).
-  twoStep?: 'reposition' | 'disarm' | 'moveAnchor';
+  twoStep?: 'reposition' | 'disarm' | 'moveAnchor' | 'gainControl';
   firstId?: string;            // the first chosen entity (set on step 2)
   eligibleSlots?: SlotId[];    // clickable empty slots when step 2 is a slot pick
 }
@@ -345,6 +345,10 @@ export function reactiveHold(game: GameState, localPlayer: 'p1' | 'p2'): string 
   // the PAYER (the attacking companion's controller) chooses; everyone else waits.
   const pfs = game.pendingForcedSacrifice;
   if (pfs && pfs.lp !== localPlayer) return `${pfs.sourceName} (forced sacrifice)`;
+  // The opponent's reversion slot pick (Arc I control theft) — the OWNER chooses
+  // where their companion returns; the caster's turn cannot end until they do.
+  const pr = game.pendingReversion;
+  if (pr && pr.lp !== localPlayer) return `${pr.sourceName} (returning to its owner)`;
   // The opponent's Item Transfer window (e.g. the defender rescuing a killed bearer's
   // items) — the active player waits so broadcasts don't clobber the resolution.
   const it = game.pendingItemTransfer;
@@ -1007,6 +1011,9 @@ interface GameStoreState {
    *  chosen own permanent (never the PC) — MANDATORY, no decline; the paused
    *  declaration window resumes after. */
   resolveForcedSacrifice: (entityId: string) => void;
+  /** Control-theft reversion (Arc I): the OWNER places their returning companion in
+   *  the clicked open slot — any line (ruling 6) — and the paused endTurn resumes. */
+  resolveReversionSlot: (slot: SlotId) => void;
 
   // Cancel any pending action
   cancelPending: () => void;
@@ -1386,6 +1393,25 @@ export const useGameStore = create<GameStoreState>()(
       return { toasts: [...s.toasts, mkToast(`Can't play ${card.name}: ${gate.reason}.`)] };
     }
 
+    // Pre-cost refusal (Arc I 2026-08-11, ruling 1 — the universal pre-cost rule
+    // applied to control theft): a gainControl action with no legal target (the
+    // CURRENT-hp gate) or no open slot on the caster's board CANNOT BE PLAYED —
+    // refused before any cost is paid, card stays in hand. SCOPED to
+    // gainControl-carrying actions: the shipped fizzle-to-Dead-Zone behavior of
+    // every other action is untouched.
+    const preOnPlay = (card.effects ?? []).filter(c => c.trigger === 'onPlay').flatMap(c => c.effects);
+    const preGc = preOnPlay.find(e => e.op === 'gainControl');
+    if (preGc && preGc.op === 'gainControl') {
+      const stealables = isInteractiveSpec(preGc.target)
+        ? filterEligibleByEffects(s.game, eligibleTargets(s.game, lp, preGc.target), preOnPlay) : [];
+      if (stealables.length === 0) {
+        return { toasts: [...s.toasts, mkToast(`Can't play ${card.name}: no legal target within the HP limit.`)] };
+      }
+      if (![...FRONT_SLOTS, ...BACK_SLOTS].some(sl => !s.game[lp].board[sl])) {
+        return { toasts: [...s.toasts, mkToast(`Can't play ${card.name}: no available slot on your board.`)] };
+      }
+    }
+
     // Pay the cost up-front, before the counter check — a countered or fizzled card
     // still spent the action. All downstream branches read from this charged game.
     let g0: GameState = { ...s.game, ...activationPatch(s.game, actLoc.ent.id) };
@@ -1464,9 +1490,14 @@ export const useGameStore = create<GameStoreState>()(
     const onPlay = (card.effects ?? []).filter(c => c.trigger === 'onPlay').flatMap(c => c.effects);
 
     // Two-step action: pick one of your characters first (then a slot or an enemy).
+    // gainControl (Arc I): step 1 picks the OPPOSING companion instead (CURRENT-hp
+    // gated); step 2 is the slot on the caster's board (resolveActionTarget arms it).
     const ts = twoStepKind(onPlay);
     if (ts) {
-      const eligibleIds = charsOf(g0, lp);
+      const gcOp = onPlay.find(e => e.op === 'gainControl');
+      const eligibleIds = ts === 'gainControl' && gcOp && gcOp.op === 'gainControl' && isInteractiveSpec(gcOp.target)
+        ? filterEligibleByEffects(g0, eligibleTargets(g0, lp, gcOp.target), onPlay)
+        : charsOf(g0, lp);
       const newHand = g0[lp].hand.filter(c => c.id !== handCardId);
       if (eligibleIds.length === 0) {
         return { game: { ...g0, [lp]: { ...g0[lp], hand: newHand, dead: [...g0[lp].dead, card] } }, pendingPlay: null, toasts: [...s.toasts, ...mkToasts(riderMsgs), mkToast(`${card.name} fizzles — no character to act.`)] };
@@ -1544,6 +1575,14 @@ export const useGameStore = create<GameStoreState>()(
     // ── Two-step actions ──────────────────────────────────────────────────────
     if (pa.twoStep && !pa.firstId) {
       // Step 1: chose the first entity → arm step 2 (slot, enemy, or dest construct).
+      if (pa.twoStep === 'gainControl') {
+        // Arc I (2026-08-11): step 2 = the slot the stolen companion is placed in —
+        // ANY open slot on the CASTER's board ("place in any available slot",
+        // ruling 2; relocation is not movement, so between-lines restrictions do
+        // not apply, and not a play, so the Back-Line rule does not either).
+        const emptySlots = [...FRONT_SLOTS, ...BACK_SLOTS].filter(sl => !s.game[pa.lp].board[sl]);
+        return { pendingActionTarget: { ...pa, firstId: targetId, eligibleIds: [], eligibleSlots: emptySlots } };
+      }
       if (pa.twoStep === 'reposition') {
         // Effect-driven repositioning is still MOVEMENT (R3, owner 2026-07-15): an
         // opposing between-lines restriction removes cross-line destinations here,
@@ -1630,7 +1669,53 @@ export const useGameStore = create<GameStoreState>()(
   resolveActionSlot: (slot) => set(s => {
     if (gameIsOver(s.game)) return s;
     const pa = s.pendingActionTarget;
-    if (!pa || pa.twoStep !== 'reposition' || !pa.firstId || !pa.eligibleSlots?.includes(slot)) return s;
+    if (!pa || !pa.firstId || !pa.eligibleSlots?.includes(slot)) return s;
+
+    // ── gainControl (Arc I 2026-08-11, Command the Broken): REAL relocation ─────
+    if (pa.twoStep === 'gainControl') {
+      const mkT = (msg: string) => {
+        const tid = ++toastId;
+        setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== tid) })), 4000);
+        return { id: tid, msg };
+      };
+      const loc = findEntityAnywhere(s.game, pa.firstId);
+      const gcOp = pa.effects.find(e => e.op === 'gainControl');
+      const cap = gcOp && gcOp.op === 'gainControl' ? gcOp.hpAtMost : undefined;
+      // Re-check at resolution (per-event state): target gone, no longer a legal
+      // steal, or the slot filled → the steal fizzles LOUDLY (the cost was already
+      // paid — playAction's up-front rule); the card still buries.
+      if (!loc || loc.player === pa.lp || loc.ent.kind !== 'companion'
+        || (cap != null && loc.ent.hp > cap) || s.game[pa.lp].board[slot]) {
+        const buried = pa.card ? { ...s.game, [pa.lp]: { ...s.game[pa.lp], dead: [...s.game[pa.lp].dead, pa.card] } } : s.game;
+        return { game: buried, pendingActionTarget: null,
+          toasts: [...s.toasts, mkT(`${pa.sourceName} fizzles — the target is no longer a legal steal.`)] };
+      }
+      const owner = loc.player;
+      // Board-to-board move — NEVER through hand, NEVER an enter (ruling 3): no
+      // placeCard, no onEnter/Paranoia/trap windows, no Scavenger re-fire. Control
+      // is board membership (ruling 2) — every "your companions" read follows free.
+      const fromBoard = { ...s.game[owner].board };
+      delete fromBoard[loc.slot];
+      let g: GameState = { ...s.game, [owner]: { ...s.game[owner], board: fromBoard } };
+      // fresh:true — relocation IS an entry for the Major-Action check (ruling 2:
+      // exactly why the card grants Zealous); acts reset for the new controller.
+      // Exhaust/tap/hp/counters PERSIST — the steal is not a ready.
+      const stolen: BoardEntity = { ...loc.ent, stolenFrom: owner, fresh: true, acts: freshActs() };
+      g = { ...g, [pa.lp]: { ...g[pa.lp], board: { ...g[pa.lp].board, [slot]: stolen } } };
+      const msgs = [`${loc.ent.name} is under your control until end of turn`];
+      // The rest of the card's effects (the Zealous grant) apply to the stolen
+      // companion BY ID — the reposition precedent ("resolve the rest after the move").
+      const rest = pa.effects.filter(e => e.op !== 'gainControl');
+      if (rest.length) {
+        const r = resolveActionEffects(g, pa.lp, pa.sourceName, rest, pa.firstId, undefined);
+        g = r.game; msgs.push(...r.msgs);
+      }
+      const finalGame = pa.card ? { ...g, [pa.lp]: { ...g[pa.lp], dead: [...g[pa.lp].dead, pa.card] } } : g;
+      return { game: recomputeStatics(finalGame), pendingActionTarget: null,
+        toasts: [...s.toasts, mkT(`${pa.sourceName}: ${msgs.join(' | ')}`)] };
+    }
+
+    if (pa.twoStep !== 'reposition') return s;
     const loc = findEntityAnywhere(s.game, pa.firstId);
     // Defense-in-depth (R3): eligibleSlots was already restriction-filtered at arming;
     // re-check against the CURRENT board in case a restriction source entered since.
@@ -2367,6 +2452,9 @@ export const useGameStore = create<GameStoreState>()(
       // A pending forced sacrifice rides the trigger stack, which a save never
       // resumes mid-window — drop it with the rest of the transient prompts.
       pendingForcedSacrifice: undefined,
+      // A dropped reversion pick is safe: the stolenFrom marker persists, so the
+      // next endTurn simply re-arms it.
+      pendingReversion: undefined,
       // Transfer windows are safe to drop: the items already sit in the Dead Zone.
       // Modal choices too: the cost is unpaid until resolved, so nothing is lost.
       pendingItemTransfer: null, pendingItemTransferQueue: [],
@@ -3264,6 +3352,41 @@ export const useGameStore = create<GameStoreState>()(
     return { game: newGame };
   }),
 
+  // ── Control-theft reversion slot pick (Arc I 2026-08-11, ruling 6) ─────────
+  resolveReversionSlot: (slot) => {
+    let placed = false;
+    set(s => {
+      const pr = s.game.pendingReversion;
+      if (!pr) return s;
+      if (s.conn.mode !== 'solo' && pr.lp !== s.localPlayer) return s; // owner-only
+      if (s.game[pr.lp].board[slot]) return s; // must be an open slot (any line — ruling 6)
+      const loc = findEntityAnywhere(s.game, pr.entId);
+      if (!loc || !loc.ent.stolenFrom) {
+        // Stale (the companion left the board since the prompt armed) — clear and
+        // let the re-invoked endTurn proceed.
+        placed = true;
+        return { game: { ...s.game, pendingReversion: undefined } };
+      }
+      // Same shedding as the auto path: the until-endOfTurn buffs (the Zealous
+      // grant) die WITH the control — one clock (ruling 5).
+      const { stolenFrom: _home, ...rest } = loc.ent;
+      const homed: BoardEntity = { ...rest, buffs: loc.ent.buffs?.filter(b => b.until !== 'endOfTurn') };
+      const fromBoard = { ...s.game[loc.player].board };
+      delete fromBoard[loc.slot];
+      let g: GameState = { ...s.game, pendingReversion: undefined,
+        [loc.player]: { ...s.game[loc.player], board: fromBoard } };
+      g = recomputeStatics({ ...g, [pr.lp]: { ...g[pr.lp], board: { ...g[pr.lp].board, [slot]: homed } } });
+      placed = true;
+      const tid = ++toastId;
+      setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== tid) })), 4000);
+      return { game: g, toasts: [...s.toasts, { id: tid, msg: `${pr.sourceName} returns to its owner's control (${slot.toUpperCase()}).` }] };
+    });
+    // The turn was PAUSED on this pick — finish it now. The re-invocation processes
+    // any remaining stolen companions, then runs the real end-of-turn sequence
+    // (reversion completes BEFORE the next player's ready phase — the Arc I finding).
+    if (placed) get().endTurn();
+  },
+
   // ── Turn end / ready phase ────────────────────────────────────────────────
   endTurn: () => set(s => {
     const heldBy = reactiveHold(s.game, s.localPlayer);
@@ -3278,7 +3401,54 @@ export const useGameStore = create<GameStoreState>()(
     // is untouched; the non-empty stack beneath it blocks endTurn anyway —
     // defensive double-lock).
     if (s.game.pendingForcedSacrifice) return s;
-    const g = s.game;
+    if (s.game.pendingReversion) return s; // a reversion pick is out — the turn waits for it
+
+    // ── Control-theft reversion (Arc I 2026-08-11) — the FIRST substantive step of
+    // ending the turn: "until end of turn" expires NOW, and the companion must be
+    // home BEFORE runReadyPhase below (which readies the NEXT player's side and
+    // runs their flee/decay checks while activePlayer is still the caster — the
+    // Arc I timing finding; a late reversion would miss its owner's entire ready).
+    // Zero open slots → sacrificed to the OWNER's Dead Zone (the flee OUTCOME,
+    // never the flee trigger — ruling 6); exactly one → auto-placed (no choice
+    // content); more → the OWNER picks ANY slot, Front or Back (ruling 6, the
+    // ratified general rule) — pendingReversion pauses the turn and
+    // resolveReversionSlot re-invokes endTurn. Same-boundary buffs (until
+    // 'endOfTurn' — the Zealous grant) strip WITH the reversion: one clock
+    // (ruling 5), even though this pass runs before the buffBoundary below.
+    let gRev = s.game;
+    const revMsgs: string[] = [];
+    {
+      const revDead: PendingDeadPick[] = [];
+      const revArmor: ArmorChoiceData[] = [];
+      for (const side of ['p1', 'p2'] as const) {
+        for (const [slot, ent] of Object.entries(gRev[side].board) as [SlotId, BoardEntity | undefined][]) {
+          if (!ent?.stolenFrom) continue;
+          const owner = ent.stolenFrom;
+          const open = [...FRONT_SLOTS, ...BACK_SLOTS].filter(sl => !gRev[owner].board[sl]);
+          if (open.length > 1) {
+            const tid = ++toastId;
+            setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== tid) })), 4000);
+            return { game: { ...gRev, pendingReversion: { lp: owner, entId: ent.id, sourceName: ent.name } },
+              toasts: [...s.toasts, { id: tid, msg: `${ent.name} returns to its owner — they choose the slot (any line).` }] };
+          }
+          if (open.length === 0) {
+            const d = destroyEntity(gRev, ent.id, revDead, revArmor, 'sacrifice'); // owner-routed via stolenFrom (ruling 4)
+            gRev = d.game;
+            revMsgs.push(`${ent.name} has nowhere to return — it is sacrificed to its owner's Dead Zone.`, ...d.msgs);
+            continue;
+          }
+          const { stolenFrom: _home, ...rest } = ent;
+          const homed: BoardEntity = { ...rest, buffs: ent.buffs?.filter(b => b.until !== 'endOfTurn') };
+          const fromBoard = { ...gRev[side].board };
+          delete fromBoard[slot];
+          gRev = { ...gRev, [side]: { ...gRev[side], board: fromBoard } };
+          gRev = { ...gRev, [owner]: { ...gRev[owner], board: { ...gRev[owner].board, [open[0]]: homed } } };
+          revMsgs.push(`${ent.name} returns to its owner's control.`);
+        }
+      }
+      if (revMsgs.length) gRev = recomputeStatics(armPrompts(gRev, revDead, revArmor));
+    }
+    const g = gRev;
     const nextPlayer: 'p1' | 'p2' = g.activePlayer === 'p1' ? 'p2' : 'p1';
     const nextTurn = nextPlayer === 'p1' ? g.turn + 1 : g.turn;
 
@@ -3378,7 +3548,8 @@ export const useGameStore = create<GameStoreState>()(
     const drawId = ++toastId;
     setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== drawId) })), 4000);
     // Event order in the toasts mirrors the ruling: triggers first, then removals.
-    const sotToasts = [...sot.sotMsgs, ...readyNotices].map(msg => {
+    // Reversion notices lead (they happened FIRST — before the ready phase).
+    const sotToasts = [...revMsgs, ...sot.sotMsgs, ...readyNotices].map(msg => {
       const tid = ++toastId;
       setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== tid) })), 4000);
       return { id: tid, msg };

@@ -223,7 +223,18 @@ export type Effect =
                                                  // still fire when this is a no-op (already-exhausted target — R4)
   // future (declared so authored cards validate; interpreter support added later)
   | { op: 'modal'; options: { label: string; effects: Effect[] }[] }  // Blueprint
-  | { op: 'gainControl'; target: TargetSpec; duration: 'while' }
+  // gainControl (Arc I 2026-08-11, Command the Broken): REAL relocation — the
+  // companion moves board-to-board for the duration (control IS board membership;
+  // owner ruling 2). duration 'endOfTurn' = the turn-bound clock (reverts at the
+  // caster's endTurn, BEFORE the next player's ready phase — the Arc I timing
+  // finding); 'while' stays DECLARED-ONLY for a future permanent-linked
+  // (Utterance-template) control shape. hpAtMost = CURRENT-hp eligibility gate
+  // (the Shade Puppeteer precedent). Relocation is NOT a replay and NOT an enter:
+  // no placeCard, no onEnter/Paranoia/trap windows (owner ruling 3). Ownership
+  // never changes — only control; deaths route to the OWNER's zones (ruling 4,
+  // via BoardEntity.stolenFrom). Store-resolved as a two-step pick-then-slot
+  // action (the reposition/moveAnchor precedent), not an interpreter case.
+  | { op: 'gainControl'; target: TargetSpec; duration: 'while' | 'endOfTurn'; hpAtMost?: number }
   | { op: 'suppressKeywords'; scope: TargetSpec; where?: { line?: 'front' | 'back' } }  // static aura: affected lose all keywords
   | { op: 'grantKeywords'; keywords: string[]; scope: TargetSpec; where?: { line?: 'front' | 'back' } }  // static aura: affected GAIN keywords (Bastion Wall)
   | { op: 'firstMagicUncounterable' } // (equipped) the bearer's FIRST Magic Action each turn cannot be countered (Ashforged Pendant, 2026-07-16)

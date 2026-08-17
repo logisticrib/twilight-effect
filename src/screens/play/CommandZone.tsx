@@ -91,6 +91,8 @@ export function CommandZone({ player, owner, flip, boardScale = DEFAULT_BOARD_SC
   const resolveKit          = useGameStore(s => s.resolveKit);
   const resolveActionTarget = useGameStore(s => s.resolveActionTarget);
   const resolveActionSlot   = useGameStore(s => s.resolveActionSlot);
+  const resolveReversionSlot = useGameStore(s => s.resolveReversionSlot);
+  const isSolo              = useGameStore(s => s.conn.mode === 'solo');
   const oppPlayer: 'p1' | 'p2' = localPlayer === 'p1' ? 'p2' : 'p1';
 
   // PC placement mode: show placement slots only for the player whose serialized
@@ -167,10 +169,16 @@ export function CommandZone({ player, owner, flip, boardScale = DEFAULT_BOARD_SC
             const isActionTarget = !!pendingActionTarget && !!card && pendingActionTarget.eligibleIds.includes(card.id);
             const isActionSlot = !!pendingActionTarget && !card && owner === localPlayer
               && !!pendingActionTarget.eligibleSlots?.includes(sid);
+            // Control-theft reversion (Arc I, ruling 6): the OWNER clicks ANY open
+            // slot — Front or Back — for the returning companion.
+            const isReversionSlot = !!game.pendingReversion && !card
+              && owner === game.pendingReversion.lp
+              && (isSolo || localPlayer === game.pendingReversion.lp);
 
             const state: SlotState = isPcPlacement   ? 'pc-placement'
                                    : (isTriggerTarget || isKitTarget) ? 'trigger-target'
                                    : isActionTarget  ? 'attack-target'
+                                   : isReversionSlot ? 'move-target'
                                    : isActionSlot    ? 'move-target'
                                    : isMoveTarget    ? 'move-target'
                                    : isPlayTarget    ? 'play-target'
@@ -180,6 +188,7 @@ export function CommandZone({ player, owner, flip, boardScale = DEFAULT_BOARD_SC
 
             const pendingIsItem = pendingCard?.type === 'Item';
             const handleClick = () => {
+              if (isReversionSlot)         { resolveReversionSlot(sid); return; }
               if (isTriggerTarget && card) { resolveTrigger(card.id); return; }
               if (isKitTarget && card)     { resolveKit(card.id); return; }
               if (isActionTarget && card)  { resolveActionTarget(card.id); return; }

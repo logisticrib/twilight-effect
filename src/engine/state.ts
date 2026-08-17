@@ -108,6 +108,18 @@ export interface GameState {
    *  `undefined` when cleared — games that never arm it keep their exact pre-arc
    *  canonical replay hash (the triggerStack discipline). */
   pendingForcedSacrifice?: PendingForcedSacrifice | null;
+  /** Control-theft reversion slot pick (Arc I 2026-08-11, Command the Broken —
+   *  owner-ratified GENERAL rule, ruling 6): a companion returning to its owner's
+   *  control WITHOUT passing through their hand may be placed in ANY available
+   *  slot, Front or Back (a deliberate exception to the Back-Line-only
+   *  play-from-hand rule). Armed by endTurn when >1 slot is open (singleton
+   *  auto-places; a FULL board sacrifices to the owner's Dead Zone — the flee
+   *  OUTCOME, never the flee trigger); endTurn PAUSES (the turn has not ended)
+   *  until resolveReversionSlot places the companion and re-invokes it — the
+   *  reversion must complete BEFORE the next player's ready phase (the Arc I
+   *  timing finding: runReadyPhase runs pre-flip). Routed to the OWNER; the
+   *  caster is held (reactiveHold). OPTIONAL (hash discipline). */
+  pendingReversion?: PendingReversion | null;
   /** Deferred start-of-turn modal choice (Pyre) — the controller picks a mode (or
    *  declines, for "you may" clauses); the clause cost is paid at resolution. */
   pendingModalChoice: PendingModalChoice | null;
@@ -445,4 +457,13 @@ export interface PendingAttackChoice {
 export interface PendingForcedSacrifice {
   lp: 'p1' | 'p2';       // who must sacrifice (the attacking companion's controller)
   sourceName: string;    // the demanding permanent (prompt/hold label)
+}
+
+/** A control-theft reversion awaiting the OWNER's slot choice (Arc I 2026-08-11):
+ *  the stolen companion (still sitting on the caster's board) returns to `lp`'s
+ *  board in the slot they click — any line (ruling 6). */
+export interface PendingReversion {
+  lp: 'p1' | 'p2';       // the owner — who chooses the slot
+  entId: string;         // the stolen companion (on the OTHER board right now)
+  sourceName: string;    // the companion's name (hold/prompt label)
 }

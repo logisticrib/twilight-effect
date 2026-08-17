@@ -150,7 +150,8 @@ export function effectTargetSpec(e: Effect): TargetSpec | null {
  * carries a narrowing field, so every shipped arm site returns `ids` unchanged.
  */
 export function filterEligibleByEffects(game: GameState, ids: string[], effects: Effect[]): string[] {
-  const cap = effects.find((e): e is Extract<Effect, { op: 'bounce' }> => e.op === 'bounce' && e.hpAtMost != null);
+  const cap = effects.find((e): e is Extract<Effect, { op: 'bounce' | 'gainControl' }> =>
+    (e.op === 'bounce' || e.op === 'gainControl') && e.hpAtMost != null);
   if (!cap) return ids;
   return ids.filter(id => {
     const loc = findEntityAnywhere(game, id);
@@ -263,11 +264,14 @@ export function actionTargetSpec(effects: Effect[]): TargetSpec | null {
 }
 
 /** A two-step action (pick own char, then a slot or an enemy), or null. */
-export function twoStepKind(effects: Effect[]): 'reposition' | 'disarm' | 'moveAnchor' | null {
+export function twoStepKind(effects: Effect[]): 'reposition' | 'disarm' | 'moveAnchor' | 'gainControl' | null {
   for (const e of effects) {
     if (e.op === 'move' && e.to === 'anySlot' && e.target === 'ownCharacter') return 'reposition';
     if (e.op === 'attackDisarm') return 'disarm';
     if (e.op === 'moveAnchor') return 'moveAnchor';
+    // Arc I (2026-08-11, Command the Broken): pick the companion, then the slot it
+    // is placed in on the CASTER's board ("place in any available slot", ruling 2).
+    if (e.op === 'gainControl' && e.duration === 'endOfTurn') return 'gainControl';
   }
   return null;
 }
@@ -450,7 +454,7 @@ export function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceNam
             msgs.push(`${loc.ent.name} has more than ${e.hpAtMost} HP — not returned`);
             continue;
           }
-          const owner = loc.player;
+          const owner = loc.ent.stolenFrom ?? loc.player;
           // Manifest (animated construct): sacrificed instead of returning to hand.
           // Via destroyEntity so its card AND any equipped items reach the Dead Zone
           // (the old inline removal LOST the items) and an Item Transfer window queues.
@@ -463,6 +467,8 @@ export function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceNam
           const cardObj = CATALOG.find(c => c.name === loc.ent.name);
           // Companions drop their items to the Dead Zone; constructs have none. A bounce
           // is an exit, so it opens an Item Transfer window too (ruled 2026-07-08).
+          // Arc I (2026-08-11, ruling 4): OWNERSHIP routes the zones — a bounced
+          // STOLEN companion goes home to its owner's hand, not the controller's.
           const items = itemCardsOf(loc.ent);
           const transfer = itemTransferOf(loc.ent, owner);
           g = removeEntity(g, id);

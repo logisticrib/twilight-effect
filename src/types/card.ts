@@ -120,4 +120,11 @@ export interface BoardEntity {
   sworn?: Card | null; // oathsworn card tucked beneath
   acts: Acts;          // per-turn action budget
   buffs?: ActiveBuff[]; // temporary modifiers (Action-card buffs, etc.)
+  /** Arc I (2026-08-11, Command the Broken): set while this entity sits on a board
+   *  its OWNER does not control — the value is the owner's side. Control is board
+   *  membership (ruling 2); this marker carries OWNERSHIP, which never changes:
+   *  deaths/bounces route zones to the owner (ruling 4), and the endTurn reversion
+   *  pass relocates the entity home when the clock expires. OPTIONAL — absent for
+   *  every un-stolen entity (hash discipline). */
+  stolenFrom?: 'p1' | 'p2';
 }

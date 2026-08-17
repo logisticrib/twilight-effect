@@ -699,9 +699,17 @@
       "text": "Gain control of target opposing companion with 2 or less HP until end of turn. It gains ZEALOUS until end of turn.",
       "flavor": "",
       "dev": true,
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-07-22, Arc I): control theft (gainControl is declared-only; ownership, targeting scopes, your/opposing evaluation, and end-of-turn reversion are all untouched engine surface — own session)",
+      "effects": [
+        {
+          "trigger": "onPlay",
+          "effects": [
+            { "op": "gainControl", "target": "enemyCompanion", "duration": "endOfTurn", "hpAtMost": 2 },
+            { "op": "buff", "scope": "enemyCompanion", "grant": ["Zealous"], "duration": "endOfTurn" }
+          ]
+        }
+      ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-08-11T00:00:00.000000Z"
     },
     {
       "id": "dd000027",
