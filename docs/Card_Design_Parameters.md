@@ -354,7 +354,7 @@ Three distinct trigger conditions:
 - **Fungal** - Nature-themed
 - **Manifest** - Created exclusively by the Animate Magic X keyword; represents a Magical Construct stabilized into Companion form
 - **Beast** - A Beast is a non-magical animal without sapience. *(Added 2026-08-18, owner ruling.)* Griffin = Beast; Lion = Beast; the ghost of a lion = "Spirit Beast Lion"; a zombified shrew = "Undead Beast Shrew". NOT Beasts: sapient creatures (Goblin, Human, Elf, Dwarf, Centaur, and Angel — Angels are canonically sapient predators, not divine, per Class_Design_Guide "Unique Subtype: Angel") and monsters of supernatural origin (Ifrit, Shadowbeast). "Beast" appearing in a card NAME does not imply the Beast type. Beast is PRINTED on the type line, never derived — physical-play trackability: a player at a table must be able to see whether a card is a Beast without consulting a lookup.
-- **Only ONE modifier per companion** *(Superseded in part 2026-08-18: Beast STACKS with one other modifier — "Spirit Beast Lion", "Undead Beast Shrew" — per the owner examples above. The one-modifier cap still governs the non-Beast modifiers: no card carries two of Undead/Spirit/Fungal/Manifest.)*
+- **Only ONE modifier per companion** *(Superseded in part 2026-08-18, owner-CONFIRMED reading: Beast STACKS with one other modifier — "Spirit Beast Lion", "Undead Beast Shrew" — and the one-modifier cap still governs the non-Beast modifiers: no card carries two of Undead/Spirit/Fungal/Manifest.)*
 
 ### Creature Type Targeting Templates
 - "Target [creature type] companion" (e.g., "Target Goblin companion")
@@ -675,7 +675,7 @@ Three distinct trigger conditions:
 - **Stats are card-specific:** Each Animate Magic effect specifies the attack/HP values (e.g., "becomes a 2/3 Elemental companion")
 
 **UNTAMED** (Druid-Specific) - While there are no Gear or Physical Constructs in the encounter, this character is Untamed. Per-card text defines the bonus granted while Untamed.
-*(Corrected 2026-08-18: "Items" → "Gear" — drift from Master_Keyword_List.md, the defining document for keywords (see its dated Rules Note under UNTAMED). Gear is a strict subset of Items: a Weapon does NOT suppress Untamed, and the scope is the whole encounter, both players. The same correction applies to the duplicate definition later in this document — flagged as a duplicate, not consolidated.)*
+*(Corrected 2026-08-18: "Items" → "Gear" — drift from Master_Keyword_List.md, the defining document for keywords (see its dated Rules Note under UNTAMED). Gear is a strict subset of Items: a Weapon does NOT suppress Untamed, and the scope is the whole encounter, both players. The duplicate definition later in this document is now a POINTER to this one — consolidated 2026-08-18, owner-ruled, so the pair cannot drift apart again.)*
 
 ### Subtypes with Special Rules
 
@@ -709,7 +709,7 @@ Three distinct trigger conditions:
   - Sworn cards count as being "in the encounter" for effects that count sworn cards
   - If a permanent with Oathsworn changes zones in some other way (such as being returned to hand), the sworn card is returned to its owner's hand
 
-**UNTAMED** (Druid-Specific) While there are no Gear or Physical Constructs in the encounter, this character is Untamed. Per-card text defines the bonus granted while Untamed. *(Corrected 2026-08-18 with the primary definition above.)*
+**UNTAMED** (Druid-Specific) — see the full definition under the class-specific keyword entries above; the defining wording lives in Master_Keyword_List.md (Rules_Taxonomy names it the defining document for keywords). *(Consolidated to a pointer 2026-08-18, owner-ruled: this second copy had drifted independently once — "Items" vs canon "Gear" — and a pointer cannot drift again.)*
 
 ---
 
