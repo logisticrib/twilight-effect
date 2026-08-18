@@ -29,7 +29,7 @@
   - Number of Special Actions available (reduced by 1)
   - Companion fleeing checks: Companions with level > current Willpower flee at start of turn
 - Does NOT stack: Multiple Dismayed effects do not reduce Willpower further
-- Can apply to players OR individual companions (check card text for target)
+- Applied to players, not characters *(corrected 2026-08-18 — see the DISMAYED entry in §Evergreen Keywords for the ruling)*
 
 **Example:** Player has 3 cards in Class Zone (Willpower 3). If Dismayed:
 - Effective Willpower becomes 2
@@ -38,6 +38,14 @@
 - Level 3+ companions will flee at start of next turn
 
 **Critical Edge Case:** If Dismayed would reduce player's Willpower to 0 (only 1 card in Class Zone), player cannot play any cards from hand or take Special Actions, and all companions flee at start of turn.
+
+### Willpower Increase (Inspired)
+**When a player is Inspired (Paladin keyword Inspire, 2026-08-18):**
+- Their effective Willpower is increased by 1 for all purposes — the exact mirror of Dismayed
+- Does NOT stack: multiple Inspire sources do not raise Willpower further
+- Applied to players, not characters
+- **Distinct from the Willpower Boosts above:** a boost is a temporary "play as though your Willpower were higher" effect that does NOT affect fleeing. Inspired is a derived state that IS part of current Willpower, so every check reads it, fleeing included (owner-ratified 2026-08-18 — see Game_Rules_Updated §Companion Fleeing).
+- **Both at once:** Dismayed + Inspired nets to zero — current Willpower is the plain Class Zone count.
 
 ---
 
@@ -299,6 +307,7 @@ Three distinct trigger conditions:
   - **Light Armor:** 1 slot, grants Armor 1-2
   - **Heavy Armor:** 2 slots (inherent rule), grants Armor 3-4+
   - **Trinket:** 1 slot, various abilities (no Armor keyword), handheld items (rings, potions, amulets)
+- **Rules Note (owner-ruled 2026-08-18) — there is no "Two-Handed Armor".** Armor is never two-handed: hands are a WEAPON property. The subtypes above are the complete set, and heavy armor is written **Heavy Armor**, whose 2-slot cost is inherent to the subtype. One shipped card (Plate of the Standing Wall) had been minted as "Two-Handed Armor"; ruled an error and corrected to Heavy Armor this date. Two consequences were corrected with it: the engine had been deciding heaviness by searching printed PROSE for the literal word "heavy" — which no card carries, so no card had ever been treated as heavy — and now reads the subtype; and because heavy armor occupies both gear slots as one item, the damage-prevention picker had to be taught to count it once rather than offering the same piece as two candidates.
 
 ### Item Attachment Rules
 - **All items must be attached to a character** - no free-floating equipment
@@ -531,9 +540,13 @@ Three distinct trigger conditions:
 3. **Poison counters** - Track poison status (see Rogue keyword)
 
 ### Armor Counters
-- Used by Armor keyword on items and some companions
-- Each prevented damage instance adds 1 counter
-- Item/companion sacrificed or loses ability when reaching threshold
+- All armor enters with its specified number of Armor counters (Armor X enters with X)
+- Remove 1 for each instance of damage it prevents
+- Sacrifice the item when the last counter is removed (a companion instead stops preventing)
+- Used by the Armor keyword on items and some companions
+- **Universal counter rule (owner-ratified 2026-08-18):** Armor counters on a companion ARE the prevention ability. A companion with one or more armor counters prevents damage (removing one per instance) regardless of how the counters arrived — printed keyword or card effect. Effect-placed and keyword-native armor counters are indistinguishable. (Deliberate parallel: effect-applied Poison counters are identical to keyword-applied ones — the same principle, on the prevention side.)
+- **Design principle (owner, 2026-08-18):** binary on/off ability grants must not leave counters lingering while the ability toggles — place counters once via triggers and let the counters carry the behavior. This is why Armor was inverted to enter loaded and count down: the counter's presence, not a separate keyword check, is the ability.
+- Canonical keyword wording: Master_Keyword_List.md §Item & Equipment Keywords
 
 ### Anchor Counters
 - All constructs enter with specified number of Anchor counters
@@ -637,9 +650,10 @@ Three distinct trigger conditions:
 
 **RECKLESS** When this character attacks, it deals 1 damage to itself.
 
-**ARMOR X** If the equip character would be dealt damage, prevent all of that damage and put an armor counter on this item. When this item has X armor counters, sacrifice it.
+**ARMOR X** See Master_Keyword_List.md §Item & Equipment Keywords for the canonical wording and Rules Notes. In short: enters with X armor counters, removes one per prevented damage instance, sacrificed when the last is removed.
 
-**ARMOR X (companion variant)** If this character would be dealt damage, prevent all of that damage and put an armor counter on this item. When this companion has X armor counters, it no longer prevents damage via this ability.
+**ARMOR X (companion variant)** See Master_Keyword_List.md §Item & Equipment Keywords for the canonical wording, and for the universal counter rule (§18).
+*(Consolidated 2026-08-18: both definitions here, and the pair in §Armor Keyword Full Rules below, are now POINTERS — same remedy as Untamed, this date. Both had already drifted: this one read "on this item" where the defining document read "on this companion", and the item line carried a "the equip character" typo. A pointer cannot drift again.)*
 
 **WARDED AGAINST [X]** Warded creatures cannot be targeted, attacked, or damaged by cards of type or subtype [X]. (Example: "Warded against Magic Actions" or "Warded against Undead")
 
@@ -663,12 +677,25 @@ Three distinct trigger conditions:
 **DISMAY** (Doom-Whisperer - Evergreen) - As long as one or more permanents with Dismay are in the encounter under your control, your opponent is Dismayed.
 
 **DISMAYED** *(state, not a card keyword)* - A Dismayed player has -1 Willpower. Dismayed does not stack.
-- Notes: Applies to players and companions. Binary state, not cumulative.
+- Notes: Applied to players, not characters. Binary state, not cumulative.
+- **Rules Note (owner-ruled 2026-08-18) — players only.** This document previously read "Applies to players and companions" (and §1 read "can apply to players OR individual companions"), contradicting Master_Keyword_List.md, the defining document for keywords, which has always read "Applied to players, not characters." Ruled incoherent and corrected to the defining document: Willpower is a PLAYER stat (the Class Zone card count) — a companion has a Level, not a Willpower, so there is nothing on a companion for -1 Willpower to reduce. Both copies corrected this date.
 - **Mechanical implications for players:**
   - Reduces number of available Special Actions per turn
   - Can cause companions to flee if Willpower drops below their level (checked at start of turn)
   - Reduces maximum level of cards playable from hand
   - **Can reduce to 0 Willpower:** Since Dismayed doesn't stack, a player can only reach 0 Willpower if they have 1 card in Class Zone and become Dismayed (they must allow this state to occur)
+
+**INSPIRE** (Paladin - Evergreen) - As long as one or more permanents with Inspire are in the encounter under your control, you are Inspired.
+
+**INSPIRED** *(state, not a card keyword)* - An Inspired player has +1 Willpower. Inspired does not stack.
+- Notes: Applied to players, not characters. Binary state, not cumulative.
+- **Mechanical implications for players:**
+  - Raises the maximum level of cards playable from hand
+  - Raises the number of available Special Actions per turn
+  - Can keep a companion from fleeing whose level would otherwise exceed current Willpower (owner-ratified 2026-08-18 — see Game_Rules_Updated §Companion Fleeing)
+  - **Nets to zero against Dismayed (owner ruling 2026-08-18):** a player who is both Dismayed and Inspired has their plain Class Zone card count as current Willpower. Stated explicitly so it is never re-derived.
+- Mirror-inverted from Dismay in both direction and sign: Inspire reads YOUR OWN board, Dismay reads your opponent's.
+- *(Resolved 2026-08-18: the DISMAYED drift this entry was flagged against — "applies to players and companions" — was ruled incoherent by the owner and corrected to the defining document. INSPIRED and DISMAYED now agree: players only.)*
 
 **ANIMATE MAGIC X** (Wizard - Evergreen) - When this enters, target Magical Construct you control becomes a Companion with the type Manifest and Attack and HP equal to X. It is no longer a Construct but retains its text and Anchor counters. If it would leave the encounter, sacrifice it instead. (Manifest is a Companion subtype exclusive to this keyword.)
 - Notes: Wizards stabilize magical effects by giving them form. Does not apply to Physical or Vocal Constructs. Keeps animation temporary and bounded.
@@ -781,14 +808,8 @@ Card effects that move a character (without that character spending a Movement a
 - Use constructs for multi-turn effects (they naturally degrade)
 
 ### Armor Keyword Full Rules
-- **On Items:** "If equipped character would be dealt damage, prevent all of that damage and put an armor counter on this item. When this item has X armor counters, sacrifice it"
-- Prevents ENTIRE damage from single source, not just X damage
-- Each instance adds 1 counter
-- Can prevent up to X separate attacks
-- Multiple armors track independently; controller chooses which prevents damage
-
-**On Companions (variant):**
-- "If this character would be dealt damage, prevent all of that damage and put an armor counter on this companion. When this companion has X armor counters, it no longer prevents damage via this ability"
+- **Canonical wording, both variants, plus every Rules Note:** Master_Keyword_List.md §Item & Equipment Keywords. Pointer, not a copy (consolidated 2026-08-18).
+- Design-relevant summary: armor enters with X counters and removes one per prevented instance; it prevents the ENTIRE damage from a single source, not just X; it can therefore prevent up to X separate attacks; multiple armors track independently and the affected character's controller chooses which prevents (and, per §18's universal counter rule, a companion's own armor counters are offered on the same footing as equipped pieces).
 
 ### Oathsworn Keyword (Verdant Pact Set)
 - "As this permanent enters the encounter, place a card from your hand face-down beneath it. If you can't, sacrifice this permanent. When this permanent leaves the encounter, return the sworn card to your hand"
@@ -1084,6 +1105,7 @@ All companions start with base stats equal to their level (Level 2 = 2/2, Level 
 - Guardian (central to identity)
 - Warded against [X] for protection
 - Tribute (Angel-exclusive keyword)
+- Inspire (grants Inspired: +1 Willpower, doesn't stack)
 - Heavy use of defensive companions
 - Gear emphasis (armor, relics, shields)
 - Vocal Constructs (blessings, oaths, declarations)

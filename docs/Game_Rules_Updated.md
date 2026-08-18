@@ -65,14 +65,10 @@ Armor is a Gear subtype that provides damage prevention through the Armor keywor
 
 - Light Armor: Occupies 1 gear slot, typically grants Armor 1-2
 - Heavy Armor: Occupies both gear slots, typically grants Armor 3-4 or higher
-- **ARMOR X:** If the equipped character would be dealt damage, prevent all of that damage and put an armor counter on this item. When this item has X armor counters, sacrifice it.
+- **ARMOR X:** an armor item enters the encounter with X armor counters and removes one for each instance of damage it prevents; it is sacrificed when the last counter is removed. The canonical wording and every Rules Note (the 2026-07-14 prevention-family rulings, the 2026-08-18 inversion, the universal counter rule) live in Master_Keyword_List.md §Item & Equipment Keywords.
+- Characters may equip multiple armors following normal gear slot rules; each tracks its own counters independently.
 
-**Rules Notes:**
-- Armor prevents the entire damage from a single source, not just X damage
-- Each instance of damage prevented adds 1 counter
-- Armor X can prevent up to X separate attacks before being sacrificed
-- Characters can equip multiple armors (following normal gear slot rules), but each armor tracks its own counters independently
-- If a character has multiple pieces of armor equipped, the controlling player chooses which armor prevents the damage
+*(Consolidated 2026-08-18: this section previously restated the keyword in full plus its own copy of the Rules Notes, and had drifted. Only the gear-slot facts above are §Items-specific — the rest is a pointer, which cannot drift.)*
 
 Each item is always considered attached to a single character. There is no "free-floating" equipment. Items in the encounter must always reference a valid slot on a character. If they cannot, they are moved to the Dead Zone.
 
@@ -196,7 +192,7 @@ The supertype determines whether a Two-Handed weapon prevents the action from be
 - Determines the number of Special Actions you may take per turn
 - You may only play a card from your hand if your Willpower is at least the card's Level
 - Spending a Special Action flips a Class Zone card face-down as a "used this turn" marker; this does NOT reduce your Willpower. The card flips back face-up at the start of your next turn.
-- **Rules Note (ruled 2026-07-04):** There is exactly ONE "current Willpower": the number of cards in your Class Zone, minus 1 while you are Dismayed (never below 0). Every Willpower reference reads this single value — the play-from-hand gate (Willpower ≥ Level), the Poison check, the fleeing check, and card conditions ("if your Willpower is at least N"). An intended consequence: Dismay pressure alone can push a companion's Level above your current Willpower and cause it to flee at the start of your turn.
+- **Rules Note (ruled 2026-07-04, amended 2026-08-18 for Inspire):** There is exactly ONE "current Willpower": the number of cards in your Class Zone, minus 1 while you are Dismayed, plus 1 while you are Inspired (never below 0). Dismayed and Inspired are derived states read at the same moment, so a player who is both nets to the plain Class Zone count. Every Willpower reference reads this single value — the play-from-hand gate (Willpower ≥ Level), the Poison check, the fleeing check, and card conditions ("if your Willpower is at least N"). An intended consequence: Dismay pressure alone can push a companion's Level above your current Willpower and cause it to flee at the start of your turn.
 
 **Companion Fleeing:**
 Companions whose Level exceeds your current Willpower flee at the start of your turn. Fleeing sends the companion to your Dead Zone.
@@ -204,7 +200,8 @@ Companions whose Level exceeds your current Willpower flee at the start of your 
 - Fleeing is checked at the start of each of your turns, not mid-turn when Willpower changes
 - Spending Special Actions does not change your Willpower, so it never causes a companion to flee. If a Class Zone Exchange lowers your Willpower below a companion's Level, that companion flees at the start of your *next* turn, not immediately
 - Temporary Willpower boosts (granted by card effects) do not prevent fleeing — fleeing checks use your actual Willpower, not boosted Willpower
-- The Dismayed condition reduces effective Willpower by 1 for fleeing checks, as with all other Willpower checks
+- The Dismayed condition reduces effective Willpower by 1 for fleeing checks, as with all other Willpower checks; the Inspired condition raises it by 1 on the same terms
+- **Rules Note (owner-ratified 2026-08-18) — Inspire can prevent fleeing.** Dismayed and Inspired are *derived states*, not the "temporary Willpower boosts" of the bullet above: they are part of the one current Willpower, so the fleeing check reads them. The consequence on the Dismay side was already ruled — Dismay pressure alone can cause fleeing; the symmetric consequence on the Inspire side is that **Inspire can keep a companion whose Level would otherwise exceed your current Willpower from fleeing**. Ratified this date.
 
 **Exhaustion:**
 - Cards rotate 90° when exhausted
@@ -268,7 +265,7 @@ Existing canon (Card_Design_Parameters §13, quoted verbatim): "**Use a stack** 
 - There are no player priority windows: nothing in the game allows casting in response. All reactions are automatic triggers; player decisions inside them (Paranoia's top/bottom, each owner's ordering of their own simultaneous triggers — 2026-07-22, "may" choices) are made when the trigger resolves.
 
 **Damage Prevention:**
-Prevention is one family of effects: anything that intervenes when a character "would take" or "would be dealt" damage. Armor is its longest-standing member (existing canon, quoted verbatim: "If the equipped character would be dealt damage, prevent all of that damage and put an armor counter on this item. When this item has X armor counters, sacrifice it."); board-sourced "prevent N of that damage" effects are members of the same family. The Rules Notes below are the owner-ratified operational model (2026-07-14).
+Prevention is one family of effects: anything that intervenes when a character "would take" or "would be dealt" damage. Armor is its longest-standing member (canon quoted verbatim from Master_Keyword_List.md §Item & Equipment Keywords, re-cut 2026-08-18 for the inversion: "This item enters the encounter with X armor counters. If the equipped character would be dealt damage, prevent all of that damage and remove an armor counter from this item. When the last armor counter is removed, sacrifice this item."); board-sourced "prevent N of that damage" effects are members of the same family. The Rules Notes below are the owner-ratified operational model (2026-07-14).
 
 - **Rules Note (2026-07-14) — Deal-side modifiers apply before receipt-side prevention.** Effects that modify the damage a source DEALS (e.g. a doubling worded "this deals double damage") are applied first, forming the dealt amount. Prevention effects then apply to that formed amount. Ruled example: a doubled 2-damage hit (→ 4) against a character covered by a prevent-1 effect resolves as 4 − 1 = 3, not (2 − 1) × 2 = 2.
 - **Rules Note (2026-07-14) — Fully prevented damage is no damage.** If prevention reduces a damage instance to 0, the character takes no damage at all: no Poison is applied, and no "when damaged"-style triggers fire. (This states as a rule for ALL prevention what has always been true of an armor-blocked hit.)
@@ -461,9 +458,9 @@ Class bonuses are applied in turn order. The player who will take the first turn
 
 **RECKLESS** - When this character attacks, it deals 1 damage to itself. *Common:* Sorcerer, Warrior. (Rules Note, re-ruled 2026-07-14: the recoil is damage the character takes — the damage-prevention family, armor included, applies to it. See §Core Mechanics, Damage Prevention.)
 
-**ARMOR X** - If the equipped character would be dealt damage, prevent all of that damage and put an armor counter on this item. When this item has X armor counters, sacrifice it. Common on Light Armor (Armor 1-2). Heavy Armor typically has Armor 3-4 or higher
+**ARMOR X** - See Master_Keyword_List.md §Item & Equipment Keywords for the canonical wording and Rules Notes. Common on Light Armor (Armor 1-2). Heavy Armor typically has Armor 3-4 or higher
 
-**ARMOR X (companion variant)** - If this character would be dealt damage, prevent all of that damage and put an armor counter on this item. When this companion has X armor counters, it no longer prevents damage via this ability.
+**ARMOR X (companion variant)** - See Master_Keyword_List.md §Item & Equipment Keywords for the canonical wording, and for the universal counter rule (armor counters on a companion ARE the prevention ability, however they arrived).
 
 ---
 

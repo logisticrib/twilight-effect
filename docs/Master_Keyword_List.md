@@ -36,18 +36,20 @@ This document consolidates all keywords from Game Rules, Keyword Glossary, and C
 
 ### Item & Equipment Keywords
 
-**ARMOR X** - If the equipped character would be dealt damage, prevent all of that damage and put an armor counter on this item. When this item has X armor counters, sacrifice it.
+**ARMOR X** - This item enters the encounter with X armor counters. If the equipped character would be dealt damage, prevent all of that damage and remove an armor counter from this item. When the last armor counter is removed, sacrifice this item.
 - Light Armor: Typically Armor 1-2
 - Heavy Armor: Typically Armor 3-4 or higher
 - **Rules Notes:**
   - Armor prevents the entire damage from a single source, not just X damage
-  - Each instance of damage prevented adds 1 counter
+  - Each instance of damage prevented removes 1 counter
   - Armor X can prevent up to X separate attacks before being sacrificed
   - Characters can equip multiple armors; each tracks its own counters independently
   - If a character has multiple pieces of armor equipped, the controlling player chooses which armor prevents the damage
   - **Rules Note (2026-07-14):** Armor is a member of the damage-prevention family (Game_Rules_Updated §Core Mechanics, Damage Prevention). When armor and other prevention effects could apply to the same damage instance, the affected character's controller chooses the order they apply; armor reached after the damage is already reduced to 0 never engages and spends no counter. Deal-side modifiers (e.g. damage doubling) form the dealt amount before any prevention applies.
+  - **Rules Note (ruled 2026-08-18) — ARMOR INVERTED to mirror Anchor-counter logic.** Armor no longer accumulates counters up to X. It now ENTERS with X armor counters, each prevented damage instance REMOVES one, and when the last counter is removed the item is sacrificed (a companion simply stops preventing damage via the ability). The wording above is the owner-ratified canon replacing the previous accumulate-up wording. All six 2026-07-14 prevention-family rulings survive the inversion unchanged — including that armor reached after the damage is already 0 never engages and spends no counter (under inversion: removes none). Consolidated this date, same remedy as Untamed (2026-08-18): the duplicate definitions in Game_Rules_Updated.md (§Items, §Keyword Reference, and the verbatim quote inside §Core Mechanics — Damage Prevention) and Card_Design_Parameters.md (§Evergreen Keywords, §Armor Keyword Full Rules) are now POINTERS to this entry. Two of them had already drifted ("on this item" where this document said "on this companion"); a pointer cannot drift again.
 
-**ARMOR X (companion variant)** - If this character would be dealt damage, prevent all of that damage and put an armor counter on this companion. When this companion has X armor counters, it no longer prevents damage via this ability.
+**ARMOR X (companion variant)** - This companion enters the encounter with X armor counters. If this companion would be dealt damage, prevent all of that damage and remove an armor counter from this companion. When this companion has no armor counters, it no longer prevents damage via this ability.
+- **Rules Note (universal counter rule, ruled 2026-08-18):** Armor counters on a companion ARE the prevention ability. A companion with one or more armor counters prevents damage (removing one per instance) regardless of how the counters arrived — printed keyword or card effect. Effect-placed and keyword-native armor counters are indistinguishable. (Deliberate parallel: effect-applied Poison counters are identical to keyword-applied ones — the same principle, on the prevention side.) The design principle recorded alongside this rule in Card_Design_Parameters §18: binary on/off ability grants must not leave counters lingering while the ability toggles — place counters once via triggers and let the counters carry the behavior.
 
 **SCAVENGER** - When this companion enters the encounter, you may return an item from your Dead Zone and immediately attach it to this companion.
 - *Common:* Rogue
@@ -130,6 +132,16 @@ This document consolidates all keywords from Game Rules, Keyword Glossary, and C
 
 **UNTAMED** - While there are no Gear or Physical Constructs in the encounter, this character is Untamed. Per-card text defines the bonus granted while Untamed.
 - **Rules Note (ruled 2026-08-18) — Wording consistency: GEAR only, ENCOUNTER-wide.** This entry is the canonical wording (Rules_Taxonomy names this document as defining for keywords). Two consequences, both ruled: (a) the condition counts GEAR only — Gear is a strict subset of Items (Items split into Weapons and Gear; Card_Design_Parameters §Type Line Format), so a WEAPON does NOT suppress Untamed; (b) the scope is the ENCOUNTER — both players' Gear and Physical Constructs count, never controller-only. Corrected this date to match: Card_Design_Parameters.md (two duplicate definitions read "no Items"), Class_Design_Guide.docx (a card-generation example was controller-scoped and dropped Gear; the Druid keyword summary read "in play" and has been harmonized to "in the encounter"). The engine registry (src/data/keywords.ts) already carried the canonical wording.
+
+### Paladin Keywords
+
+**INSPIRE** - As long as one or more permanents with Inspire are in the encounter under your control, you are Inspired.
+
+**INSPIRED** *(state, not a card keyword)* - An Inspired player has +1 Willpower. Inspired does not stack.
+- Binary state, not cumulative
+- Applied to players, not characters
+- **Rules Note (ruled 2026-08-18):** A player who is both Dismayed and Inspired nets to zero — their current Willpower is the plain Class-Zone card count. Stated explicitly here so it is never re-derived.
+- **Rules Note (ruled 2026-08-18):** Inspire reads YOUR OWN board; Dismay reads your opponent's. The two are mirror-inverted in both direction and sign — "under your control, YOU are Inspired" against Dismay's "under your control, your OPPONENT is Dismayed."
 
 ---
 
@@ -231,7 +243,7 @@ This document consolidates all keywords from Game Rules, Keyword Glossary, and C
 - **Access:** None exclusive beyond design patterns
 
 ### Paladin
-- **Primary:** Tribute, Guardian, Kit-Master (occasional)
+- **Primary:** Tribute, Guardian, Inspire, Kit-Master (occasional)
 - **Access:** Zealous (rare, flavored as conviction)
 - **Set-Specific:** Oathsworn (Verdant Pact)
 
