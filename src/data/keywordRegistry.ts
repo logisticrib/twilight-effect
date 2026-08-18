@@ -28,11 +28,12 @@ export const KEYWORDS: Record<string, KeywordSpec> = {
   // Printed as "X's Bane" (Goblin's Bane…) — double damage vs companions of the named subtype/class.
   Bane:      { event: 'attack',  done: true,  note: 'parseBanes -> per-hit doubling in applyCombatHit' },
   // Items / defence
-  'Armor':   { event: 'damaged', done: true,  note: 'applyDamageToEntity counters' },
+  'Armor':   { event: 'damaged', done: true,  note: 'removeArmorCounter — enters loaded with X, counts DOWN (inverted 2026-08-18); companion-side counters are the ability (universal counter rule)' },
   Acrobatics:{ event: 'damaged', done: true,  note: 'isImmuneToSplash' },
   Poison:    { event: 'damaged', done: true,  note: 'poisonHitPatch in combat; ready-phase check via PoisonModal/resolvePoison' },
   // Static auras
   Dismay:    { event: 'static',  done: true,  note: 'recomputeStatics' },
+  Inspire:   { event: 'static',  done: true,  note: 'recomputeStatics (mirror of Dismay: reads YOUR OWN board, +1 via currentWillpower)' },
   // Set-specific
   Oathsworn: { event: 'enter',   done: true,  note: 'oathsworn modal' },
 

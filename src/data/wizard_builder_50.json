@@ -614,10 +614,10 @@
       "keywords": [
         "Armor 1"
       ],
-      "text": "ARMOR 1. If the equipped character would be dealt damage, prevent all of that damage and put an armor counter on this item. When this item has 1 armor counter, sacrifice it.",
+      "text": "ARMOR 1. This item enters the encounter with 1 armor counter. If the equipped character would be dealt damage, prevent all of that damage and remove an armor counter from this item. When the last armor counter is removed, sacrifice this item.",
       "flavor": "",
       "createdAt": "2026-05-16T19:02:21.324278Z",
-      "updatedAt": "2026-05-16T19:02:21.324280Z"
+      "updatedAt": "2026-08-18T00:00:00.000000Z"
     },
     {
       "id": "6948a781",
@@ -1445,10 +1445,10 @@
       "keywords": [
         "Armor 2"
       ],
-      "text": "ARMOR 2. If the equipped character would be dealt damage, prevent all of that damage and put an armor counter on this item. When this item has 2 armor counters, sacrifice it.",
+      "text": "ARMOR 2. This item enters the encounter with 2 armor counters. If the equipped character would be dealt damage, prevent all of that damage and remove an armor counter from this item. When the last armor counter is removed, sacrifice this item.",
       "flavor": "",
       "createdAt": "2026-05-16T19:02:21.324608Z",
-      "updatedAt": "2026-05-16T19:02:21.324610Z"
+      "updatedAt": "2026-08-18T00:00:00.000000Z"
     },
     {
       "id": "46e94ea1",

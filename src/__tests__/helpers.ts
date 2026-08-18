@@ -30,8 +30,12 @@ export const mkConstruct = (id: string, name: string, anchors: number, over: Par
   ...over,
 });
 
+/** Armor enters LOADED with X counters and counts DOWN (inverted 2026-08-18) -- this
+ *  default mirrors equipOnto, so a seed of `{ armor: 3 }` is armor that actually
+ *  prevents. An explicit `counters` in `over` still wins (seed an EMPTY piece with
+ *  `{ armor: 3, counters: 0 }`). */
 export const mkItem = (id: string, name: string, over: Partial<EquippedItem> = {}): EquippedItem =>
-  ({ id, name, sub: '', hands: 1, counters: 0, text: '', ...over });
+  ({ id, name, sub: '', hands: 1, counters: over.armor ?? 0, text: '', ...over });
 
 /** Class Zone entry from a catalog card; `cls` override lets tests satisfy classInZone. */
 export const mkCz = (card: Card, cls?: string, id?: string) =>

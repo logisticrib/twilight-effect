@@ -626,10 +626,10 @@
     "keywords": [
       "Armor 1"
     ],
-    "text": "ARMOR 1. If the equipped character would be dealt damage, prevent all of that damage and put an armor counter on this item. When this item has 1 armor counter, sacrifice it. Equipped character has +1 attack.",
+    "text": "ARMOR 1. This item enters the encounter with 1 armor counter. If the equipped character would be dealt damage, prevent all of that damage and remove an armor counter from this item. When the last armor counter is removed, sacrifice this item. Equipped character has +1 attack.",
     "flavor": "",
     "createdAt": "2026-05-16T19:05:55.111041Z",
-    "updatedAt": "2026-05-16T19:05:55.111045Z",
+    "updatedAt": "2026-08-18T00:00:00.000000Z",
     "effects": [
       {
         "trigger": "equipped",
@@ -1430,17 +1430,17 @@
     "keywords": [
       "Armor 2"
     ],
-    "text": "ARMOR 2. If the equipped character would be dealt damage, prevent all of that damage and put an armor counter on this item. When this item has 2 armor counters, sacrifice it.",
+    "text": "ARMOR 2. This item enters the encounter with 2 armor counters. If the equipped character would be dealt damage, prevent all of that damage and remove an armor counter from this item. When the last armor counter is removed, sacrifice this item.",
     "flavor": "",
     "createdAt": "2026-05-16T19:05:55.111389Z",
-    "updatedAt": "2026-05-16T19:05:55.111390Z"
+    "updatedAt": "2026-08-18T00:00:00.000000Z"
   },
   {
     "id": "3cf13287",
     "name": "Plate of the Standing Wall",
     "level": 3,
     "type": "Item",
-    "subtype": "Two-Handed Armor",
+    "subtype": "Heavy Armor",
     "rarity": "Uncommon",
     "class1": "Warrior",
     "class2": "",
@@ -1453,10 +1453,10 @@
     "keywords": [
       "Armor 4"
     ],
-    "text": "ARMOR 4. If the equipped character would be dealt damage, prevent all of that damage and put an armor counter on this item. When this item has 4 armor counters, sacrifice it. (Equipped character cannot use Magic Actions.)",
+    "text": "ARMOR 4. This item enters the encounter with 4 armor counters. If the equipped character would be dealt damage, prevent all of that damage and remove an armor counter from this item. When the last armor counter is removed, sacrifice this item. (Equipped character cannot use Magic Actions.)",
     "flavor": "",
     "createdAt": "2026-05-16T19:05:55.111396Z",
-    "updatedAt": "2026-05-16T19:05:55.111398Z"
+    "updatedAt": "2026-08-18T00:00:00.000000Z"
   },
   {
     "id": "42db15dc",

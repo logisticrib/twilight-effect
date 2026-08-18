@@ -41,15 +41,24 @@ function controlsKeyword(ps: PlayerState, kw: string): boolean {
  *
  * Dismay: a player is Dismayed (−1 Willpower, via currentWillpower) while the
  * OPPONENT controls one or more permanents with the Dismay keyword.
+ *
+ * Inspire (2026-08-18): a player is Inspired (+1 Willpower, via currentWillpower)
+ * while THEY THEMSELVES control one or more permanents with the Inspire keyword.
+ * Deliberately mirror-inverted from Dismay in both sign and direction — canon reads
+ * "under your control, YOU are Inspired" against Dismay's "your OPPONENT is Dismayed".
+ * Neither state stacks; both are derived here and nowhere else.
  */
 export function recomputeStatics(game: GameState): GameState {
   const p1Dismayed = controlsKeyword(game.p2, 'Dismay');
   const p2Dismayed = controlsKeyword(game.p1, 'Dismay');
-  if (game.p1.dismayed === p1Dismayed && game.p2.dismayed === p2Dismayed) return game;
+  const p1Inspired = controlsKeyword(game.p1, 'Inspire');
+  const p2Inspired = controlsKeyword(game.p2, 'Inspire');
+  if (game.p1.dismayed === p1Dismayed && game.p2.dismayed === p2Dismayed &&
+      game.p1.inspired === p1Inspired && game.p2.inspired === p2Inspired) return game;
   return {
     ...game,
-    p1: { ...game.p1, dismayed: p1Dismayed },
-    p2: { ...game.p2, dismayed: p2Dismayed },
+    p1: { ...game.p1, dismayed: p1Dismayed, inspired: p1Inspired },
+    p2: { ...game.p2, dismayed: p2Dismayed, inspired: p2Inspired },
   };
 }
 
@@ -523,6 +532,23 @@ export function parseAnimateMagic(keywords: string[]): number | null {
   return null;
 }
 
+/**
+ * Armor X on a COMPANION (the companion variant, canon re-cut 2026-08-18: "This
+ * companion enters the encounter with X armor counters"). Parsed from the keyword
+ * string like Reinforce/Dismantle/Animate Magic, so card data stays declarative.
+ * Returns X, or null when the keyword is absent or printed without its parameter.
+ *
+ * Items do NOT come through here: an equipped piece carries its own counters and
+ * derives X in equipOnto (lifecycle.ts), from printed text.
+ */
+export function parseArmorKeyword(keywords: string[]): number | null {
+  for (const kw of keywords) {
+    const m = /^Armor\s+(\d+)$/.exec(kw);
+    if (m) return parseInt(m[1], 10);
+  }
+  return null;
+}
+
 // (Paranoia needs no parser: the canonical keyword is bare — see docs/Master_Keyword_List.md.
 //  It is not an on-enter trigger of the printed card at all; placeCard checks the OPPONENT's
 //  board for permanents whose effectiveKeywords include 'Paranoia' when a Companion is played.)
@@ -610,16 +636,26 @@ export function hasTwoHanded(ent: BoardEntity): boolean {
 }
 
 /**
- * THE one "current Willpower" (owner ruling 2026-07-04): the Class-Zone card count
- * (player.willpower — face-down cards still count; Special Actions don't lower it)
- * minus 1 while Dismayed, floored at 0. EVERY Willpower reader goes through this
- * accessor — the play-from-hand level gate, the Poison check, the fleeing check, and
- * card conditions (willpowerAtLeast). Never read player.willpower raw in a check;
- * that field is the base stat, not the current value. A consequence the owner ruled
- * intended: Dismay pressure alone can push companions over the fleeing threshold.
+ * THE one "current Willpower" (owner ruling 2026-07-04, extended 2026-08-18 for
+ * Inspire): the Class-Zone card count (player.willpower — face-down cards still count;
+ * Special Actions don't lower it) minus 1 while Dismayed, plus 1 while Inspired,
+ * floored at 0. EVERY Willpower reader goes through this accessor — the play-from-hand
+ * level gate, the Poison check, the fleeing check, and card conditions
+ * (willpowerAtLeast). Never read player.willpower raw in a check; that field is the
+ * base stat, not the current value.
+ *
+ * Both modifiers are added HERE, at the one read site, rather than as separate read
+ * paths — which is what makes the owner's netting ruling fall out for free: a player
+ * who is both Dismayed and Inspired reads their printed Class-Zone count. Neither
+ * state stacks (they are booleans, not tallies).
+ *
+ * A consequence the owner ruled intended: Dismay pressure alone can push companions
+ * over the fleeing threshold. The symmetric consequence on the Inspire side —
+ * Inspire can KEEP a companion from fleeing — is flagged for ratification in
+ * Game_Rules_Updated §Companion Fleeing (2026-08-18).
  */
 export function currentWillpower(player: PlayerState): number {
-  return Math.max(0, player.willpower - (player.dismayed ? 1 : 0));
+  return Math.max(0, player.willpower - (player.dismayed ? 1 : 0) + (player.inspired ? 1 : 0));
 }
 
 /**

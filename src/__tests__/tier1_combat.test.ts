@@ -6,13 +6,15 @@ import { CATALOG } from '../data/catalog';
 
 const compCard = CATALOG.find(c => c.type === 'Companion')!;
 const compCard2 = CATALOG.filter(c => c.type === 'Companion')[1];
-const armorA = () => mkItem('ar-a', 'Guard Plate A', { armor: 3, counters: 0 });
-const armorB = () => mkItem('ar-b', 'Guard Plate B', { armor: 2, counters: 0 });
+// Seeded LOADED (armor 3 -> 3 counters, armor 2 -> 2) per the 2026-08-18 inversion:
+// mkItem defaults counters to X, so these are fresh pieces, not spent ones.
+const armorA = () => mkItem('ar-a', 'Guard Plate A', { armor: 3 });
+const armorB = () => mkItem('ar-b', 'Guard Plate B', { armor: 2 });
 
 describe('item 6: armor per-hit picker', () => {
-  it('a single armor piece auto-applies (no prompt) and sacrifices at X counters', () => {
+  it('a single armor piece auto-applies (no prompt) and is sacrificed when its last counter goes', () => {
     freshGame();
-    const oneHit = mkItem('ar-1', 'Thin Shield', { armor: 1, counters: 0 });
+    const oneHit = mkItem('ar-1', 'Thin Shield', { armor: 1 });
     const att = mkComp('sa-att', compCard.name, { atk: 4 });
     const def = mkComp('sa-def', compCard2.name, { hp: 5, loadout: { weapon: null, gear: [oneHit, null] } });
     gs.setState(s => ({ game: { ...s.game,
@@ -45,8 +47,8 @@ describe('item 6: armor per-hit picker', () => {
     g = gs.getState().game;
     expect(g.pendingArmor, 'combat resumed and finished').toBeNull();
     expect(g.p2.board.f1?.hp, 'hit fully prevented').toBe(5);
-    expect(g.p2.board.f1?.loadout?.gear[1]?.counters, 'the CHOSEN piece took the counter').toBe(1);
-    expect(g.p2.board.f1?.loadout?.gear[0]?.counters, 'the other piece untouched').toBe(0);
+    expect(g.p2.board.f1?.loadout?.gear[1]?.counters, 'the CHOSEN piece spent a counter (2 -> 1)').toBe(1);
+    expect(g.p2.board.f1?.loadout?.gear[0]?.counters, 'the other piece untouched (still 3)').toBe(3);
     expect(g.p1.board.f1?.exhausted, 'attack finalized (attacker exhausted)').toBe(true);
   });
 
@@ -91,7 +93,7 @@ describe('item 6: armor per-hit picker', () => {
     gs.getState().resolveArmor('ar-a');
     g = gs.getState().game;
     expect(g.pendingArmor, 'choice resolved').toBeNull();
-    expect(g.p2.board.f1?.loadout?.gear[0]?.counters, 'chosen piece took the counter').toBe(1);
+    expect(g.p2.board.f1?.loadout?.gear[0]?.counters, 'chosen piece spent a counter (3 -> 2)').toBe(2);
   });
 
   it('Reckless recoil routes through the damage chokepoint — armor absorbs it (RE-RULED 2026-07-14; supersedes the 2026-07-03 bypass reading)', () => {
@@ -110,7 +112,7 @@ describe('item 6: armor per-hit picker', () => {
     gs.getState().resolveAttack('rb-def');
     const g = gs.getState().game;
     expect(g.p1.board.f1?.hp, 'recoil fully prevented by armor').toBe(5);
-    expect(g.p1.board.f1?.loadout?.gear[0]?.counters, 'the armor piece took the counter').toBe(1);
+    expect(g.p1.board.f1?.loadout?.gear[0]?.counters, 'the armor piece spent a counter (3 -> 2)').toBe(2);
   });
 });
 

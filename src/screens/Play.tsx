@@ -341,7 +341,7 @@ function PreventOrderModal() {
   const nth = po.picked.length + 1;
   const label = (it: (typeof po.items)[number]) => it.kind === 'prevent'
     ? `${it.sourceName} — prevent ${it.amount}`
-    : `${it.pieceName} — armor: prevents ALL remaining damage (${it.counters + 1}/${it.armor} counters)`;
+    : `${it.pieceName} — armor: prevents ALL remaining damage (${Math.max(0, it.counters - 1)}/${it.armor} counters left)`;
   return (
     <ModalShell glyph="⛨" eyebrow={`${po.sourceName} deals ${po.dmg} damage to ${po.entityName}`}
       title={nth === 1 ? 'Choose which prevention applies first' : `Choose the prevention to apply #${nth}`}
@@ -557,15 +557,15 @@ function ArmorModal() {
   return (
     <CardPickModal glyph="✚" eyebrow={`${pa.entityName} is hit`}
       title="Choose which armor absorbs it"
-      sub="The chosen armor prevents the damage and takes a counter (sacrificed at its limit)."
+      sub="The chosen armor prevents the damage and spends a counter (sacrificed when its last one goes)."
       picks={pa.candidates.map(c => {
-        const next = c.counters + 1;
-        const willBreak = next >= c.armor;
+        const next = Math.max(0, c.counters - 1);
+        const willBreak = next <= 0;
         return {
           key: c.id, name: c.name,
           caption: (
             <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: willBreak ? TBL.amber : TBL.ink2 }}>
-              {next}/{c.armor} counters{willBreak ? ' — breaks!' : ''}
+              {next}/{c.armor} counters left{willBreak ? ' — breaks!' : ''}
             </span>
           ),
         };

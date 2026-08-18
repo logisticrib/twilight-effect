@@ -22,25 +22,73 @@ import { resolveActionEffects, actionTargetSpec, eligibleTargets, conditionMet, 
  * chooses which absorbs — the combat driver pauses for that and replays this with
  * `armorPieceId` set. Without a forced id (non-attack damage, or a single piece)
  * the most-worn piece is consumed (spends nearly-sacrificed armor first).
+ *
+ * INVERTED 2026-08-18 (owner ruling, mirrors Anchor counters): a piece ENTERS with X
+ * counters and REMOVES one per prevented instance; it is sacrificed when the last one
+ * goes. `counters` therefore means REMAINING, and "most-worn" means FEWEST remaining.
  */
 export function armorPiecesOf(ent: BoardEntity): EquippedItem[] {
-  return (ent.loadout?.gear.filter((gi): gi is EquippedItem => !!gi && gi.armor !== undefined)) ?? [];
+  const hits = (ent.loadout?.gear.filter((gi): gi is EquippedItem =>
+    !!gi && gi.armor !== undefined && (gi.counters ?? 0) > 0)) ?? [];
+  // HEAVY armor occupies BOTH gear slots and is stored as the same item in each, so a
+  // raw filter yields it twice — which would offer ONE piece as two picker candidates
+  // and read as "2+ pieces" to every branch that counts sources. Dedupe by id.
+  // (Latent until 2026-08-18: no shipped card was detected as heavy before the
+  // Two-Handed Armor / Heavy Armor correction made the path reachable.)
+  const seen = new Set<string>();
+  return hits.filter(p => !seen.has(p.id) && (seen.add(p.id), true));
 }
-/** Default armor choice when the player doesn't pick: the most-worn piece (highest counters). */
-export function pickDefaultArmor(pieces: EquippedItem[]): EquippedItem {
-  return pieces.reduce((best, p) => ((p.counters ?? 0) > (best.counters ?? 0) ? p : best), pieces[0]);
+/** Sentinel piece id standing for a companion's OWN armor counters (universal counter
+ *  rule, 2026-08-18). Prefixed so it can never collide with a card id, and carried as a
+ *  plain string so the MP wire types (PreventItem / ArmorChoiceData) are unchanged. */
+export const SELF_ARMOR_PREFIX = 'self-armor:';
+export const selfArmorId = (entityId: string): string => `${SELF_ARMOR_PREFIX}${entityId}`;
+export const isSelfArmorId = (id: string): boolean => id.startsWith(SELF_ARMOR_PREFIX);
+
+/** One armor source in picker / prevention-ordering shape. */
+export interface ArmorSource { id: string; name: string; counters: number; armor: number }
+
+/** EVERY armor source that can still prevent for `ent`: each equipped armor piece with
+ *  counters left, PLUS — per the universal counter rule — the entity's own armor
+ *  counters when it has any. How those arrived (printed companion-variant keyword or a
+ *  card effect) is deliberately invisible here: the counter's presence IS the ability. */
+export function armorCandidatesOf(ent: BoardEntity): ArmorSource[] {
+  const out: ArmorSource[] = armorPiecesOf(ent).map(p =>
+    ({ id: p.id, name: p.name, counters: p.counters ?? 0, armor: p.armor ?? 0 }));
+  const own = ent.armorCounters ?? 0;
+  if (own > 0) out.push({ id: selfArmorId(ent.id), name: `${ent.name}'s armor`, counters: own, armor: ent.armorStart ?? own });
+  return out;
 }
-/** Put one armor counter on `pieceId` (sacrifice it at its limit). Shared by the
- *  in-line block in applyDamage and the deferred non-combat choice in resolveArmor. */
-export function applyArmorCounter(game: GameState, entityId: string, pieceId: string): { game: GameState; msgs: string[] } {
+
+/** Default armor choice when the player doesn't pick: the most-worn piece — under the
+ *  inversion that is the piece with the FEWEST counters left (spends nearly-sacrificed
+ *  armor first, unchanged intent). */
+export function pickDefaultArmor<T extends { counters?: number }>(pieces: T[]): T {
+  return pieces.reduce((best, p) => ((p.counters ?? 0) < (best.counters ?? 0) ? p : best), pieces[0]);
+}
+/** Remove one armor counter from `pieceId` (sacrifice it when the last one goes).
+ *  Shared by the in-line block in applyDamage and the deferred non-combat choice in
+ *  resolveArmor. INVERTED 2026-08-18 — was applyArmorCounter, counting up to X. */
+export function removeArmorCounter(game: GameState, entityId: string, pieceId: string): { game: GameState; msgs: string[] } {
   const loc = findEntityAnywhere(game, entityId);
+  // A companion's OWN counters (universal counter rule): removing the last one simply
+  // ENDS the prevention — canon is explicit that nothing is sacrificed ("it no longer
+  // prevents damage via this ability").
+  if (loc && isSelfArmorId(pieceId)) {
+    const own = loc.ent.armorCounters ?? 0;
+    if (own <= 0) return { game, msgs: [] };
+    const left = own - 1;
+    const msgs = [`${loc.ent.name}'s armor blocks! (${left}/${loc.ent.armorStart ?? own} counters left)`];
+    if (left <= 0) msgs.push(`${loc.ent.name} has no armor counters left — it no longer prevents damage.`);
+    return { game: updateEntity(game, entityId, { armorCounters: left }), msgs };
+  }
   const piece = loc?.ent.loadout?.gear.find(gi => gi?.id === pieceId);
   if (!loc || !piece) return { game, msgs: [] };
   const msgs: string[] = [];
-  const newCounters = (piece.counters ?? 0) + 1;
-  msgs.push(`${piece.name} blocks! (${newCounters}/${piece.armor} counters)`);
+  const newCounters = Math.max(0, (piece.counters ?? 0) - 1);
+  msgs.push(`${piece.name} blocks! (${newCounters}/${piece.armor} counters left)`);
   let gear = loc.ent.loadout!.gear.map(gi => gi?.id === pieceId ? { ...gi, counters: newCounters } : gi);
-  if (newCounters >= (piece.armor ?? 0)) {
+  if (newCounters <= 0) {
     gear = gear.map(gi => gi?.id === pieceId ? null : gi);
     msgs.push(`${piece.name} is destroyed!`);
   }
@@ -74,7 +122,8 @@ export function preventionEffectsFor(game: GameState, ent: BoardEntity, controll
 /** Walk prevention items in the chosen order against one damage instance (R3).
  *  prevent-N cuts the running damage (toast names source + amount — no silent
  *  outcomes); an armor piece reached while damage remains prevents ALL of it and
- *  takes its counter; a piece reached at 0 never engages (no counter — R3's
+ *  spends one of its counters; a piece reached at 0 damage never engages (removes no
+ *  counter — R3's
  *  canonical consequence). Returns the damage left after all prevention. */
 export function applyPreventionOrder(game: GameState, entityId: string, dmg: number, order: PreventItem[]): { game: GameState; remaining: number; msgs: string[] } {
   const entName = findEntityAnywhere(game, entityId)?.ent.name ?? 'the character';
@@ -86,7 +135,7 @@ export function applyPreventionOrder(game: GameState, entityId: string, dmg: num
       const cut = Math.min(remaining, item.amount);
       if (cut > 0) { remaining -= cut; msgs.push(`${item.sourceName} prevents ${cut} of the damage to ${entName}`); }
     } else if (remaining > 0) {
-      const r = applyArmorCounter(g, entityId, item.pieceId);
+      const r = removeArmorCounter(g, entityId, item.pieceId);
       g = r.game; msgs.push(...r.msgs);
       remaining = 0; // armor prevents all of the remaining damage
     }
@@ -111,7 +160,7 @@ export function applyDamage(game: GameState, entityId: string, dmg: number, sour
     g = w.game; msgs.push(...w.msgs); dmg = w.remaining;
     if (dmg <= 0) return { game: g, msgs }; // fully prevented = no damage at all (R2)
   } else if (pools.length) {
-    const pieces = armorPiecesOf(ent);
+    const pieces = armorCandidatesOf(ent);
     if (pools.length === 1 && pieces.length === 0) {
       // Exactly one prevention applies → silently, with its toast (no prompt).
       const w = applyPreventionOrder(g, entityId, dmg, [{ kind: 'prevent', ...pools[0] }]);
@@ -133,19 +182,19 @@ export function applyDamage(game: GameState, entityId: string, dmg: number, sour
       if (dmg <= 0) return { game: g, msgs }; // fully prevented = no damage at all (R2)
     }
   } else {
-    const armorPieces = armorPiecesOf(ent);
+    const armorPieces = armorCandidatesOf(ent);
     if (armorPieces.length) {
-      // 2+ pieces with no forced choice and a sink to defer into → the defender picks
+      // 2+ sources with no forced choice and a sink to defer into → the defender picks
       // which absorbs (armed after this resolution). Damage is fully prevented either way.
       if (armorPieces.length >= 2 && armorSink && !armorPieceId) {
         armorSink.push({ defender: loc.player, entityId, entityName: ent.name,
-          candidates: armorPieces.map(p => ({ id: p.id, name: p.name, counters: p.counters ?? 0, armor: p.armor ?? 0 })) });
+          candidates: armorPieces });
         msgs.push(`${ent.name}'s armor blocks! (choose which)`);
         return { game, msgs };
       }
       // Single piece, or a forced/auto choice → apply the counter now.
       const piece = armorPieceId ? armorPieces.find(p => p.id === armorPieceId) ?? pickDefaultArmor(armorPieces) : pickDefaultArmor(armorPieces);
-      const r = applyArmorCounter(game, entityId, piece.id);
+      const r = removeArmorCounter(game, entityId, piece.id);
       return { game: r.game, msgs: [...msgs, ...r.msgs] };
     }
   }
@@ -227,7 +276,7 @@ export function driveAttack(game: GameState, ctx: AttackCtx):
       const entityId = ctx.hitQueue[0];
       const loc = findEntityAnywhere(g, entityId);
       if (!loc) { ctx.hitQueue.shift(); continue; } // already removed by an earlier hit
-      const pieces = armorPiecesOf(loc.ent);
+      const pieces = armorCandidatesOf(loc.ent);
       const pools = preventionEffectsFor(g, loc.ent, loc.player);
       if (pools.length && pools.length + pieces.length >= 2) {
         // >1 prevention effect could apply to this hit → PAUSE: the affected
@@ -242,7 +291,7 @@ export function driveAttack(game: GameState, ctx: AttackCtx):
           dmg: combatDealt(ctx, loc.ent), sourceName: ctx.attackerName,
           items: [
             ...pools.map(p => ({ kind: 'prevent' as const, ...p })),
-            ...pieces.map(p => ({ kind: 'armor' as const, pieceId: p.id, pieceName: p.name, counters: p.counters ?? 0, armor: p.armor ?? 0 })),
+            ...pieces.map(p => ({ kind: 'armor' as const, pieceId: p.id, pieceName: p.name, counters: p.counters, armor: p.armor })),
           ],
           picked: [], ctx,
         } };
@@ -252,7 +301,7 @@ export function driveAttack(game: GameState, ctx: AttackCtx):
         // this hit. The head of the queue stays put so the choice resolves it.
         return { done: false, game: g, pendingArmor: {
           defender: loc.player, entityId, entityName: loc.ent.name,
-          candidates: pieces.map(p => ({ id: p.id, name: p.name, counters: p.counters ?? 0, armor: p.armor ?? 0 })),
+          candidates: pieces,
           ctx,
         } };
       }
@@ -448,15 +497,15 @@ export function armNextArmorChoice(game: GameState, queue: ArmorChoiceData[]): {
     const c = rest.shift()!;
     const loc = findEntityAnywhere(g, c.entityId);
     if (!loc) continue; // entity gone since
-    const pieces = armorPiecesOf(loc.ent);
+    const pieces = armorCandidatesOf(loc.ent);
     if (pieces.length >= 2) {
       return { game: g, pendingArmor: {
         defender: c.defender, entityId: c.entityId, entityName: loc.ent.name,
-        candidates: pieces.map(p => ({ id: p.id, name: p.name, counters: p.counters ?? 0, armor: p.armor ?? 0 })),
+        candidates: pieces,
         queue: rest,
       } };
     }
-    if (pieces.length === 1) g = applyArmorCounter(g, c.entityId, pieces[0].id).game; // no choice left
+    if (pieces.length === 1) g = removeArmorCounter(g, c.entityId, pieces[0].id).game; // no choice left
     // 0 pieces → nothing to absorb with; skip
   }
   return { game: g, pendingArmor: null };
@@ -478,17 +527,17 @@ export function armNextPreventOrder(game: GameState): { game: GameState; pending
     const loc = findEntityAnywhere(g, c.entityId);
     if (!loc) continue; // entity gone since
     const pools = preventionEffectsFor(g, loc.ent, loc.player);
-    const pieces = armorPiecesOf(loc.ent);
+    const pieces = armorCandidatesOf(loc.ent);
     const items: PreventItem[] = [
       ...pools.map(p => ({ kind: 'prevent' as const, ...p })),
-      ...pieces.map(p => ({ kind: 'armor' as const, pieceId: p.id, pieceName: p.name, counters: p.counters ?? 0, armor: p.armor ?? 0 })),
+      ...pieces.map(p => ({ kind: 'armor' as const, pieceId: p.id, pieceName: p.name, counters: p.counters, armor: p.armor })),
     ];
     if (items.length >= 2) {
       const q = rest.length ? rest : undefined;
       return { game: { ...g, preventOrderQueue: q }, pendingPreventOrder: { ...c, items, picked: [] }, msgs };
     }
     if (items.length === 1 && items[0].kind === 'armor') {
-      const r = applyArmorCounter(g, c.entityId, items[0].pieceId);
+      const r = removeArmorCounter(g, c.entityId, items[0].pieceId);
       g = r.game; msgs.push(...r.msgs);
     }
     // a lone prevent (or nothing) → no residue to place

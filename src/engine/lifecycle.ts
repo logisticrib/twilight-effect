@@ -12,7 +12,7 @@ import { CATALOG } from '../data/catalog';
 import type { GameState, PlayerState, ClassZoneCard, PendingPeek, PeekRequest,
               PendingDeadPick, ArmorChoiceData, PendingModalChoice } from './state';
 import { findEntityAnywhere, updateEntity, itemProfileOf } from './entities';
-import { isCharacter, canHoldItem } from './stats';
+import { isCharacter, canHoldItem, parseArmorKeyword } from './stats';
 import { permanentEffects, effectsOfCard, actionTargetSpec, eligibleTargets,
          resolveActionEffects } from './interpreter';
 
@@ -166,12 +166,20 @@ export function equipOnto(game: GameState, lp: 'p1' | 'p2', entityId: string, ca
   if (!loc) return game;
   const loadout = loc.ent.loadout ?? { weapon: null, gear: [] };
   const { isWeapon, isHeavy } = itemProfileOf(card);
+  // Armor X for an ITEM: read the declarative KEYWORD ARRAY first (2026-08-18 owner
+  // ruling). The printed-text regex is a fallback only — it used to be the sole source,
+  // which made printed prose load-bearing code input: any rewording that dropped the
+  // "ARMOR N." prefix silently turned the item into a non-armor item, with nothing to
+  // catch it. Companions use the same parser (parseArmorKeyword), so both paths agree.
   const armorMatch = card.text?.match(/armor\s+(\d+)/i);
-  const armorVal = armorMatch ? parseInt(armorMatch[1]) : undefined;
+  const armorVal = parseArmorKeyword(card.keywords ?? []) ??
+                   (armorMatch ? parseInt(armorMatch[1]) : undefined);
   const equippedItem = {
     id: card.id, name: card.name, sub: card.subtype ?? '',
     hands: card.text?.toLowerCase().includes('two-handed') ? 2 as const : 1 as const,
-    heavy: isHeavy, armor: armorVal, counters: 0, text: card.text,
+    // Armor enters LOADED with X counters and counts down (inverted 2026-08-18);
+    // non-armor items keep the vestigial 0.
+    heavy: isHeavy, armor: armorVal, counters: armorVal ?? 0, text: card.text,
   };
   // Normalize gear to its two slots so the capacity checks see real holes.
   const newLoadout = { ...loadout, gear: [loadout.gear?.[0] ?? null, loadout.gear?.[1] ?? null] };
@@ -273,6 +281,7 @@ function dealPlayer(
     board: {},            // PC slot is empty — player places it in setup
     hand,
     dismayed: false,
+    inspired: false,
     _pc: pc,             // Stashed for placement step
   } as PlayerState & { _pc: BoardEntity };
 }

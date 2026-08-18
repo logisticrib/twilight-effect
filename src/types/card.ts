@@ -116,6 +116,17 @@ export interface BoardEntity {
   exhausted: boolean;
   fresh?: boolean;     // summoning sickness
   poison?: number;     // poison counter count
+  /** Armor counters held by the ENTITY itself (companion-variant Armor, and any
+   *  card effect that places them) -- owner-ratified 2026-08-18. The counters ARE
+   *  the prevention ability: while this is > 0 the companion prevents damage,
+   *  removing one per instance, and at 0 it simply stops (nothing is sacrificed).
+   *  OPTIONAL and absent for every companion that never held one (hash discipline,
+   *  as with `poison` / `stolenFrom`). */
+  armorCounters?: number;
+  /** The printed X the entity's armor counters started from -- display only, the
+   *  `anchorsStart` pattern. Absent when the counters came from an effect rather
+   *  than a printed keyword. */
+  armorStart?: number;
   loadout?: Loadout;
   sworn?: Card | null; // oathsworn card tucked beneath
   acts: Acts;          // per-turn action budget

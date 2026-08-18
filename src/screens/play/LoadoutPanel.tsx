@@ -181,7 +181,7 @@ function ItemSlot({ item, slotName, owner }: { item: EquippedItem | null; slotNa
         {slotName}
         {item.armor != null && (
           <span style={{ color: TBL.amber2, marginLeft: 6 }}>
-            A{item.armor}{item.counters ? `(${item.counters})` : ''}
+            A{item.armor}{item.counters != null ? `(${item.counters} left)` : ''}
           </span>
         )}
         {item.exhausted && (

@@ -8,7 +8,7 @@ import { recomputeStatics, isImmuneToSplash, HIT_RUN_STATUS,
          isPhysicalConstruct, parseEnterTrigger, type EnterTriggerKind,
          isCharacter, firstItemOf, allItemsOf, canHoldItem, effectiveAttack, effectiveKeywords, effectiveMaxHp, wardedLines,
          canPlayActionCard, specialActionActor, minorActionReason, actionTypeOf, currentWillpower, parseBanes,
-         POISONED_STATUS, parseAnimateMagic,
+         POISONED_STATUS, parseAnimateMagic, parseArmorKeyword,
          attackRestrictedBy, moveRestrictedBy, hasModifier,
          canAttackFromPosition, isLegalAttackTarget, bindingGuardianIds, legalAttackTargetIds } from './keywords';
 
@@ -30,7 +30,7 @@ import { ADJ, FRONT_SLOTS, BACK_SLOTS, isFront, findSlot, type SlotId, type Boar
          permanentEffects, gatherActivated, abilityUsedTag, magicCtx,
          destroyEntity, applyDamage, applyCombatHit, driveAttack, optionalAttackAbility,
          attackDamageBonus, resolveActionEffects, armPrompts, armNextArmorChoice,
-         applyArmorCounter, applyPreventionOrder, armNextPreventOrder,
+         removeArmorCounter, applyPreventionOrder, armNextPreventOrder,
          freshActs, uid, computeWillpower, makeNewGame, nextPeek, buildPeek,
          equipOnto, kitDests, runReadyPhase } from '../engine';
 
@@ -2798,7 +2798,7 @@ export const useGameStore = create<GameStoreState>()(
     // Non-combat deferred choice: apply the counter, then arm the next queued one
     // (then any deferred prevention ordering held back behind the armor prompts).
     if (!pa.ctx) {
-      const r = applyArmorCounter(s.game, pa.entityId, pieceId);
+      const r = removeArmorCounter(s.game, pa.entityId, pieceId);
       const next = armNextArmorChoice(r.game, pa.queue ?? []);
       let g: GameState = { ...next.game, pendingArmor: next.pendingArmor };
       if (!g.pendingArmor && g.preventOrderQueue?.length) {
@@ -3091,6 +3091,11 @@ export const useGameStore = create<GameStoreState>()(
       maxHp: card.hp ?? 0,
       anchors: card.anchor ?? undefined,
       anchorsStart: card.anchor ?? undefined,
+      // Companion-variant Armor X: "This companion enters the encounter with X armor
+      // counters" (canon 2026-08-18). Placed ONCE here — from then on the COUNTERS
+      // carry the behavior, not a keyword check (universal counter rule).
+      armorCounters: parseArmorKeyword(card.keywords) ?? undefined,
+      armorStart: parseArmorKeyword(card.keywords) ?? undefined,
       keywords: card.keywords,
       statuses: [],
       subtype: card.subtype,

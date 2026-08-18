@@ -88,11 +88,19 @@ export function itemTransferOf(ent: BoardEntity, controller: 'p1' | 'p2'): Pendi
 
 /** Weapon/heavy classification for a hand item (drives slot placement + the capacity
  *  gate in equipItem). Sniffed from itemKind/subtype/text — the deck data has no
- *  structured field for it yet. */
+ *  structured field for it yet.
+ *
+ *  HEAVY (fixed 2026-08-18, owner ruling): read from the SUBTYPE — canon names the
+ *  subtype "Heavy Armor" and makes 2 slots an inherent rule of it
+ *  (Card_Design_Parameters §Type Line Format). This previously sniffed the literal
+ *  word "heavy" out of printed prose, which no shipped card carries, so the heavy
+ *  path had never once fired. The prose check is kept only as a fallback. */
 export function itemProfileOf(card: Card): { isWeapon: boolean; isHeavy: boolean } {
   const isWeapon = card.itemKind?.toLowerCase().includes('weapon') ||
                    (card.type === 'Item' && (card.subtype?.toLowerCase().includes('weapon') || card.subtype?.toLowerCase().includes('sword') || card.subtype?.toLowerCase().includes('bow') || card.subtype?.toLowerCase().includes('staff') || card.subtype?.toLowerCase().includes('dagger') || card.subtype?.toLowerCase().includes('axe') || card.subtype?.toLowerCase().includes('mace') || card.subtype?.toLowerCase().includes('wand')));
-  return { isWeapon: !!isWeapon, isHeavy: !!card.text?.toLowerCase().includes('heavy') };
+  const isHeavy = card.subtype?.toLowerCase().includes('heavy') ||
+                  card.text?.toLowerCase().includes('heavy');
+  return { isWeapon: !!isWeapon, isHeavy: !!isHeavy };
 }
 
 /**

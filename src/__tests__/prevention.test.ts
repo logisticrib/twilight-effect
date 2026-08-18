@@ -7,7 +7,7 @@
 //        "when damaged"-style triggers (generalizes the armor-blocked-hit behavior).
 //   R3 — when >1 prevention effect could apply to one damage instance, the AFFECTED
 //        character's controller orders them (each armor piece is its own orderable
-//        item; armor reached at 0 remaining never engages — no counter).
+//        item; armor reached at 0 remaining DAMAGE never engages — removes no counter).
 // Scope: exactly what the card names — 'ownCompanions' + where.cls 'Wizard' never
 // covers the PC, non-Wizard companions, or opposing characters. Applies per damage
 // instance (each Cleave splash hit separately), to combat and effect damage alike
@@ -68,7 +68,7 @@ describe('Reflecting Pool — single prevention applies silently with a toast (n
 });
 
 describe('R3 — the affected controller orders prevention effects (armor is part of the family)', () => {
-  const armored = () => wiz('pv-wiz', { loadout: { weapon: null, gear: [mkItem('pv-ar', 'Guard Plate', { armor: 3, counters: 0 }), null] } });
+  const armored = () => wiz('pv-wiz', { loadout: { weapon: null, gear: [mkItem('pv-ar', 'Guard Plate', { armor: 3 }), null] } });
 
   it('1-damage hit, pool + armor: combat pauses for the DEFENDER; pool-first zeroes the damage and armor never engages (no counter)', () => {
     freshGame();
@@ -88,7 +88,7 @@ describe('R3 — the affected controller orders prevention effects (armor is par
     g = gs.getState().game;
     expect(g.pendingPreventOrder ?? undefined, 'ordering resolved').toBeUndefined();
     expect(g.p2.board.f1?.hp, 'fully prevented').toBe(5);
-    expect(g.p2.board.f1?.loadout?.gear[0]?.counters, 'armor never engaged — NO counter spent').toBe(0);
+    expect(g.p2.board.f1?.loadout?.gear[0]?.counters, 'armor never engaged — NO counter spent (still 3)').toBe(3);
   });
 
   it('same hit, armor-first: the whole hit is prevented by armor and the counter IS spent; the pool prevents nothing', () => {
@@ -101,7 +101,7 @@ describe('R3 — the affected controller orders prevention effects (armor is par
     g = gs.getState().game;
     expect(g.pendingPreventOrder ?? undefined, 'ordering resolved').toBeUndefined();
     expect(g.p2.board.f1?.hp, 'fully prevented').toBe(5);
-    expect(g.p2.board.f1?.loadout?.gear[0]?.counters, 'the chosen armor took its counter').toBe(1);
+    expect(g.p2.board.f1?.loadout?.gear[0]?.counters, 'the chosen armor spent a counter (3 → 2)').toBe(2);
   });
 
   it('duplicate preventions stack: two pools prevent 2 total (ordered via the prompt, result order-independent)', () => {
@@ -191,7 +191,7 @@ describe('arc-1 interop — reactive-trigger (trap) damage is prevented like any
     // instance — while p1 controls both a Reflecting Pool and armor on the attacker:
     // pool + armor both apply → the ordering defers and arms at the resolution boundary.
     const spikes = mkConstruct('is-1', 'Iron Spikes', 2, { subtype: 'Trap' });
-    const attacker = wiz('pv-atk', { atk: 2, hp: 5, loadout: { weapon: null, gear: [mkItem('pv-ar2', 'Guard Plate', { armor: 3, counters: 0 }), null] } });
+    const attacker = wiz('pv-atk', { atk: 2, hp: 5, loadout: { weapon: null, gear: [mkItem('pv-ar2', 'Guard Plate', { armor: 3 }), null] } });
     gs.setState(s => ({ game: { ...s.game,
       p1: { ...s.game.p1, board: { f1: attacker, f2: pool('pv-pl') } },
       p2: { ...s.game.p2, board: { f1: mkComp('pv-def', compCard2.name, { hp: 9 }), f3: spikes } },
@@ -210,6 +210,6 @@ describe('arc-1 interop — reactive-trigger (trap) damage is prevented like any
     g = gs.getState().game;
     expect(g.pendingPreventOrder ?? undefined, 'ordering drained').toBeUndefined();
     expect(g.preventOrderQueue ?? undefined, 'queue field back to undefined (hash-neutral)').toBeUndefined();
-    expect(g.p1.board.f1?.loadout?.gear[0]?.counters, 'pool-first: armor never engaged, no counter').toBe(0);
+    expect(g.p1.board.f1?.loadout?.gear[0]?.counters, 'pool-first: armor never engaged, no counter (still 3)').toBe(3);
   });
 });

@@ -32,6 +32,11 @@ export interface PlayerState {
   hand: Card[];
   /** -1 Willpower while any opponent Dismay permanent is in play. Does not stack. */
   dismayed: boolean;
+  /** +1 Willpower while any Inspire permanent YOU control is in play (Paladin,
+   *  2026-08-18). Does not stack. The mirror of `dismayed` in both sign and
+   *  direction — Dismay reads the OPPONENT's board, Inspire reads your own. Both
+   *  are derived: recomputeStatics owns them, nothing else writes them. */
+  inspired: boolean;
   /** For opponent display when hand is hidden (multiplayer). */
   handCount?: number;
   /** PC entity stashed until the player places it (setup step 8). */
@@ -243,11 +248,13 @@ export interface PendingTriggerOrder {
 
 // ─── Damage prevention (arc 2, owner-ratified 2026-07-14) ──────────────────────
 /** One orderable prevention item on a single damage instance. Armor is a member of
- *  the prevention family (canon ARMOR X: "If the equipped character would be dealt
- *  damage, prevent all of that damage and put an armor counter on this item") — each
+ *  the prevention family (canon ARMOR X, re-cut 2026-08-18: "This item enters the
+ *  encounter with X armor counters. If the equipped character would be dealt damage,
+ *  prevent all of that damage and remove an armor counter from this item.") — each
  *  equipped piece is its own item, so ordering a piece first both engages armor AND
  *  picks the piece. An armor item reached when the running damage is already 0 never
- *  engages: no counter is spent (R3's canonical consequence). */
+ *  engages: no counter is spent (R3's canonical consequence).
+ *  `counters` is the number REMAINING on the piece (inverted 2026-08-18). */
 export type PreventItem =
   | { kind: 'prevent'; sourceId: string; sourceName: string; amount: number }
   | { kind: 'armor'; pieceId: string; pieceName: string; counters: number; armor: number };
