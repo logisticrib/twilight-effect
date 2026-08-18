@@ -53,6 +53,18 @@ describe('dev deck data: exactly the 50 owner cards, all flagged dev', () => {
     expect(DW_ROGUE_DEV_CARDS.every(c => c.dev)).toBe(true);
     expect(new Set(DW_ROGUE_DEV_CARDS.map(c => c.id)).size).toBe(50);
   });
+
+  it('Beast re-cut (owner-ratified 2026-08-18): the four animals carry the PRINTED Beast modifier — modifier-first, never derived', () => {
+    // Owner ruling (Card_Design_Parameters §12, 2026-08-18): Beast = a non-magical
+    // animal without sapience; PRINTED on the type line (physical-play
+    // trackability), order Modifier → Organism. Exactly these four qualify —
+    // every other companion in the pool is sapient or of supernatural origin.
+    const beasts = DW_ROGUE_DEV_CARDS.filter(c => c.type === 'Companion' && /^Beast /.test(c.subtype ?? ''));
+    expect(new Map(beasts.map(c => [c.name, c.subtype]))).toEqual(new Map([
+      ['Fang-Adder', 'Beast Snake'], ['Marsh Scorpion', 'Beast Scorpion'],
+      ['Carrion Crow', 'Beast Crow'], ['Sewer Rat', 'Beast Rat'],
+    ]));
+  });
 });
 
 describe('Coercion carrier (Whispering Acolyte) — the shipped keyword flow fires from dev data', () => {

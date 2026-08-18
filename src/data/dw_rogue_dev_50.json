@@ -911,7 +911,7 @@
       "name": "Fang-Adder",
       "level": 1,
       "type": "Companion",
-      "subtype": "Snake",
+      "subtype": "Beast Snake",
       "rarity": "Common",
       "class1": "Rogue",
       "class2": "",
@@ -926,14 +926,14 @@
       "flavor": "",
       "dev": true,
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-08-18T00:00:00.000000Z"
     },
     {
       "id": "dd000035",
       "name": "Marsh Scorpion",
       "level": 3,
       "type": "Companion",
-      "subtype": "Scorpion",
+      "subtype": "Beast Scorpion",
       "rarity": "Uncommon",
       "class1": "Rogue",
       "class2": "",
@@ -948,7 +948,7 @@
       "flavor": "",
       "dev": true,
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-08-18T00:00:00.000000Z"
     },
     {
       "id": "dd000036",
@@ -985,7 +985,7 @@
       "name": "Carrion Crow",
       "level": 1,
       "type": "Companion",
-      "subtype": "Crow",
+      "subtype": "Beast Crow",
       "rarity": "Common",
       "class1": "Rogue",
       "class2": "",
@@ -1000,7 +1000,7 @@
       "flavor": "",
       "dev": true,
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-08-18T00:00:00.000000Z"
     },
     {
       "id": "dd000038",
@@ -1081,7 +1081,7 @@
       "name": "Sewer Rat",
       "level": 2,
       "type": "Companion",
-      "subtype": "Rat",
+      "subtype": "Beast Rat",
       "rarity": "Common",
       "class1": "Rogue",
       "class2": "",
@@ -1096,7 +1096,7 @@
       "flavor": "",
       "dev": true,
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-08-18T00:00:00.000000Z"
     },
     {
       "id": "dd000042",
