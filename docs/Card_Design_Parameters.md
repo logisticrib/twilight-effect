@@ -353,7 +353,8 @@ Three distinct trigger conditions:
 - **Spirit** - For incorporeal entities
 - **Fungal** - Nature-themed
 - **Manifest** - Created exclusively by the Animate Magic X keyword; represents a Magical Construct stabilized into Companion form
-- **Only ONE modifier per companion**
+- **Beast** - A Beast is a non-magical animal without sapience. *(Added 2026-08-18, owner ruling.)* Griffin = Beast; Lion = Beast; the ghost of a lion = "Spirit Beast Lion"; a zombified shrew = "Undead Beast Shrew". NOT Beasts: sapient creatures (Goblin, Human, Elf, Dwarf, Centaur, and Angel — Angels are canonically sapient predators, not divine, per Class_Design_Guide "Unique Subtype: Angel") and monsters of supernatural origin (Ifrit, Shadowbeast). "Beast" appearing in a card NAME does not imply the Beast type. Beast is PRINTED on the type line, never derived — physical-play trackability: a player at a table must be able to see whether a card is a Beast without consulting a lookup.
+- **Only ONE modifier per companion** *(Superseded in part 2026-08-18: Beast STACKS with one other modifier — "Spirit Beast Lion", "Undead Beast Shrew" — per the owner examples above. The one-modifier cap still governs the non-Beast modifiers: no card carries two of Undead/Spirit/Fungal/Manifest.)*
 
 ### Creature Type Targeting Templates
 - "Target [creature type] companion" (e.g., "Target Goblin companion")
@@ -673,7 +674,8 @@ Three distinct trigger conditions:
 - Notes: Wizards stabilize magical effects by giving them form. Does not apply to Physical or Vocal Constructs. Keeps animation temporary and bounded.
 - **Stats are card-specific:** Each Animate Magic effect specifies the attack/HP values (e.g., "becomes a 2/3 Elemental companion")
 
-**UNTAMED** (Druid-Specific) - While there are no Items or Physical Constructs in the encounter, this character is Untamed. Per-card text defines the bonus granted while Untamed.
+**UNTAMED** (Druid-Specific) - While there are no Gear or Physical Constructs in the encounter, this character is Untamed. Per-card text defines the bonus granted while Untamed.
+*(Corrected 2026-08-18: "Items" → "Gear" — drift from Master_Keyword_List.md, the defining document for keywords (see its dated Rules Note under UNTAMED). Gear is a strict subset of Items: a Weapon does NOT suppress Untamed, and the scope is the whole encounter, both players. The same correction applies to the duplicate definition later in this document — flagged as a duplicate, not consolidated.)*
 
 ### Subtypes with Special Rules
 
@@ -707,7 +709,7 @@ Three distinct trigger conditions:
   - Sworn cards count as being "in the encounter" for effects that count sworn cards
   - If a permanent with Oathsworn changes zones in some other way (such as being returned to hand), the sworn card is returned to its owner's hand
 
-**UNTAMED** (Druid-Specific) While there are no Items or Physical Constructs in the encounter, this character is Untamed. Per-card text defines the bonus granted while Untamed.
+**UNTAMED** (Druid-Specific) While there are no Gear or Physical Constructs in the encounter, this character is Untamed. Per-card text defines the bonus granted while Untamed. *(Corrected 2026-08-18 with the primary definition above.)*
 
 ---
 
@@ -1560,13 +1562,14 @@ Within the established constraints, designers should:
 ### By Card Type
 
 **COMPANIONS:**
-- Format: **[Supertype] Companion - Organism Role [Modifier]**
+- Format: **[Supertype] Companion - [Modifier] Organism Role** *(Corrected 2026-08-18: the format string read "Organism Role [Modifier]", contradicting both the example below ("modifier comes first") and the Subtype Formatting Rules ("Order: Modifier → Organism → Role"). Modifier-first is the intended order.)*
 - Examples:
   - "Companion - Human Knight"
   - "Companion - Wolf" (no role needed)
   - "Legendary Companion - Elf Shaman"
   - "Companion - Undead Human Soldier" (modifier comes first)
   - "Companion - Spirit Fox" (modifier + organism)
+  - "Companion - Undead Beast Wolf" (stacked modifiers — Beast stacks with one other modifier, 2026-08-18)
 
 **ITEMS - WEAPONS:**
 - Format: **Item - Weapon [- Two-Handed]**

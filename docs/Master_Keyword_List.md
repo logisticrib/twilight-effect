@@ -129,6 +129,7 @@ This document consolidates all keywords from Game Rules, Keyword Glossary, and C
 ### Druid Keywords
 
 **UNTAMED** - While there are no Gear or Physical Constructs in the encounter, this character is Untamed. Per-card text defines the bonus granted while Untamed.
+- **Rules Note (ruled 2026-08-18) — Wording consistency: GEAR only, ENCOUNTER-wide.** This entry is the canonical wording (Rules_Taxonomy names this document as defining for keywords). Two consequences, both ruled: (a) the condition counts GEAR only — Gear is a strict subset of Items (Items split into Weapons and Gear; Card_Design_Parameters §Type Line Format), so a WEAPON does NOT suppress Untamed; (b) the scope is the ENCOUNTER — both players' Gear and Physical Constructs count, never controller-only. Corrected this date to match: Card_Design_Parameters.md (two duplicate definitions read "no Items"), Class_Design_Guide.docx (a card-generation example was controller-scoped and dropped Gear; the Druid keyword summary read "in play" and has been harmonized to "in the encounter"). The engine registry (src/data/keywords.ts) already carried the canonical wording.
 
 ---
 
