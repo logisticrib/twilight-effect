@@ -49,7 +49,7 @@ describe('recomputeStatics derives Inspired from YOUR OWN board', () => {
   it('an Inspire permanent Inspires ITS CONTROLLER, not the opponent', () => {
     const g = seed({ f1: mkComp('insp-src', compCard.name, { keywords: ['Inspire'] }) });
     expect(g.p1.inspired, 'the controller is Inspired').toBe(true);
-    expect(g.p2.inspired, 'the opponent is NOT — this is the mirror of Dismay').toBe(false);
+    expect(g.p2.inspired ?? false, 'the opponent is NOT — this is the mirror of Dismay (key ABSENT when clear — fixture-hash discipline 2026-08-19)').toBe(false);
   });
 
   it('DOES NOT STACK: two Inspire permanents are still +1', () => {
@@ -75,7 +75,7 @@ describe('recomputeStatics derives Inspired from YOUR OWN board', () => {
   it('it is DERIVED: removing the source clears the state', () => {
     const g = seed({ f1: mkComp('gone', compCard.name, { keywords: ['Inspire'] }) });
     expect(g.p1.inspired).toBe(true);
-    expect(recomputeStatics({ ...g, p1: { ...g.p1, board: {} } }).p1.inspired, 'no source → not Inspired').toBe(false);
+    expect(recomputeStatics({ ...g, p1: { ...g.p1, board: {} } }).p1.inspired, 'no source → not Inspired — and the key is REMOVED, never written false (fixture-hash discipline 2026-08-19)').toBeUndefined();
   });
 
   it('both states at once are derived independently, and net on the read', () => {

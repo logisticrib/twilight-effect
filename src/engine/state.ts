@@ -35,8 +35,14 @@ export interface PlayerState {
   /** +1 Willpower while any Inspire permanent YOU control is in play (Paladin,
    *  2026-08-18). Does not stack. The mirror of `dismayed` in both sign and
    *  direction — Dismay reads the OPPONENT's board, Inspire reads your own. Both
-   *  are derived: recomputeStatics owns them, nothing else writes them. */
-  inspired: boolean;
+   *  are derived: recomputeStatics owns them, nothing else writes them.
+   *  OPTIONAL and present ONLY when true (fixture-hash discipline, corrected
+   *  2026-08-19): `dismayed: false` predates the committed replay fixtures and is
+   *  IN their recorded states, but an unconditional `inspired: false` re-hashed
+   *  every recorded snapshot from the first recomputeStatics onward — all three
+   *  fixtures diverged at step 10 (placePc). Post-fixture fields stay absent when
+   *  clear, the triggerStack convention. */
+  inspired?: boolean;
   /** For opponent display when hand is hidden (multiplayer). */
   handCount?: number;
   /** PC entity stashed until the player places it (setup step 8). */

@@ -17,6 +17,13 @@ export const KEYWORD_DEFS: Record<string, string> = {
   'Zealous':       'This character may attack without needing to first pass a willpower check.',
   'Guardian':      'While this character is ready (not exhausted) and a legal target, opponents must attack it before any other character.',
   'Armor':         'This item enters the encounter with X armor counters. If the equipped character would be dealt damage, prevent all of that damage and remove an armor counter from this item. When the last armor counter is removed, sacrifice this item.',
+  // Armor prints TWO canonical wordings (Master_Keyword_List §Item & Equipment
+  // Keywords). The entry above is the ITEM clause; this is the COMPANION variant,
+  // quoted verbatim from the same section. The validator selects between them by the
+  // card's HOST TYPE (validateCards.keywordDefFor) -- a companion carrying Armor is
+  // checked against this wording, and an item that prints it still fails, which is the
+  // point: they are different rules, not interchangeable phrasings.
+  'Armor (companion variant)': 'This companion enters the encounter with X armor counters. If this companion would be dealt damage, prevent all of that damage and remove an armor counter from this companion. When this companion has no armor counters, it no longer prevents damage via this ability.',
   'Scavenger':     'When this companion enters the encounter, you may return an item from your Dead Zone and immediately attach it to this companion.',
   'Kit-Master':    'When this companion enters the encounter, you may move target item from one character you control to another character you control.',
   'Tribute':       'As an additional cost to play this Angel companion, pay its Tribute cost.',

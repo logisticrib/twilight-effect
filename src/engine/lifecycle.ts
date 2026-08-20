@@ -281,7 +281,8 @@ function dealPlayer(
     board: {},            // PC slot is empty — player places it in setup
     hand,
     dismayed: false,
-    inspired: false,
+    // `inspired` deliberately ABSENT (optional, present only when true — the
+    // fixture-hash discipline; dismayed:false predates the fixtures and stays).
     _pc: pc,             // Stashed for placement step
   } as PlayerState & { _pc: BoardEntity };
 }

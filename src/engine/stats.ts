@@ -54,11 +54,18 @@ export function recomputeStatics(game: GameState): GameState {
   const p1Inspired = controlsKeyword(game.p1, 'Inspire');
   const p2Inspired = controlsKeyword(game.p2, 'Inspire');
   if (game.p1.dismayed === p1Dismayed && game.p2.dismayed === p2Dismayed &&
-      game.p1.inspired === p1Inspired && game.p2.inspired === p2Inspired) return game;
+      (game.p1.inspired ?? false) === p1Inspired && (game.p2.inspired ?? false) === p2Inspired) return game;
+  // `inspired` is OPTIONAL and present only when true (fixture-hash discipline,
+  // 2026-08-19): an unconditional `inspired: false` re-hashed every pre-Inspire
+  // recording — the key is REMOVED when the state clears, never written false.
+  const side = (ps: PlayerState, dismayed: boolean, inspired: boolean): PlayerState => {
+    const { inspired: _old, ...rest } = ps;
+    return inspired ? { ...rest, dismayed, inspired: true } : { ...rest, dismayed };
+  };
   return {
     ...game,
-    p1: { ...game.p1, dismayed: p1Dismayed, inspired: p1Inspired },
-    p2: { ...game.p2, dismayed: p2Dismayed, inspired: p2Inspired },
+    p1: side(game.p1, p1Dismayed, p1Inspired),
+    p2: side(game.p2, p2Dismayed, p2Inspired),
   };
 }
 

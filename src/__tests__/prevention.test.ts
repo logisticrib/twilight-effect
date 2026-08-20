@@ -16,6 +16,7 @@ import { describe, it, expect } from 'vitest';
 import { gs, freshGame, mkComp, mkConstruct, mkItem, mkPc, mkCz } from './helpers';
 import { CATALOG } from '../data/catalog';
 import type { Card } from '../types/card';
+import { isSelfArmorId } from '../engine/combat';
 
 const compCard = CATALOG.find(c => c.type === 'Companion')!;
 const compCard2 = CATALOG.filter(c => c.type === 'Companion')[1];
@@ -115,6 +116,76 @@ describe('R3 — the affected controller orders prevention effects (armor is par
     g = gs.getState().game;
     expect(g.pendingPreventOrder ?? undefined).toBeUndefined();
     expect(g.p2.board.f1?.hp, '3 dealt − 2 prevented = 1 taken').toBe(4);
+  });
+});
+
+// ── A companion's OWN armor counters inside the ordering (pinned 2026-08-19) ─────
+// The universal counter rule (2026-08-18) makes a companion's armor counters a
+// prevention source in their own right, so they must be offered for ordering exactly
+// like an equipped piece — carrying the `self-armor:` sentinel id, ordered by the
+// affected character's controller per the 2026-07-14 canon. Implemented that session
+// via armorCandidatesOf -> driveAttack / armNextPreventOrder; only the gear + self
+// PICKER case was pinned, never gear-free self + a board pool. This is the shape the
+// incoming Elder Shellback depends on.
+describe('R3 — a companion’s OWN armor counters order against board-sourced prevention', () => {
+  const selfArmored = () => wiz('pv-wiz', { armorCounters: 2, armorStart: 2 });
+
+  it('offers the companion’s own counters as an orderable armor item (sentinel id, counters REMAINING)', () => {
+    freshGame();
+    arm(mkComp('pv-att', compCard.name, { atk: 1 }), { f1: selfArmored(), f2: pool('pv-pool') });
+    gs.getState().resolveAttack('pv-wiz');
+    const g = gs.getState().game;
+    expect(g.pendingPreventOrder, 'paused on the ordering').toBeTruthy();
+    expect(g.pendingPreventOrder?.chooser, "the AFFECTED character's controller chooses").toBe('p2');
+    const items = g.pendingPreventOrder!.items;
+    expect(items.length, 'pool + the companion’s own armor').toBe(2);
+    const selfItem = items.find(i => i.kind === 'armor');
+    expect(selfItem, 'the companion’s counters are an armor-kind item').toBeTruthy();
+    expect(isSelfArmorId((selfItem as { pieceId: string }).pieceId), 'carried by sentinel id, not a gear id').toBe(true);
+    expect((selfItem as { counters: number }).counters, 'reports counters REMAINING').toBe(2);
+  });
+
+  it('pool-first: the damage is zeroed and the companion’s armor never engages — NO counter removed', () => {
+    freshGame();
+    arm(mkComp('pv-att', compCard.name, { atk: 1 }), { f1: selfArmored(), f2: pool('pv-pool') });
+    gs.getState().resolveAttack('pv-wiz');
+    let g = gs.getState().game;
+    const poolIdx = g.pendingPreventOrder!.items.findIndex(i => i.kind === 'prevent');
+    gs.getState().resolvePreventOrder(poolIdx); // 2 items → one pick completes the order
+    g = gs.getState().game;
+    expect(g.pendingPreventOrder ?? undefined, 'ordering resolved').toBeUndefined();
+    expect(g.p2.board.f1?.hp, 'fully prevented by the pool').toBe(5);
+    expect(g.p2.board.f1?.armorCounters, 'armor reached at 0 damage never engages (still 2)').toBe(2);
+  });
+
+  it('armor-first: the companion’s counter prevents the whole hit and IS spent; the pool prevents nothing', () => {
+    freshGame();
+    arm(mkComp('pv-att', compCard.name, { atk: 1 }), { f1: selfArmored(), f2: pool('pv-pool') });
+    gs.getState().resolveAttack('pv-wiz');
+    let g = gs.getState().game;
+    const armorIdx = g.pendingPreventOrder!.items.findIndex(i => i.kind === 'armor');
+    gs.getState().resolvePreventOrder(armorIdx);
+    g = gs.getState().game;
+    expect(g.pendingPreventOrder ?? undefined, 'ordering resolved').toBeUndefined();
+    expect(g.p2.board.f1?.hp, 'armor prevents ALL of the remaining damage').toBe(5);
+    expect(g.p2.board.f1?.armorCounters, 'one counter removed (2 → 1)').toBe(1);
+  });
+
+  it('EFFECT-placed counters order identically — no printed Armor keyword (the Elder Shellback shape)', () => {
+    freshGame();
+    // Counters with no keyword behind them: the counter IS the ability, so the
+    // ordering must not care where it came from.
+    arm(mkComp('pv-att', compCard.name, { atk: 1 }),
+        { f1: wiz('pv-wiz', { keywords: [], armorCounters: 1 }), f2: pool('pv-pool') });
+    gs.getState().resolveAttack('pv-wiz');
+    let g = gs.getState().game;
+    expect(g.pendingPreventOrder?.items.length, 'still two orderable preventions').toBe(2);
+    const armorIdx = g.pendingPreventOrder!.items.findIndex(i => i.kind === 'armor');
+    gs.getState().resolvePreventOrder(armorIdx);
+    g = gs.getState().game;
+    expect(g.p2.board.f1?.hp, 'fully prevented').toBe(5);
+    expect(g.p2.board.f1?.armorCounters, 'its last counter spent — now inert, not sacrificed').toBe(0);
+    expect(g.p2.board.f1, 'the companion is still on the board').toBeTruthy();
   });
 });
 

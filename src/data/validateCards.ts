@@ -313,12 +313,27 @@ function stripKeywordNames(sentence: string): string {
  * completeness of cards that DO carry effects is not mechanically decidable — that
  * remains human triage (see the 2026-07-08 authoring-gap sweep).
  */
+/** Canonical definition for one declared keyword ON THIS CARD.
+ *
+ *  Armor is the one keyword with two canonical wordings: the ITEM clause ends
+ *  "sacrifice this item", the COMPANION variant ends "it no longer prevents damage via
+ *  this ability" (Master_Keyword_List §Item & Equipment Keywords). Which one a card may
+ *  print is decided by its HOST TYPE, so the reminder-text check is keyed off it too.
+ *  Added 2026-08-19: the single item-only entry failed every companion-armor card at
+ *  45% on its third sentence, which would have blocked the first companion-armor cards
+ *  on import. Every other keyword has exactly one wording and falls through unchanged. */
+export const ARMOR_COMPANION_DEF = 'Armor (companion variant)';
+function keywordDefFor(base: string, card: Card): string | undefined {
+  if (base === 'Armor' && card.type === 'Companion') return KEYWORD_DEFS[ARMOR_COMPANION_DEF];
+  return KEYWORD_DEFS[base];
+}
+
 function proseCompletenessProblems(card: Card, p: (msg: string) => void): void {
   if ((card.effects?.length ?? 0) > 0) return;
   if (card.effectsFlag) return;
   const text = (card.text ?? '').replace(/\([^)]*\)/g, ' ');
   const defs = (card.keywords ?? [])
-    .map(k => KEYWORD_DEFS[keywordBase(k)])
+    .map(k => keywordDefFor(keywordBase(k), card))
     .filter((d): d is string => !!d)
     .map(d => new Set(proseTokens(d)));
   const offending = text.split(/(?<=[.!?])\s+/)

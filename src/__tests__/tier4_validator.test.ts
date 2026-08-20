@@ -195,8 +195,39 @@ describe('prose completeness: a prose-only card can never mint silently', () => 
   it('un-parenthesized keyword REMINDER text is exempt (canon-containment against KEYWORD_DEFS)', () => {
     expect(validateCards([noFx({ keywords: ['Zealous'],
       text: 'ZEALOUS. This character may attack without needing to first pass a willpower check.' })])).toEqual([]);
+    // RETIRED + REWRITTEN 2026-08-19: this pin previously quoted the PRE-INVERSION item
+    // wording ("put an armor counter... when this item has 2"). It still passed on token
+    // containment, which is exactly why it needed replacing rather than trusting -- a
+    // pin that survives the canon it pins is not testing the canon.
     expect(validateCards([noFx({ keywords: ['Armor 2'], type: 'Item', itemKind: 'Armor',
-      text: 'ARMOR 2. If the equipped character would be dealt damage, prevent all of that damage and put an armor counter on this item. When this item has 2 armor counters, sacrifice it.' })])).toEqual([]);
+      text: 'ARMOR 2. This item enters the encounter with 2 armor counters. If the equipped character would be dealt damage, prevent all of that damage and remove an armor counter from this item. When the last armor counter is removed, sacrifice this item.' })])).toEqual([]);
+  });
+
+  // ── Armor's two canonical wordings, keyed off host type (2026-08-19) ──────────
+  // Master_Keyword_List §Item & Equipment Keywords defines ARMOR X twice: an ITEM
+  // clause and a COMPANION variant. Before this, KEYWORD_DEFS carried only the item
+  // clause, so every companion-armor card failed prose-completeness at 45% on its
+  // third sentence — which would have blocked the first companion-armor cards
+  // (Thornback Tortoise, Warden of Stonefern) on import day one.
+  describe('Armor: item and companion variants both validate, on their own host type', () => {
+    const ITEM_CLAUSE = 'ARMOR 2. This item enters the encounter with 2 armor counters. If the equipped character would be dealt damage, prevent all of that damage and remove an armor counter from this item. When the last armor counter is removed, sacrifice this item.';
+    const COMPANION_CLAUSE = 'ARMOR 1. This companion enters the encounter with 1 armor counter. If this companion would be dealt damage, prevent all of that damage and remove an armor counter from this companion. When this companion has no armor counters, it no longer prevents damage via this ability.';
+
+    it('an ITEM printing the item clause validates clean', () => {
+      expect(validateCards([noFx({ name: 'Mailed Hauberk (pin)', keywords: ['Armor 2'],
+        type: 'Item', itemKind: 'Armor', text: ITEM_CLAUSE })])).toEqual([]);
+    });
+
+    it('a COMPANION printing the companion clause validates clean', () => {
+      expect(validateCards([noFx({ name: 'Thornback Tortoise (pin)', keywords: ['Armor 1'],
+        type: 'Companion', text: COMPANION_CLAUSE })])).toEqual([]);
+    });
+
+    it('NEGATIVE: text matching NEITHER variant is still caught', () => {
+      expectCaught(noFx({ name: 'Warden of Stonefern (bad pin)', keywords: ['Armor 1'], type: 'Companion',
+        text: 'ARMOR 1. This companion enters the encounter with 1 armor counter. Whenever this companion blocks, draw a card and each opponent discards.' }),
+        'a novel rider beyond either Armor wording');
+    });
   });
 
   it('a declared keyword does NOT excuse a novel rider (the Patient Conjurer class)', () => {
