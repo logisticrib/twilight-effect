@@ -437,7 +437,7 @@ export function resolveCombatTriggers(game: GameState, attacker: BoardEntity, at
  * targets auto-pick the first own-side eligible. Called from applyDamage's destroy
  * branch (other removal paths — bounce/sacrifice — are not yet hooked).
  */
-export function resolveRemovalTriggers(game: GameState, ent: BoardEntity, controller: 'p1' | 'p2', sink: PendingDeadPick[] | undefined, armorSink: ArmorChoiceData[] | undefined, cause: 'damage' | 'sacrifice'): { game: GameState; msgs: string[] } {
+export function resolveRemovalTriggers(game: GameState, ent: BoardEntity, controller: 'p1' | 'p2', sink: PendingDeadPick[] | undefined, armorSink: ArmorChoiceData[] | undefined, cause: 'damage' | 'sacrifice' | 'destroy'): { game: GameState; msgs: string[] } {
   let g = game;
   const msgs: string[] = [];
   for (const trig of ['onDestroy', 'onLeave'] as const) {

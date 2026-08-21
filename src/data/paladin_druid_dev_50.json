@@ -1,5 +1,5 @@
 {
-  "_comment": "DEV DECK - Sworn Wild (Paladin / Druid), 50 hand-authored dev cards (owner-designed, 2026-08-19). NON-CANON: every card carries dev:true so shipped-pool queries can exclude them. Phase 1 = AUTHOR + FLAG: cards whose behavior has a live engine path carry structured effects; every behavior the engine cannot yet honor carries an effectsFlag starting 'DEV NOT-IMPLEMENTED' (visible machinery debt; the validator reports it and does not fail). That flag list IS the arc plan for the implementation sessions that follow. Type lines carry the Beast modifier per the 2026-08-18 ruling (Beast = non-magical non-sapient animal, printed never derived, ordered Modifier-Organism-Role); Angels are sapient and are NOT Beasts. Armor carriers print the FULL inverted companion clause (2026-08-18 inversion) with X substituted.",
+  "_comment": "DEV DECK - Sworn Wild (Paladin / Druid), 50 hand-authored dev cards (owner-designed, 2026-08-19). NON-CANON: every card carries dev:true so shipped-pool queries can exclude them. Phase 1 = AUTHOR + FLAG: cards whose behavior has a live engine path carry structured effects; every behavior the engine cannot yet honor carries an effectsFlag starting 'DEV NOT-IMPLEMENTED' (visible machinery debt; the validator reports it and does not fail). That flag list IS the arc plan for the implementation sessions that follow. Type lines carry the Beast modifier per the 2026-08-18 ruling (Beast = non-magical non-sapient animal, printed never derived, ordered Modifier-Organism-Role); Angels are sapient and are NOT Beasts. Armor carriers print the FULL inverted companion clause (2026-08-18 inversion) with X substituted. Vocal subtypes corrected 2026-08-19 (owner ruling): Druid Vocal Constructs are RITE, Paladin's are BLESSING. 'Performance' was retired entirely and the borrowed Utterance (a Doom-Whisperer subtype) was wrong for the same reason. ARC A (2026-08-19): the destroy primitive landed — the seven destroy cards are LIVE. Destroy is a DIFFERENT EVENT from sacrifice (owner ruling): it never fires on-sacrifice listeners, while generic leave/death triggers fire for both, and the card lands in its OWNER's Dead Zone either way.",
   "cards": [
     {
       "id": "dd000051",
@@ -608,7 +608,7 @@
       "name": "Chorus of the Understory",
       "level": 2,
       "type": "Construct",
-      "subtype": "Performance",
+      "subtype": "Rite",
       "rarity": "Common",
       "class1": "Druid",
       "class2": "",
@@ -631,7 +631,7 @@
       "name": "Oath to the Shelf",
       "level": 3,
       "type": "Construct",
-      "subtype": "Utterance",
+      "subtype": "Rite",
       "rarity": "Rare",
       "class1": "Druid",
       "class2": "",
@@ -672,7 +672,17 @@
       "dev": true,
       "createdAt": "2026-08-19T00:00:00.000000Z",
       "updatedAt": "2026-08-19T00:00:00.000000Z",
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): no `destroy` op exists anywhere in the effect vocabulary, and NO card in any pool has ever printed 'Destroy'. `sacrifice` is NOT a substitute: canon makes sacrifice a distinct event that fires on-sacrifice listeners (Siegeworks), which destruction must not. Needs a new primitive AND an owner ruling on whether destroy fires those listeners."
+      "effects": [
+        {
+          "trigger": "onPlay",
+          "effects": [
+            {
+              "op": "destroy",
+              "target": "anyGear"
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "dd000076",
@@ -695,7 +705,21 @@
       "dev": true,
       "createdAt": "2026-08-19T00:00:00.000000Z",
       "updatedAt": "2026-08-19T00:00:00.000000Z",
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): no `destroy` op exists anywhere in the effect vocabulary, and NO card in any pool has ever printed 'Destroy'. `sacrifice` is NOT a substitute: canon makes sacrifice a distinct event that fires on-sacrifice listeners (Siegeworks), which destruction must not. Needs a new primitive AND an owner ruling on whether destroy fires those listeners."
+      "effects": [
+        {
+          "trigger": "onPlay",
+          "effects": [
+            {
+              "op": "destroy",
+              "target": "physicalConstruct"
+            },
+            {
+              "op": "draw",
+              "count": 1
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "dd000077",
@@ -718,7 +742,21 @@
       "dev": true,
       "createdAt": "2026-08-19T00:00:00.000000Z",
       "updatedAt": "2026-08-19T00:00:00.000000Z",
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): no `destroy` op exists anywhere in the effect vocabulary, and NO card in any pool has ever printed 'Destroy'. `sacrifice` is NOT a substitute: canon makes sacrifice a distinct event that fires on-sacrifice listeners (Siegeworks), which destruction must not. Needs a new primitive AND an owner ruling on whether destroy fires those listeners. Additionally needs a UNION target spec (Gear OR Physical Construct)."
+      "effects": [
+        {
+          "trigger": "onPlay",
+          "effects": [
+            {
+              "op": "destroy",
+              "target": "gearOrPhysicalConstruct"
+            },
+            {
+              "op": "draw",
+              "count": 1
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "dd000078",
@@ -843,7 +881,22 @@
       "dev": true,
       "createdAt": "2026-08-19T00:00:00.000000Z",
       "updatedAt": "2026-08-19T00:00:00.000000Z",
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): no `destroy` op exists anywhere in the effect vocabulary, and NO card in any pool has ever printed 'Destroy'. `sacrifice` is NOT a substitute: canon makes sacrifice a distinct event that fires on-sacrifice listeners (Siegeworks), which destruction must not. Needs a new primitive AND an owner ruling on whether destroy fires those listeners. Also needs a mass/symmetric Gear scope and a count-derived draw amount (Amount has no 'perDestroyed'). Owner-confirmed 2026-08-19 as SYMMETRIC — both players' Gear."
+      "effects": [
+        {
+          "trigger": "onPlay",
+          "effects": [
+            {
+              "op": "destroy",
+              "target": "allGear"
+            },
+            {
+              "op": "draw",
+              "count": 0,
+              "perDestroyed": true
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "dd000083",
@@ -1047,7 +1100,7 @@
       "name": "Blessing of the Spires",
       "level": 2,
       "type": "Construct",
-      "subtype": "Performance",
+      "subtype": "Blessing",
       "rarity": "Common",
       "class1": "Paladin",
       "class2": "",
@@ -1071,7 +1124,7 @@
       "name": "Declaration of Wardship",
       "level": 3,
       "type": "Construct",
-      "subtype": "Utterance",
+      "subtype": "Blessing",
       "rarity": "Uncommon",
       "class1": "Paladin",
       "class2": "",
@@ -1094,7 +1147,7 @@
       "name": "Consecrate the Ground",
       "level": 3,
       "type": "Construct",
-      "subtype": "Utterance",
+      "subtype": "Blessing",
       "rarity": "Rare",
       "class1": "Paladin",
       "class2": "",
@@ -1110,14 +1163,24 @@
       "dev": true,
       "createdAt": "2026-08-19T00:00:00.000000Z",
       "updatedAt": "2026-08-19T00:00:00.000000Z",
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): no `destroy` op exists anywhere in the effect vocabulary, and NO card in any pool has ever printed 'Destroy'. `sacrifice` is NOT a substitute: canon makes sacrifice a distinct event that fires on-sacrifice listeners (Siegeworks), which destruction must not. Needs a new primitive AND an owner ruling on whether destroy fires those listeners. Plus the union target spec (see dd000077)."
+      "effects": [
+        {
+          "trigger": "onEnter",
+          "effects": [
+            {
+              "op": "destroy",
+              "target": "gearOrPhysicalConstruct"
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "dd000093",
       "name": "The Oath at Stonefern",
       "level": 4,
       "type": "Construct",
-      "subtype": "Utterance",
+      "subtype": "Blessing",
       "rarity": "Rare",
       "class1": "Paladin",
       "class2": "",
@@ -1202,7 +1265,22 @@
       "dev": true,
       "createdAt": "2026-08-19T00:00:00.000000Z",
       "updatedAt": "2026-08-19T00:00:00.000000Z",
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): no `destroy` op exists anywhere in the effect vocabulary, and NO card in any pool has ever printed 'Destroy'. `sacrifice` is NOT a substitute: canon makes sacrifice a distinct event that fires on-sacrifice listeners (Siegeworks), which destruction must not. Needs a new primitive AND an owner ruling on whether destroy fires those listeners."
+      "effects": [
+        {
+          "trigger": "onPlay",
+          "effects": [
+            {
+              "op": "destroy",
+              "target": "anyGear"
+            },
+            {
+              "op": "heal",
+              "amount": 2,
+              "target": "anyCharacter"
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "dd000096",
@@ -1225,7 +1303,18 @@
       "dev": true,
       "createdAt": "2026-08-19T00:00:00.000000Z",
       "updatedAt": "2026-08-19T00:00:00.000000Z",
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): no `destroy` op exists anywhere in the effect vocabulary, and NO card in any pool has ever printed 'Destroy'. `sacrifice` is NOT a substitute: canon makes sacrifice a distinct event that fires on-sacrifice listeners (Siegeworks), which destruction must not. Needs a new primitive AND an owner ruling on whether destroy fires those listeners. Plus 'up to N' targeting, which exists ONLY as `animate.max` and has no general form. OWNER RULING 2026-08-19: castable when at least ONE legal target exists; refuses at zero, per the universal pre-cost refusal."
+      "effects": [
+        {
+          "trigger": "onPlay",
+          "effects": [
+            {
+              "op": "destroy",
+              "target": "physicalConstruct",
+              "max": 2
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "dd000097",

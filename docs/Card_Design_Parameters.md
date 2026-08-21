@@ -330,7 +330,18 @@ Three distinct trigger conditions:
 - **Subtype:** Incantation
 
 **Vocal Constructs** (Bards, Doom-Whisperers, Druids, Paladins)
-- **Subtypes:** Performance, Utterance
+- **Subtypes:** Chant, Song (Bard) · Utterance, Dirge (Doom-Whisperer) · Rite (Druid) · Blessing (Paladin)
+- **Rules Note (owner-ruled 2026-08-19) — Rite and Blessing named; Performance RETIRED.**
+  Druid Vocal Constructs are **Rites**, Paladin's are **Blessings**. Both classes already
+  held Vocal access in this document (the class list above, and their class entries: the
+  Druid's "rituals", the Paladin's "blessings, oaths, declarations") — what this ruling
+  adds is the NAMED subtype for each, so their cards stop borrowing Doom-Whisperer's
+  Utterance. **"Performance" is retired entirely**: it appeared only here and in the Bard
+  entry, contradicting Master_Keyword_List, which has always listed Chant/Song/Dirge/
+  Utterance and never Performance. Bard's Vocal subtypes are Chant and Song per that
+  document. Rite and Blessing carry PLAIN Vocal behaviour — Anchor counters and decay,
+  nothing more — unless an individual card says otherwise; no engine behaviour keys on a
+  Vocal subtype name (swept 2026-08-19).
 
 ### Construct Abilities
 - **Can have:** Static effects, triggered effects, entry/exit effects
@@ -1091,7 +1102,7 @@ All companions start with base stats equal to their level (Level 2 = 2/2, Level 
 - Wide variety of animal companions (beasts, spirits, fungal creatures)
 - Evasive, Overkill, Guardian on companions
 - Untamed keyword (bonus when no gear/physical constructs)
-- Incantation and Vocal Constructs (rituals, chants, elemental effects)
+- Incantation and Vocal Constructs (Rites — rituals, chants, elemental effects)
 
 **Restrictions:**
 - âŒ No nature corruption (blight, rot, corrupted ecosystems)
@@ -1108,7 +1119,7 @@ All companions start with base stats equal to their level (Level 2 = 2/2, Level 
 - Inspire (grants Inspired: +1 Willpower, doesn't stack)
 - Heavy use of defensive companions
 - Gear emphasis (armor, relics, shields)
-- Vocal Constructs (blessings, oaths, declarations)
+- Vocal Constructs (Blessings — consecrations, oaths, declarations)
 - Targeted damage to "evil" aligned creatures (zombies, goblins, blight)
 - Board sweepers and light-based magic
 
@@ -1255,7 +1266,7 @@ All companions start with base stats equal to their level (Level 2 = 2/2, Level 
 ### ðŸŽ¶ BARD
 **Core Mechanics:**
 - Performance and social manipulation
-- Vocal Constructs (Performances and some Utterances)
+- Vocal Constructs (Chants and Songs; some Utterances)
 - Buff allies and debuff enemies
 - Card draw and hand manipulation
 - Flexible companion types (can befriend various roles)
@@ -1615,7 +1626,7 @@ Within the established constraints, designers should:
   - "Construct - Physical - Fortification"
   - "Construct - Physical - Trap"
   - "Construct - Magic - Incantation"
-  - "Construct - Vocal - Performance"
+  - "Construct - Vocal - Rite"
   - "Construct - Vocal - Utterance"
 
 **ACTIONS:**

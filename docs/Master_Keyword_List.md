@@ -198,7 +198,7 @@ This document consolidates all keywords from Game Rules, Keyword Glossary, and C
 - "The magic anchoring it to the field begins to fray..."
 
 ### Vocal Constructs
-*Used by: Bards, Doom-Whisperers*
+*Used by: Bards, Doom-Whisperers, Druids, Paladins*
 
 **CHANT** - Repetitive rhythmic effects
 - "The echoes fade, and with them, its influence..."
@@ -207,6 +207,12 @@ This document consolidates all keywords from Game Rules, Keyword Glossary, and C
 - "The echoes fade, and with them, its influence..."
 
 **DIRGE** - Dark, mournful incantations
+- "The echoes fade, and with them, its influence..."
+
+**RITE** (Druid) - Seasonal and growth rites spoken to the wild
+- "The echoes fade, and with them, its influence..."
+
+**BLESSING** (Paladin) - Consecrations, oaths, and declarations of light
 - "The echoes fade, and with them, its influence..."
 
 **UTTERANCE** (Doom-Whisperer Exclusive) - Spoken compulsions, threats, or commands

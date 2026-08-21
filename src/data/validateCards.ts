@@ -39,6 +39,8 @@ const TARGET_SPECS = [
   'anyCompanion', 'enemyCompanion', 'ownCompanion',
   'anyConstruct', 'physicalConstruct', 'magicalConstruct',
   'anyItem', 'targetPlayer',
+  // Gear targeting + mass Gear (Arc A, 2026-08-19)
+  'anyGear', 'gearOrPhysicalConstruct', 'allGear',
   'self', 'allEnemies', 'allEnemyCompanions', 'ownCompanions', 'ownPhysicalConstructs', 'ownMagicalConstructs',
   'frontLineOwn', 'frontLineEnemy', 'backLineEnemy', 'sameLineAsTarget', 'ownParty',
   'damagedController', 'eventSubject',
@@ -53,6 +55,7 @@ const OPS = [
   'lineWard', 'exhaustSelf', 'exhaust', 'modal', 'gainControl', 'suppressKeywords', 'counterAction',
   'grantKeywords', 'backLineAttack', 'preventDamage', 'firstMagicUncounterable', 'restrictAttack', 'restrictMove',
   'forcedSacrifice',
+  'destroy',
 ] as const satisfies readonly Effect['op'][];
 export type _ExhaustiveOps = AssertNever<Exclude<Effect['op'], (typeof OPS)[number]>>;
 
@@ -152,7 +155,12 @@ function validateEffect(e: Effect, path: string, p: (msg: string) => void, keywo
       if (e.where?.line !== undefined && e.where.line !== 'front' && e.where.line !== 'back') p(`${path}(buff): bad where.line`);
       break;
     case 'draw':
-      count('count');
+      // perDestroyed (Arc A, 2026-08-19) supplies the count at resolution — how many
+      // permanents THIS resolution destroyed — so the authored `count` is inert and
+      // the >=1 floor would be meaningless. Everything else still needs a real count.
+      if (e.perDestroyed) {
+        if (e.count !== 0) p(`${path}(draw): perDestroyed supplies the count — author count: 0`);
+      } else count('count');
       if (e.if !== undefined && !validCondition(e.if)) p(`${path}(draw): bad condition ${JSON.stringify(e.if)}`);
       break;
     case 'discard':

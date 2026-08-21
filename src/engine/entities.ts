@@ -65,6 +65,49 @@ export function deadCardsOf(ent: BoardEntity): Card[] {
   return names.map(n => CATALOG.find(c => c.name === n)).filter((c): c is Card => !!c);
 }
 
+/** Every Gear item currently equipped, across BOTH boards, as {itemId, bearerId, owner,
+ *  name}. Gear only — weapons are excluded (canon splits Items into Weapons and Gear;
+ *  "target Gear" never reaches a weapon). Deduped by item id: a heavy piece occupies
+ *  both gear slots but is ONE item and must be offered once. (Arc A, 2026-08-19.) */
+export function gearItemsOf(game: GameState): { itemId: string; bearerId: string; owner: 'p1' | 'p2'; name: string }[] {
+  const out: { itemId: string; bearerId: string; owner: 'p1' | 'p2'; name: string }[] = [];
+  for (const side of ['p1', 'p2'] as const) {
+    for (const ent of Object.values(game[side].board)) {
+      if (!ent?.loadout) continue;
+      const seen = new Set<string>();
+      for (const gi of ent.loadout.gear) {
+        if (!gi || seen.has(gi.id)) continue;
+        seen.add(gi.id);
+        // Ownership routes zones, never board membership (Arc I ruling 4).
+        out.push({ itemId: gi.id, bearerId: ent.id, owner: ent.stolenFrom ?? side, name: gi.name });
+      }
+    }
+  }
+  return out;
+}
+
+/** Destroy one equipped Gear item: strip it from its bearer's loadout and put its CARD
+ *  in the OWNER's Dead Zone (recoverable). Extracted from the inline disarm path so the
+ *  two removals cannot drift. A heavy piece occupying both slots clears from both.
+ *  (Arc A, 2026-08-19.) */
+export function destroyItemById(game: GameState, itemId: string): { game: GameState; msgs: string[]; destroyed: boolean } {
+  for (const side of ['p1', 'p2'] as const) {
+    for (const ent of Object.values(game[side].board)) {
+      const lo = ent?.loadout;
+      if (!ent || !lo) continue;
+      const hit = lo.gear.find(gi => gi?.id === itemId);
+      if (!hit) continue;
+      const newLo = { ...lo, gear: lo.gear.map(gi => gi?.id === itemId ? null : gi) };
+      let g = updateEntity(game, ent.id, { loadout: newLo });
+      const owner: 'p1' | 'p2' = ent.stolenFrom ?? side;
+      const card = CATALOG.find(c => c.name === hit.name);
+      if (card) g = { ...g, [owner]: { ...g[owner], dead: [...g[owner].dead, card] } };
+      return { game: g, msgs: [`${hit.name} is destroyed (from ${ent.name})`], destroyed: true };
+    }
+  }
+  return { game, msgs: [], destroyed: false };
+}
+
 /** The catalog cards of an entity's equipped items (deduped — a heavy item is one card). */
 export function itemCardsOf(ent: BoardEntity): Card[] {
   const seen = new Set<string>();
@@ -161,7 +204,7 @@ export function canBeSacrificed(ent: BoardEntity): boolean {
  *  and death-cause-conditional removal triggers ("if it died to damage" — Cult
  *  Fanatic) gate on it in resolveRemovalTriggers. An unknowable cause is a BUG:
  *  the required parameter makes a new call site without one fail to compile. */
-export function destroyEntity(game: GameState, entityId: string, sink: PendingDeadPick[] | undefined, armorSink: ArmorChoiceData[] | undefined, cause: 'damage' | 'sacrifice'): { game: GameState; msgs: string[] } {
+export function destroyEntity(game: GameState, entityId: string, sink: PendingDeadPick[] | undefined, armorSink: ArmorChoiceData[] | undefined, cause: 'damage' | 'sacrifice' | 'destroy'): { game: GameState; msgs: string[] } {
   const loc = findEntityAnywhere(game, entityId);
   if (!loc) return { game, msgs: [] };
   // Arc I (2026-08-11, ruling 4): OWNERSHIP routes zones. A stolen companion

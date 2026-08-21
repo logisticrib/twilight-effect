@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist, subscribeWithSelector } from 'zustand/middleware';
 import { recordActions } from './recordMiddleware';
 import type { BoardEntity, Card, TapState } from '../types/card';
-import type { Effect } from '../types/effects';
+import type { Effect, TargetSpec } from '../types/effects';
 import { CATALOG, SORCERER_WARRIOR_CARDS, WIZARD_BUILDER_CARDS } from '../data/catalog';
 import { recomputeStatics, isImmuneToSplash, HIT_RUN_STATUS,
          isPhysicalConstruct, parseEnterTrigger, type EnterTriggerKind,
@@ -88,7 +88,10 @@ export interface PendingActionTarget {
   sourceId?: string; // present when source === 'enter' (for 'self' targeting)
   // Two-step (Tactical Reposition: char→slot; Disarming Blow: attacker→enemy;
   // Field Engineer: Physical Construct → Physical Construct anchor move).
-  twoStep?: 'reposition' | 'disarm' | 'moveAnchor' | 'gainControl';
+  // Arc A (2026-08-19) adds the two destroy kinds. They differ from the others in
+  // that STEP 1 mutates the board, so cancelling at step 2 commits (see
+  // cancelActionTarget) instead of returning the card to hand.
+  twoStep?: 'reposition' | 'disarm' | 'moveAnchor' | 'gainControl' | 'destroyThenHeal' | 'destroyUpTo';
   firstId?: string;            // the first chosen entity (set on step 2)
   eligibleSlots?: SlotId[];    // clickable empty slots when step 2 is a slot pick
 }
@@ -1495,8 +1498,14 @@ export const useGameStore = create<GameStoreState>()(
     const ts = twoStepKind(onPlay);
     if (ts) {
       const gcOp = onPlay.find(e => e.op === 'gainControl');
-      const eligibleIds = ts === 'gainControl' && gcOp && gcOp.op === 'gainControl' && isInteractiveSpec(gcOp.target)
-        ? filterEligibleByEffects(g0, eligibleTargets(g0, lp, gcOp.target), onPlay)
+      // Arc A (2026-08-19): for the destroy two-steps, STEP 1 is the destroy target
+      // (Gear / Physical Construct / the union), NOT one of the caster's characters.
+      const dOp = onPlay.find(e => e.op === 'destroy');
+      const eligibleIds =
+        (ts === 'destroyThenHeal' || ts === 'destroyUpTo') && dOp && dOp.op === 'destroy'
+          ? filterEligibleByEffects(g0, eligibleTargets(g0, lp, dOp.target), onPlay)
+        : ts === 'gainControl' && gcOp && gcOp.op === 'gainControl' && isInteractiveSpec(gcOp.target)
+          ? filterEligibleByEffects(g0, eligibleTargets(g0, lp, gcOp.target), onPlay)
         : charsOf(g0, lp);
       const newHand = g0[lp].hand.filter(c => c.id !== handCardId);
       if (eligibleIds.length === 0) {
@@ -1583,6 +1592,38 @@ export const useGameStore = create<GameStoreState>()(
         const emptySlots = [...FRONT_SLOTS, ...BACK_SLOTS].filter(sl => !s.game[pa.lp].board[sl]);
         return { pendingActionTarget: { ...pa, firstId: targetId, eligibleIds: [], eligibleSlots: emptySlots } };
       }
+      // Arc A (2026-08-19): STEP 1 DESTROYS, then arms the second pick. Unlike every
+      // other twoStep kind, this one has already changed the board by the time step 2
+      // is offered — which is why cancelActionTarget commits for these kinds.
+      if (pa.twoStep === 'destroyThenHeal' || pa.twoStep === 'destroyUpTo') {
+        const destroyEff = pa.effects.filter(e => e.op === 'destroy');
+        const r = resolveActionEffects(s.game, pa.lp, pa.sourceName, destroyEff, targetId, pa.sourceId,
+                                       magicCtx(s.game, pa.lp, pa.card));
+        let g = r.game;
+        const msgs = [...r.msgs];
+        // What step 2 offers: the heal's own targets, or the constructs still standing.
+        const rest = pa.effects.filter(e => e.op !== 'destroy');
+        const spec = pa.twoStep === 'destroyThenHeal'
+          ? actionTargetSpec(rest)
+          : (pa.effects.find(e => e.op === 'destroy') as { target: TargetSpec } | undefined)?.target ?? null;
+        const nextEligible = spec ? eligibleTargets(g, pa.lp, spec).filter(id => id !== targetId) : [];
+        if (nextEligible.length) {
+          const id0 = ++toastId;
+          setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id0) })), 4000);
+          return { game: g, pendingActionTarget: { ...pa, firstId: targetId, eligibleIds: nextEligible },
+                   toasts: [...s.toasts, { id: id0, msg: `${pa.sourceName}: ${msgs.join(' | ')}` }] };
+        }
+        // Nothing left to pick — finish now rather than stranding an empty prompt.
+        if (pa.twoStep === 'destroyThenHeal' && rest.length) {
+          const r2 = resolveActionEffects(g, pa.lp, pa.sourceName, rest, undefined, pa.sourceId, magicCtx(g, pa.lp, pa.card));
+          g = r2.game; msgs.push(...r2.msgs);
+        }
+        const done = pa.card ? { ...g, [pa.lp]: { ...g[pa.lp], dead: [...g[pa.lp].dead, pa.card] } } : g;
+        const id1 = ++toastId;
+        setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id1) })), 4000);
+        return { game: recomputeStatics(done), pendingActionTarget: null,
+                 toasts: [...s.toasts, { id: id1, msg: `${pa.sourceName}: ${msgs.join(' | ')}` }] };
+      }
       if (pa.twoStep === 'reposition') {
         // Effect-driven repositioning is still MOVEMENT (R3, owner 2026-07-15): an
         // opposing between-lines restriction removes cross-line destinations here,
@@ -1623,6 +1664,19 @@ export const useGameStore = create<GameStoreState>()(
       const id = ++toastId;
       setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 4000);
       return { game: recomputeStatics(armPrompts(g, deadSink, armorSink)), pendingActionTarget: null, toasts: [...s.toasts, { id, msg: `${pa.sourceName}: ${msgs.join(' | ')}` }] };
+    }
+    if ((pa.twoStep === 'destroyThenHeal' || pa.twoStep === 'destroyUpTo') && pa.firstId) {
+      // Step 2: the heal's chosen target, or the second destroy.
+      const step2 = pa.twoStep === 'destroyThenHeal'
+        ? pa.effects.filter(e => e.op !== 'destroy')
+        : (pa.effects.filter(e => e.op === 'destroy') as Effect[]);
+      const r = resolveActionEffects(s.game, pa.lp, pa.sourceName, step2, targetId, pa.sourceId,
+                                     magicCtx(s.game, pa.lp, pa.card));
+      const done = pa.card ? { ...r.game, [pa.lp]: { ...r.game[pa.lp], dead: [...r.game[pa.lp].dead, pa.card] } } : r.game;
+      const id = ++toastId;
+      setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 4000);
+      return { game: recomputeStatics(done), pendingActionTarget: null,
+               toasts: [...s.toasts, { id, msg: `${pa.sourceName}: ${r.msgs.join(' | ')}` }] };
     }
     if (pa.twoStep === 'disarm' && pa.firstId) {
       // Step 2: attacker (firstId) attacks the chosen enemy, then sacrifice an item on it.
@@ -2020,6 +2074,14 @@ export const useGameStore = create<GameStoreState>()(
   cancelActionTarget: () => set(s => {
     const pa = s.pendingActionTarget;
     if (!pa) return { pendingActionTarget: null };
+    // Arc A (2026-08-19): for the destroy two-steps, STEP 1 already destroyed something.
+    // "Skip" at step 2 means STOP (an "up to two" that takes one), never undo — so the
+    // card goes to the Dead Zone like any resolved Action. Rolling it back to hand here
+    // would hand the player a free destroy.
+    if (pa.firstId && (pa.twoStep === 'destroyThenHeal' || pa.twoStep === 'destroyUpTo')) {
+      const g = pa.card ? { ...s.game, [pa.lp]: { ...s.game[pa.lp], dead: [...s.game[pa.lp].dead, pa.card] } } : s.game;
+      return { pendingActionTarget: null, game: g };
+    }
     if (pa.source === 'action' && pa.card) {
       return {
         pendingActionTarget: null,

@@ -10,7 +10,8 @@ import { CATALOG } from '../data/catalog';
 import { isFront } from './geometry';
 import type { GameState, PendingDeadPick, ArmorChoiceData } from './state';
 import { charsOf, companionIds, constructIds, findEntityAnywhere, updateEntity,
-         removeEntity, destroyEntity, setPcHp, pcIdOf, itemCardsOf, itemTransferOf, canBeSacrificed } from './entities';
+         removeEntity, destroyEntity, setPcHp, pcIdOf, itemCardsOf, itemTransferOf, canBeSacrificed,
+         gearItemsOf, destroyItemById } from './entities';
 import { isPhysicalConstruct, currentWillpower, effectiveAttack, effectiveMaxHp, isImmuneToSplash, isCharacter, poisonHitPatch } from './stats';
 // Function-level cycle with combat.ts (resolveActionEffects deals damage; combat
 // triggers resolve effects). Safe: hoisted functions, called only at runtime.
@@ -77,6 +78,10 @@ const INTERACTIVE_SPECS: TargetSpec[] = [
   'anyCharacter', 'enemyCharacter', 'ownCharacter', 'otherCharacter',
   'anyCompanion', 'enemyCompanion', 'ownCompanion',
   'anyConstruct', 'physicalConstruct', 'magicalConstruct',
+  // Arc A (2026-08-19): Gear picks resolve to ITEM ids, not board-entity ids — the
+  // pick surface is the bearer's loadout panel. 'allGear' is auto-scoped and is
+  // deliberately NOT here.
+  'anyGear', 'gearOrPhysicalConstruct',
 ];
 export function isInteractiveSpec(spec: TargetSpec): boolean { return INTERACTIVE_SPECS.includes(spec); }
 
@@ -93,6 +98,12 @@ export function eligibleTargets(game: GameState, lp: 'p1' | 'p2', spec: TargetSp
     case 'physicalConstruct': return constructIds(game, isPhysicalConstruct);
     case 'magicalConstruct':  return constructIds(game, e => e.subtype === 'Incantation');
     case 'anyConstruct':      return constructIds(game, () => true);
+    // Arc A (2026-08-19). "Target Gear" carries no controller qualifier in canon, so
+    // BOTH sides' Gear is legal. The union spec mixes item ids and construct entity
+    // ids in one list — resolution disambiguates by looking for an item first.
+    case 'anyGear':               return gearItemsOf(game).map(x => x.itemId);
+    case 'gearOrPhysicalConstruct':
+      return [...gearItemsOf(game).map(x => x.itemId), ...constructIds(game, isPhysicalConstruct)];
     default: return [];
   }
 }
@@ -129,6 +140,7 @@ export function effectTargetSpec(e: Effect): TargetSpec | null {
     // pick. Shipped exhaust targets (self / eventSubject) are not interactive → null,
     // exactly as before.
     case 'exhaust':
+    case 'destroy':
     case 'forceAttack': return isInteractiveSpec(e.target) ? e.target : null;
     case 'dieCheck': {
       // The branch effects choose the target up-front (declared before the roll).
@@ -264,7 +276,15 @@ export function actionTargetSpec(effects: Effect[]): TargetSpec | null {
 }
 
 /** A two-step action (pick own char, then a slot or an enemy), or null. */
-export function twoStepKind(effects: Effect[]): 'reposition' | 'disarm' | 'moveAnchor' | 'gainControl' | null {
+export function twoStepKind(effects: Effect[]): 'reposition' | 'disarm' | 'moveAnchor' | 'gainControl' | 'destroyThenHeal' | 'destroyUpTo' | null {
+  // Arc A (2026-08-19). Checked FIRST: a destroy card can carry an interactive rider
+  // (Sanctify's heal) or an "up to N" cap, and either makes it a two-step pick.
+  const destroy = effects.find(e => e.op === 'destroy');
+  if (destroy && destroy.op === 'destroy') {
+    if ((destroy.max ?? 1) > 1) return 'destroyUpTo';
+    const rider = effects.find(e => e !== destroy && isInteractiveSpec(effectTargetSpec(e) ?? 'self'));
+    if (rider) return 'destroyThenHeal';
+  }
   for (const e of effects) {
     if (e.op === 'move' && e.to === 'anySlot' && e.target === 'ownCharacter') return 'reposition';
     if (e.op === 'attackDisarm') return 'disarm';
@@ -289,6 +309,9 @@ export function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceNam
   const msgs: string[] = [];
   if (usesDie) msgs.push(`Rolled ${die}`);
   let g = game;
+  // How many permanents THIS resolution destroyed — read by a following
+  // `draw.perDestroyed` (Let the Wild In). Arc A, 2026-08-19.
+  let destroyedThisResolution = 0;
 
   for (const e of effects) {
     switch (e.op) {
@@ -415,8 +438,12 @@ export function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceNam
       }
       case 'draw': {
         if (e.if && !conditionMet(g, lp, e.if)) break;
+        // perDestroyed (Arc A): "draw a card for each Gear destroyed this way" — the
+        // count is what THIS resolution actually destroyed, so a destroy that found
+        // nothing draws nothing.
+        const want = e.perDestroyed ? destroyedThisResolution : e.count;
         let drawn = 0;
-        for (let i = 0; i < e.count; i++) {
+        for (let i = 0; i < want; i++) {
           const ps = g[lp];
           if (ps.deck.length === 0) break;
           const [d, ...rest] = ps.deck;
@@ -620,6 +647,34 @@ export function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceNam
           if (loc.ent.exhausted || loc.ent.tapped === 'major') { msgs.push(`${loc.ent.name} is already exhausted`); continue; }
           g = updateEntity(g, id, { exhausted: true, tapped: 'major' });
           msgs.push(`${loc.ent.name} is exhausted`);
+        }
+        break;
+      }
+      case 'destroy': {
+        // DESTROY (Arc A, owner-ratified 2026-08-19) — a DIFFERENT EVENT from sacrifice.
+        // Destruction never fires on-sacrifice listeners: destroyEntity only gathers an
+        // on-sacrifice eventBoard when cause === 'sacrifice', so threading 'destroy'
+        // here is the whole mechanism. Generic leave/death triggers fire for both, and
+        // the destroyed card lands in its OWNER's Dead Zone either way.
+        //
+        // FAMILY C (Untamed) DEPENDENCY: Untamed reads live encounter contents ("no Gear
+        // or Physical Constructs in the encounter"). Both removal paths below fully
+        // detach — destroyItemById nulls the loadout slot(s) and destroyEntity removes
+        // the entity — so no stale reference survives for a future encounter-wide scan
+        // to miscount. Do not "soft-remove" here.
+        const ids: string[] = e.target === 'allGear'
+          ? gearItemsOf(g).map(x => x.itemId)              // symmetric: BOTH players' Gear
+          : targetId ? [targetId] : [];
+        for (const id of ids) {
+          // Items first: the union spec can hand us either kind of id.
+          const r = destroyItemById(g, id);
+          if (r.destroyed) { g = r.game; msgs.push(...r.msgs); destroyedThisResolution++; continue; }
+          const loc = findEntityAnywhere(g, id);
+          if (!loc) continue;                              // already gone this resolution
+          const d = destroyEntity(g, id, sink, armorSink, 'destroy');
+          g = d.game;
+          msgs.push(`${loc.ent.name} is destroyed`, ...d.msgs);
+          destroyedThisResolution++;
         }
         break;
       }

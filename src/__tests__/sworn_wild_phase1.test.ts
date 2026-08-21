@@ -40,7 +40,17 @@ describe('Sworn Wild — deck data contract', () => {
 
   it('every unimplemented behavior is FLAGGED, never silent (visible machinery debt)', () => {
     const flagged = SWORN_WILD_DEV_CARDS.filter(c => c.effectsFlag?.startsWith('DEV NOT-IMPLEMENTED'));
-    expect(flagged.length, '26 cards await engine arcs').toBe(26);
+    // RETIRED + REWRITTEN 2026-08-19 (Arc A): this pinned the Phase-1 snapshot of 26.
+    // Arc A cleared the seven family-A (destroy) cards, so the count is 19 — and the
+    // pin now names WHICH cards went live, which is the fact worth protecting: a
+    // regression that silently re-flagged one of them would slip past a bare count.
+    const ARC_A = ['dd000075', 'dd000076', 'dd000077', 'dd000082', 'dd000092', 'dd000095', 'dd000096'];
+    for (const id of ARC_A) {
+      const c = SWORN_WILD_DEV_CARDS.find(x => x.id === id)!;
+      expect(c.effectsFlag, `${id} ${c.name} went live in Arc A`).toBeUndefined();
+      expect(c.effects?.length, `${id} carries real effects`).toBeGreaterThan(0);
+    }
+    expect(flagged.length, "19 cards still await engine arcs (26 minus Arc A's seven)").toBe(19);
     // A card is SILENT only if nothing at all carries its behavior: no effects, no
     // flag, and no printed keyword either. (Keyword reminder text is not silent — the
     // Armor carriers print a full clause that the live keyword honours, which is

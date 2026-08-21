@@ -93,6 +93,16 @@ export type TargetSpec =
   // auto-scoped groups (no selection)
   | 'self' | 'allEnemies' | 'allEnemyCompanions' | 'ownCompanions' | 'ownPhysicalConstructs' | 'ownMagicalConstructs'
   | 'frontLineOwn' | 'frontLineEnemy' | 'backLineEnemy' | 'sameLineAsTarget' | 'ownParty'
+  // Gear targeting (Arc A, 2026-08-19). Items are NOT board entities — they live in a
+  // character's `loadout` — so these resolve to ITEM ids, and the pick surface is the
+  // bearer's loadout panel. 'anyGear' is deliberately un-sided: canon's "target Gear"
+  // carries no controller qualifier, so either player's Gear is legal.
+  // 'gearOrPhysicalConstruct' is the first UNION spec (Unmake the Works / Consecrate
+  // the Ground) and can resolve to either an item id or a construct entity id.
+  | 'anyGear' | 'gearOrPhysicalConstruct'
+  // auto-scoped mass Gear (Let the Wild In) — SYMMETRIC, both players' Gear (owner
+  // 2026-08-19). No selection.
+  | 'allGear'
   // combat-trigger context (resolved from the event, not the board)
   | 'damagedController'    // the Player Character of the just-damaged entity's owner
   // reactive-trigger context (resolved from the queued trigger's event, not the board)
@@ -157,7 +167,13 @@ export type Effect =
   // the turn-start window) and strips at its end.
   | { op: 'buff'; stat?: 'atk' | 'hp'; amount?: number; grant?: string[]; modifiers?: Modifier[]; scope: TargetSpec; duration: 'endOfTurn' | 'while' | 'untilYourNextTurn' | 'controllersNextTurn' | 'controllersNextTurnStart'; where?: { line?: 'front' | 'back'; cls?: string } }
   // card / zone movement
-  | { op: 'draw'; count: number; if?: Condition }
+  // perDestroyed (Arc A, 2026-08-19 — Let the Wild In: "draw a card for each Gear
+  // destroyed this way"): the count is how many permanents THIS resolution actually
+  // destroyed, not a board delta and not the number targeted. `count` is ignored when
+  // set. No prevention-of-destruction mechanic exists in canon (swept 2026-08-19), so
+  // destroyed-count and resolved-destroys are the same number today; if such a
+  // mechanic is ever ruled, this is the site that must honour it.
+  | { op: 'draw'; count: number; if?: Condition; perDestroyed?: boolean }
   // discard (Arc A, 2026-07-22): the DISCARDING player chooses the card (owner
   // agency, the Coercion precedent). Engine-supported victim scopes: targetPlayer
   // (the opponent), damagedController (combat ctx), eventSubject (the subject's
@@ -200,6 +216,14 @@ export type Effect =
   | { op: 'forceAttack'; attackers: TargetSpec; target: TargetSpec }
   | { op: 'anchor'; delta: number; target: TargetSpec }     // Reinforce/Dismantle/Shore Up/Demolish
   | { op: 'sacrifice'; target: TargetSpec }
+  // destroy (Arc A, 2026-08-19). DISTINCT FROM SACRIFICE by owner ruling: destruction
+  // does NOT fire on-sacrifice listeners (Siegeworks stays silent), while generic
+  // leave/death triggers fire for both. Destroyed permanents go to their OWNER's Dead
+  // Zone — same destination as a sacrifice, different event. `max` caps an "up to N"
+  // (Break the Siegeworks): the caster picks them one at a time and may stop early,
+  // but per the universal pre-cost refusal the card refuses outright at ZERO legal
+  // targets (owner ruling 2026-08-19 — the precedent for every future "up to N").
+  | { op: 'destroy'; target: TargetSpec; max?: number }
   | { op: 'sacrificeItem'; target: TargetSpec }
   | { op: 'equipFromHand'; target: TargetSpec }
   | { op: 'animate'; atk: number; hp: number; target: TargetSpec; max?: number }  // Animate Magic X (max caps a group target, e.g. "up to two")
