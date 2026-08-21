@@ -53,5 +53,13 @@ export const KEYWORDS: Record<string, KeywordSpec> = {
   Paranoia:       { event: 'oppPlay', done: true,  note: "placeCard arms a controller-owned PendingPeek over the PLACING player's deck (top/bottom only)" },
 
   // ── Not yet implemented ───────────────────────────────────────────────────────
-  Untamed:        { event: 'static',  done: false, note: 'per-card text bonus (needs card data)' },
+  Untamed:        { event: 'static',  done: false, note: 'continuous encounter-wide state (no Gear / Physical Constructs) + the dd000066 entry-snapshot form; per-card text bonus' },
+  // Vocabulary added 2026-08-19 for the Sworn Wild dev deck. Both are DECLARED so their
+  // carriers validate; NEITHER has engine behavior yet (the Untamed precedent — the
+  // contract must not advertise implemented space, but it must name what cards print).
+  Tribute:        { event: 'enter',   done: false, note: 'additional cost to PLAY (Angel/Paladin exclusive). The Cost schema covers ACTIVATED abilities only — a play-time cost chokepoint does not exist. Unpayable = card stays in hand, nothing paid (universal pre-cost refusal)' },
+  // Printed parameterized as "Warded against [X]" — keywordBase strips the parameter the
+  // way it does for "[NAME]'s Bane". NOT to be confused with `lineWard`, an unrelated
+  // Fortification mechanic that shares the word.
+  Warded:         { event: 'damaged', done: false, note: 'canon: warded characters cannot be targeted, attacked, or damaged by cards of type or subtype [X]. No targeting/damage gate consults it' },
 };

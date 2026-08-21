@@ -81,7 +81,12 @@ const isInt = (v: unknown): v is number => typeof v === 'number' && Number.isInt
 
 /** Keyword base word — "Armor 2" / "Reinforce 3" carry a printed parameter;
  *  "Goblin's Bane" names its prey and resolves to the Bane contract entry. */
-const keywordBase = (kw: string) => /'s Bane$/.test(kw) ? 'Bane' : kw.replace(/ \d+$/, '');
+const keywordBase = (kw: string) =>
+  /'s Bane$/.test(kw) ? 'Bane'
+  // "Warded against Physical Actions" -> "Warded" (2026-08-19): the parameter is the
+  // warded-against type/subtype, stripped exactly as Bane's prey name is.
+  : /^Warded against /i.test(kw) ? 'Warded'
+  : kw.replace(/ \d+$/, '');
 
 function validAmount(a: unknown): boolean {
   if (typeof a === 'number') return Number.isFinite(a);

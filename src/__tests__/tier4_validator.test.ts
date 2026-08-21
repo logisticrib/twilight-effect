@@ -4,7 +4,7 @@
 // the validator actually catches each class of authoring mistake.
 import { describe, it, expect } from 'vitest';
 import { validateCards } from '../data/validateCards';
-import { CATALOG, SHIPPED_CATALOG, DW_ROGUE_DEV_CARDS } from '../data/catalog';
+import { CATALOG, SHIPPED_CATALOG, DW_ROGUE_DEV_CARDS, SWORN_WILD_DEV_CARDS } from '../data/catalog';
 import type { Card } from '../types/card';
 
 const base = CATALOG[0];
@@ -43,10 +43,16 @@ describe('data contract: the shipped decks validate clean', () => {
     expect(badDevFlags.map(c => c.name)).toEqual([]);
   });
 
-  it('dev cards are flagged dev:true, exactly the dw_rogue_dev_50 deck, and SHIPPED_CATALOG excludes them', () => {
-    expect(CATALOG.filter(c => c.dev).length).toBe(50);
-    expect(DW_ROGUE_DEV_CARDS.every(c => c.dev === true)).toBe(true);
-    expect(SHIPPED_CATALOG.length).toBe(CATALOG.length - 50);
+  // RETIRED + REWRITTEN 2026-08-19: this pinned "exactly the dw_rogue_dev_50 deck" and
+  // the literal 50 in two places. A SECOND dev deck landed (paladin_druid_dev_50, "Sworn
+  // Wild"), so the pin now spans both decks and DERIVES the count rather than repeating
+  // a magic number that has to be edited in lockstep with the data.
+  it('dev cards are flagged dev:true across BOTH dev decks, and SHIPPED_CATALOG excludes them', () => {
+    const devDecks = [...DW_ROGUE_DEV_CARDS, ...SWORN_WILD_DEV_CARDS];
+    expect(devDecks.length, 'two 50-card dev decks').toBe(100);
+    expect(devDecks.every(c => c.dev === true), 'every dev card carries dev:true').toBe(true);
+    expect(CATALOG.filter(c => c.dev).length, 'CATALOG carries exactly those').toBe(devDecks.length);
+    expect(SHIPPED_CATALOG.length).toBe(CATALOG.length - devDecks.length);
     expect(SHIPPED_CATALOG.some(c => c.dev)).toBe(false);
   });
 });
