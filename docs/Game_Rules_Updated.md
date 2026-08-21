@@ -132,6 +132,13 @@ Actions are one-time effects that resolve immediately and then move to the Dead 
 
 The supertype determines whether a Two-Handed weapon prevents the action from being played (Two-Handed weapons prevent Magic Actions but not Physical Actions).
 
+**Targeted Actions with no legal target.**
+- **Current behaviour (INTERIM):** a targeted Action played with no legal target FIZZLES — it resolves to nothing and the card is spent to the Dead Zone. This is what every targeted Action in the game does today.
+- **Rules Note (owner design intent, 2026-08-20) — DEFERRED, not yet built.** The ultimate rule is that a targeted Action with ZERO legal targets is **UNCASTABLE**: a cast-time legality gate refuses the play outright, so the card is never spent. Resolution-time fizzle SURVIVES this unchanged, for the different case where a legal target existed at cast and was removed in response — the two are distinct moments and coexist. Break the Siegeworks (dd000096) is the prototype for the cast-time half: "up to two" is castable at one or more legal targets and may stop after one.
+  - This note exists so that no future card, pin, or ruling treats fizzle-at-zero as *desirable*. It is interim behaviour awaiting implementation, and **any pin asserting it must say so.**
+  - Implementation is deliberately deferred to its own session: the gate is pool-wide (it touches the cast path every Action uses) and its pin set is unknown until diagnosed. Tracked in tasks/todo.md as a named post-program item.
+  - **Superseded (dated 2026-08-20):** an earlier note recorded dd000096 as "refusing at zero, card returning to hand" under the universal pre-cost refusal. That over-extended the precedent — the pre-cost refusal governs ACTIVATED ABILITIES, where refusal prevents paying a cost for nothing. Retired; dd000096 fizzles like every other targeted Action until the cast gate lands.
+
 ### GAME ZONES
 
 **Class Zone:**

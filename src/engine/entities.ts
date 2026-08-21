@@ -108,6 +108,70 @@ export function destroyItemById(game: GameState, itemId: string): { game: GameSt
   return { game, msgs: [], destroyed: false };
 }
 
+/** One row of the target-pick modal (Arc A follow-up, owner ruling 2026-08-20).
+ *  Gear is not rendered on the board, so a Gear pick is made in a dedicated picker —
+ *  and the owner's explicit requirement is that every entry names the character the
+ *  Gear is attached to. Described here rather than in the component so the requirement
+ *  is testable without a screenshot. */
+export interface PickEntry {
+  id: string;
+  kind: 'gear' | 'construct';
+  name: string;
+  /** Gear only: the character wearing it. The owner requirement. */
+  bearerName?: string;
+  /** Perspective-relative, like the synced player names: never a raw side id. */
+  ownerLabel: 'You' | 'Opponent';
+  /** Armor pieces only: counters REMAINING (they count DOWN post-inversion), and the
+   *  printed X, so a chooser can tell a nearly-spent piece from a fresh one. */
+  counters?: number;
+  armor?: number;
+  /** Any non-Armor-clause sentence the item prints (e.g. "Equipped character has +1 attack."). */
+  rider?: string;
+}
+
+/** The rider of an item's printed text: everything that is NOT the canonical Armor
+ *  clause or its "ARMOR N." label. Parenthetical restrictions are kept — they matter
+ *  to the chooser (the Magic Actions clause on Plate of the Standing Wall). */
+export function itemRiderText(text: string | undefined): string | undefined {
+  if (!text) return undefined;
+  const rest = text.split(/(?<=[.!?])\s+/)
+    .filter(sen => !/^ARMOR\s+\d+\.?$/i.test(sen.trim()))
+    .filter(sen => !/armor counter/i.test(sen))
+    .join(' ')
+    .trim();
+  return rest.length ? rest : undefined;
+}
+
+/** Describe an interactive pick's eligible ids for the picker modal. `viewer` is the
+ *  local player, so ownership reads "You" / "Opponent" from their seat. Ids that match
+ *  neither a Gear item nor a board entity are dropped rather than rendered blank. */
+export function describePickTargets(game: GameState, ids: string[], viewer: 'p1' | 'p2'): PickEntry[] {
+  const gearById = new Map(gearItemsOf(game).map(x => [x.itemId, x]));
+  const out: PickEntry[] = [];
+  for (const id of ids) {
+    const gi = gearById.get(id);
+    if (gi) {
+      const bearer = findEntityAnywhere(game, gi.bearerId)?.ent;
+      const piece = bearer?.loadout?.gear.find(x => x?.id === id) ?? null;
+      out.push({
+        id, kind: 'gear', name: gi.name,
+        bearerName: bearer?.name ?? 'unknown',
+        ownerLabel: gi.owner === viewer ? 'You' : 'Opponent',
+        ...(piece?.armor !== undefined ? { counters: piece.counters ?? 0, armor: piece.armor } : {}),
+        ...(itemRiderText(piece?.text) ? { rider: itemRiderText(piece?.text) } : {}),
+      });
+      continue;
+    }
+    const loc = findEntityAnywhere(game, id);
+    if (!loc) continue;
+    out.push({
+      id, kind: 'construct', name: loc.ent.name,
+      ownerLabel: (loc.ent.stolenFrom ?? loc.player) === viewer ? 'You' : 'Opponent',
+    });
+  }
+  return out;
+}
+
 /** The catalog cards of an entity's equipped items (deduped — a heavy item is one card). */
 export function itemCardsOf(ent: BoardEntity): Card[] {
   const seen = new Set<string>();

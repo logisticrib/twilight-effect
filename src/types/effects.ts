@@ -220,9 +220,13 @@ export type Effect =
   // does NOT fire on-sacrifice listeners (Siegeworks stays silent), while generic
   // leave/death triggers fire for both. Destroyed permanents go to their OWNER's Dead
   // Zone — same destination as a sacrifice, different event. `max` caps an "up to N"
-  // (Break the Siegeworks): the caster picks them one at a time and may stop early,
-  // but per the universal pre-cost refusal the card refuses outright at ZERO legal
-  // targets (owner ruling 2026-08-19 — the precedent for every future "up to N").
+  // (Break the Siegeworks): the caster picks them one at a time and may stop early.
+  // At ZERO legal targets the card FIZZLES like every other targeted Action — the card
+  // is spent (owner ruling 2026-08-20, RETIRING the earlier "refuses at zero, returns
+  // to hand" reading, which over-extended a precedent that governs ACTIVATED abilities).
+  // INTERIM: the owner's recorded design intent is a cast-time legality gate making a
+  // zero-target Action UNCASTABLE pool-wide — deferred to its own session. See
+  // Game_Rules_Updated §Action Supertypes, "Targeted Actions with no legal target".
   | { op: 'destroy'; target: TargetSpec; max?: number }
   | { op: 'sacrificeItem'; target: TargetSpec }
   | { op: 'equipFromHand'; target: TargetSpec }

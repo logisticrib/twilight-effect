@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useGameStore, itemTransferCandidates, reactiveLabel, canBeSacrificed } from '../store/gameStore';
 import type { BoardEntity } from '../types/card';
+import { describePickTargets } from '../engine/entities';
 import { useMultiplayer } from '../lib/useMultiplayer';
 import { CardFace } from '../components/CardFace';
 import { TBL, Z } from '../tokens';
@@ -84,6 +85,7 @@ function GameView() {
       <ModalChoiceHost />
       <ItemTransferModal />
       <ArmorModal />
+      <GearPickModal />
       <PreventOrderModal />
       <AttackChoiceModal />
       <ForcedSacrificeModal />
@@ -166,9 +168,18 @@ function KitItemModal() {
 /** Banner shown while an Action card awaits its target. */
 function ActionPrompt() {
   const pa = useGameStore(s => s.pendingActionTarget);
+  const game = useGameStore(s => s.game);
+  const localPlayer = useGameStore(s => s.localPlayer);
   const cancelActionTarget = useGameStore(s => s.cancelActionTarget);
   if (!pa) return null;
-  const text = pa.twoStep && !pa.firstId ? 'Click one of your characters.'
+  // Arc A: a Gear pick is made in GearPickModal, not on the board — Gear is worn, so
+  // there is nothing on the mat to click. The modal carries its own affordances.
+  if (describePickTargets(game, pa.eligibleIds, localPlayer).some(e => e.kind === 'gear')) return null;
+  const destroyStep = pa.twoStep === 'destroyUpTo' || pa.twoStep === 'destroyThenHeal';
+  const text = destroyStep && pa.firstId && pa.twoStep === 'destroyThenHeal' ? 'Click the character to heal.'
+    : destroyStep && pa.firstId ? 'Click a second target, or Skip to stop at one.'
+    : destroyStep ? 'Click a highlighted target to destroy.'
+    : pa.twoStep && !pa.firstId ? 'Click one of your characters.'
     : pa.twoStep === 'reposition' && pa.firstId ? 'Click an empty slot to move to.'
     : pa.twoStep === 'disarm' && pa.firstId ? 'Click an enemy to attack.'
     : 'Click a highlighted target.';
@@ -572,6 +583,60 @@ function ArmorModal() {
       })}
       onPick={id => resolveArmor(id as string)}
       pickTitle={n => `${n} absorbs the hit`}
+    />
+  );
+}
+
+/** Gear / union target picker (owner ruling 2026-08-20). Gear is not rendered on the
+ *  board — it lives inside a character's loadout — so a Gear pick cannot be a board
+ *  click. This is the dedicated picker, same family as ArmorModal.
+ *
+ *  The owner's explicit requirement: every entry names the character the Gear is
+ *  attached to. Entries are built by describePickTargets (engine-side, so the
+ *  requirement is unit-tested rather than eyeballed), and carry remaining armor
+ *  counters — they count DOWN post-inversion — plus any rider line, so the chooser can
+ *  tell a nearly-spent piece from a fresh one.
+ *
+ *  Renders ONLY when the eligible set contains Gear: a constructs-only pick (The Ground
+ *  Reclaims, Break the Siegeworks) stays a board click, and a mass destroy (Let the Wild
+ *  In) has nothing to choose and never arms a pick at all.
+ *
+ *  MP: pendingActionTarget is store-local, so this exists only on the acting client —
+ *  no localPlayer gate is needed or correct here (unlike the game-state pendings). */
+function GearPickModal() {
+  const pa = useGameStore(s => s.pendingActionTarget);
+  const game = useGameStore(s => s.game);
+  const localPlayer = useGameStore(s => s.localPlayer);
+  const resolveActionTarget = useGameStore(s => s.resolveActionTarget);
+  const cancelActionTarget = useGameStore(s => s.cancelActionTarget);
+  if (!pa || pa.eligibleSlots?.length) return null;
+  const entries = describePickTargets(game, pa.eligibleIds, localPlayer);
+  if (!entries.some(e => e.kind === 'gear')) return null;   // board-clickable pick
+
+  // "Up to two" (destroyUpTo) is the only optional second pick: Skip stops at one.
+  const isSecondOfUpTo = pa.twoStep === 'destroyUpTo' && !!pa.firstId;
+  return (
+    <CardPickModal glyph="✖" eyebrow={pa.sourceName}
+      title={isSecondOfUpTo ? 'Destroy a second target?' : 'Choose a target to destroy'}
+      sub="Gear is worn, not on the board — pick it here. Each entry names the character carrying it."
+      picks={entries.map(e => ({
+        key: e.id,
+        name: e.name,
+        caption: (
+          <span style={{ display: 'inline-block', maxWidth: 150, textAlign: 'center', fontFamily: "'Inter', sans-serif", fontSize: 11, color: TBL.ink2, lineHeight: 1.35 }}>
+            {e.kind === 'gear'
+              ? <>on <b style={{ color: TBL.ink }}>{e.bearerName}</b> ({e.ownerLabel})</>
+              : <>Physical Construct ({e.ownerLabel})</>}
+            {e.counters !== undefined && (
+              <><br /><span style={{ fontFamily: "'JetBrains Mono', monospace", color: TBL.amber2 }}>{e.counters}/{e.armor} counters left</span></>
+            )}
+            {e.rider && <><br /><span style={{ color: TBL.ink3, fontStyle: 'italic' }}>{e.rider}</span></>}
+          </span>
+        ),
+      }))}
+      onPick={id => resolveActionTarget(id as string)}
+      pickTitle={n => `Destroy ${n}`}
+      cancel={isSecondOfUpTo ? { label: 'Skip — stop at one', onClick: cancelActionTarget } : undefined}
     />
   );
 }

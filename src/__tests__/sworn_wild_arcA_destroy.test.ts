@@ -6,13 +6,15 @@
 // encounter" for generic leave/death triggers, and both send the card to its OWNER's
 // Dead Zone — same destination, different event.
 //
-// Sub-rulings pinned here: "up to N" is castable with >=1 legal target and refuses at
-// zero (universal pre-cost refusal); "destroy all Gear" is SYMMETRIC; unqualified
-// "target Gear" reaches EITHER side's Gear.
+// Sub-rulings pinned here: "up to N" is castable with >=1 legal target and may stop
+// after one; at ZERO legal targets it FIZZLES like every other targeted Action, the card
+// spent (owner 2026-08-20, retiring the earlier refuses-at-zero reading). "Destroy all
+// Gear" is SYMMETRIC; unqualified "target Gear" reaches EITHER side's Gear.
 import { describe, it, expect } from 'vitest';
 import { gs, freshGame, mkComp, mkPc, mkConstruct, mkItem, mkCz } from './helpers';
 import { CATALOG, SWORN_WILD_DEV_CARDS } from '../data/catalog';
-import { gearItemsOf } from '../engine/entities';
+import { gearItemsOf, describePickTargets, itemRiderText } from '../engine/entities';
+import { eligibleTargets } from '../engine/interpreter';
 import type { Card } from '../types/card';
 
 const sw = (name: string): Card => SWORN_WILD_DEV_CARDS.find(c => c.name === name)!;
@@ -161,14 +163,17 @@ describe('union, mass, and "up to N"', () => {
     expect(g().p1.dead.map(c => c.name)).toContain(card.name);
   });
 
-  // FLAGGED FOR RATIFICATION (2026-08-19): the owner ruled dd000096 "refuses at zero,
-  // per the universal pre-cost refusal". The SHIPPED behaviour for a targeted ACTION
-  // with no legal target is to FIZZLE — the card is spent to the Dead Zone (gameStore
-  // "fizzles — no legal target", the path every targeted Action has always taken). The
-  // pre-cost refusal precedent (Fence's Ledger, the Quill) governs ACTIVATED abilities,
-  // where a cost would otherwise be paid for nothing. This pin records what the engine
-  // ACTUALLY does; changing it for one card would make dd000096 the only Action in the
-  // game that returns to hand, so it needs an explicit ruling first.
+  // RATIFIED 2026-08-20: dd000096 CONFORMS to the shipped Action fizzle. The earlier
+  // "refuses at zero, returns to hand" reading is RETIRED — it over-extended the
+  // universal pre-cost refusal, which governs ACTIVATED abilities (Fence's Ledger, the
+  // Quill), where refusal prevents paying a cost for nothing.
+  //
+  // ⚠ INTERIM (owner design intent, 2026-08-20): fizzle-at-zero is NOT the desired end
+  // state. The ultimate rule is a cast-time legality gate making any zero-target Action
+  // UNCASTABLE pool-wide; resolution-time fizzle survives only for targets removed in
+  // response. Deferred to its own session — see Game_Rules_Updated §Action Supertypes,
+  // "Targeted Actions with no legal target". This pin asserts the INTERIM behaviour and
+  // is expected to be retired when that gate lands.
   it('"up to two" with ZERO legal targets does not arm, and fizzles (shipped Action behaviour)', () => {
     const card = sw('Break the Siegeworks');
     seed(card, 'Paladin', {}, { f1: mkComp('just-a-guy', 'Enemy A', { hp: 5 }) }); // no constructs
@@ -203,5 +208,98 @@ describe('Consecrate the Ground — an ENTERS trigger carrying a destroy', () =>
       .toContain('trap-1');
     gs.getState().resolveActionTarget('trap-1');
     expect(g().p2.board.f1, 'destroyed by the entering construct').toBeFalsy();
+  });
+});
+
+// ── The Gear picker modal (owner ruling 2026-08-20) ───────────────────────────
+// Gear is worn, not on the board, so a Gear pick is made in a dedicated picker — same
+// choreography family as the armor-prevention picker. The owner's explicit requirement
+// is that EVERY entry names the character the Gear is attached to. The entries are
+// described engine-side (describePickTargets) precisely so that requirement is pinned
+// here rather than eyeballed in a screenshot; the component is a thin renderer.
+describe('gear picker entries — the owner display requirement', () => {
+  it('every Gear entry names its BEARER and whose it is, from the viewer’s seat', () => {
+    freshGame();
+    gs.setState(s => ({ game: { ...s.game,
+      p1: { ...s.game.p1, board: { f1: mkComp('ally', 'Ally Bear', { hp: 5, loadout: { weapon: null, gear: [gear('g-mine'), null] } }) } },
+      p2: { ...s.game.p2, board: { f1: mkComp('foe', 'Enemy Ogre', { hp: 5, loadout: { weapon: null, gear: [gear('g-theirs'), null] } }) } },
+    } }));
+    const asP1 = describePickTargets(g(), ['g-mine', 'g-theirs'], 'p1');
+    expect(asP1.map(e => [e.name, e.bearerName, e.ownerLabel])).toEqual([
+      ['Guard Plate', 'Ally Bear', 'You'],
+      ['Guard Plate', 'Enemy Ogre', 'Opponent'],
+    ]);
+    // Perspective-relative, like the synced player names — never a raw side id.
+    const asP2 = describePickTargets(g(), ['g-mine', 'g-theirs'], 'p2');
+    expect(asP2.map(e => e.ownerLabel)).toEqual(['Opponent', 'You']);
+  });
+
+  it('two pieces on ONE bearer are two distinct entries (disambiguated by construction)', () => {
+    freshGame();
+    gs.setState(s => ({ game: { ...s.game,
+      p2: { ...s.game.p2, board: { f1: mkComp('foe', 'Enemy Ogre', { hp: 5, loadout: { weapon: null, gear: [gear('g-a', 'Mailed Hauberk'), gear('g-b', 'Scribe’s Apron')] } }) } },
+    } }));
+    const entries = describePickTargets(g(), ['g-a', 'g-b'], 'p1');
+    expect(entries.length).toBe(2);
+    expect(entries.every(e => e.bearerName === 'Enemy Ogre'), 'same bearer, distinct entries').toBe(true);
+    expect(entries.map(e => e.name)).toEqual(['Mailed Hauberk', 'Scribe’s Apron']);
+  });
+
+  it('Armor entries carry counters REMAINING and the printed X (they count DOWN)', () => {
+    freshGame();
+    const worn = mkItem('g-worn', 'Guard Plate', { armor: 3, counters: 1, sub: 'Armor' });
+    gs.setState(s => ({ game: { ...s.game,
+      p2: { ...s.game.p2, board: { f1: mkComp('foe', 'Enemy Ogre', { hp: 5, loadout: { weapon: null, gear: [worn, null] } }) } },
+    } }));
+    const [e] = describePickTargets(g(), ['g-worn'], 'p1');
+    expect([e.counters, e.armor], 'nearly spent: 1 of 3 left').toEqual([1, 3]);
+  });
+
+  it('a rider line is surfaced, and the Armor clause itself is NOT repeated as one', () => {
+    const mantle = CATALOG.find(c => c.name === "Storm-Caller's Mantle")!;
+    expect(itemRiderText(mantle.text), 'the +1 attack rider survives')
+      .toBe('Equipped character has +1 attack.');
+    const hauberk = CATALOG.find(c => c.name === 'Mailed Hauberk')!;
+    expect(itemRiderText(hauberk.text), 'a pure Armor clause has no rider').toBeUndefined();
+  });
+
+  it('the UNION list describes Physical Constructs with their controller', () => {
+    freshGame();
+    gs.setState(s => ({ game: { ...s.game,
+      p2: { ...s.game.p2, board: {
+        f1: mkComp('foe', 'Enemy Ogre', { hp: 5, loadout: { weapon: null, gear: [gear('g-1'), null] } }),
+        f2: mkConstruct('trap-1', 'Tripwire Snare', 3, { subtype: 'Trap' }),
+      } },
+    } }));
+    const entries = describePickTargets(g(), ['g-1', 'trap-1'], 'p1');
+    expect(entries.map(e => [e.kind, e.ownerLabel])).toEqual([['gear', 'Opponent'], ['construct', 'Opponent']]);
+  });
+
+  it('a HEAVY piece filling both slots is exactly ONE entry (via the real eligibility path)', () => {
+    // The dedupe lives UPSTREAM, in gearItemsOf/eligibleTargets — describePickTargets
+    // faithfully describes whatever ids it is handed, so this must go through the real
+    // path rather than hand-feeding a duplicated id.
+    const heavy = mkItem('hv', 'Plate of the Standing Wall', { armor: 4, sub: 'Heavy Armor' });
+    freshGame();
+    gs.setState(s => ({ game: { ...s.game,
+      p2: { ...s.game.p2, board: { f1: mkComp('hw', 'Enemy Ogre', { hp: 5, loadout: { weapon: null, gear: [heavy, heavy] } }) } },
+    } }));
+    const ids = eligibleTargets(g(), 'p1', 'anyGear');
+    expect(ids, 'offered once').toEqual(['hv']);
+    expect(describePickTargets(g(), ids, 'p1').length, 'so exactly one entry renders').toBe(1);
+  });
+});
+
+describe('gear pick — wire contract parity', () => {
+  it('the armed pick survives a JSON round-trip (replay/MP snapshot parity)', () => {
+    const card = sw('Rust and Root');
+    seed(card, 'Druid', {}, { f1: mkComp('foe', 'Enemy Ogre', { hp: 5, loadout: { weapon: null, gear: [gear('g-1'), null] } }) });
+    gs.getState().playAction(card.id);
+    const armed = gs.getState().pendingActionTarget!;
+    const round = JSON.parse(JSON.stringify(armed));
+    expect(round.eligibleIds, 'item ids are plain strings — no new wire type').toEqual(['g-1']);
+    expect(round.sourceName).toBe('Rust and Root');
+    // And the entries rebuild identically from the round-tripped ids.
+    expect(describePickTargets(g(), round.eligibleIds, 'p1').map(e => e.bearerName)).toEqual(['Enemy Ogre']);
   });
 });
