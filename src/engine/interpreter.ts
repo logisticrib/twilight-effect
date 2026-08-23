@@ -12,6 +12,7 @@ import type { GameState, PendingDeadPick, ArmorChoiceData } from './state';
 import { charsOf, companionIds, constructIds, findEntityAnywhere, updateEntity,
          removeEntity, destroyEntity, setPcHp, pcIdOf, itemCardsOf, itemTransferOf, canBeSacrificed,
          gearItemsOf, destroyItemById } from './entities';
+import { hasSubtype, cardHasSubtype } from './stats';
 import { isPhysicalConstruct, currentWillpower, effectiveAttack, effectiveMaxHp, isImmuneToSplash, isCharacter, poisonHitPatch } from './stats';
 // Function-level cycle with combat.ts (resolveActionEffects deals damage; combat
 // triggers resolve effects). Safe: hoisted functions, called only at runtime.
@@ -63,7 +64,8 @@ export function effectsWouldAffectSomething(game: GameState, lp: 'p1' | 'p2', ef
         // paid. Filters mirror the interpreter's (cardType, itemKind).
         if (e.to !== 'hand') return true; // 'encounter' unimplemented — stay conservative
         if (game[lp].dead.some(c =>
-          (!e.cardType || c.type === e.cardType) && (!e.itemKind || c.itemKind === e.itemKind))) return true;
+          (!e.cardType || c.type === e.cardType) && (!e.itemKind || c.itemKind === e.itemKind)
+          && (!e.subtype || cardHasSubtype(c, e.subtype)))) return true;
         break;
       }
       default:
@@ -140,6 +142,7 @@ export function effectTargetSpec(e: Effect): TargetSpec | null {
     // pick. Shipped exhaust targets (self / eventSubject) are not interactive → null,
     // exactly as before.
     case 'exhaust':
+    case 'ready':
     case 'destroy':
     case 'forceAttack': return isInteractiveSpec(e.target) ? e.target : null;
     case 'dieCheck': {
@@ -162,13 +165,30 @@ export function effectTargetSpec(e: Effect): TargetSpec | null {
  * carries a narrowing field, so every shipped arm site returns `ids` unchanged.
  */
 export function filterEligibleByEffects(game: GameState, ids: string[], effects: Effect[]): string[] {
+  let out = ids;
   const cap = effects.find((e): e is Extract<Effect, { op: 'bounce' | 'gainControl' }> =>
     (e.op === 'bounce' || e.op === 'gainControl') && e.hpAtMost != null);
-  if (!cap) return ids;
-  return ids.filter(id => {
-    const loc = findEntityAnywhere(game, id);
-    return !!loc && loc.ent.hp <= cap.hpAtMost!;
-  });
+  if (cap) {
+    out = out.filter(id => {
+      const loc = findEntityAnywhere(game, id);
+      return !!loc && loc.ent.hp <= cap.hpAtMost!;
+    });
+  }
+  // Arc B (2026-08-19): subtype narrowing for a targeted pick — "target Beast you
+  // control". The controller half is already carried by the TargetSpec (ownCompanion);
+  // this adds the subtype half, so the two compose instead of needing a spec per
+  // subtype. Set membership over authored tokens, never a derived organism.
+  const want = effects.map(e =>
+    e.op === 'ready' ? e.subtype
+    : e.op === 'buff' ? e.where?.subtype
+    : undefined).find((x): x is string => !!x);
+  if (want) {
+    out = out.filter(id => {
+      const loc = findEntityAnywhere(game, id);
+      return !!loc && hasSubtype(loc.ent, want);
+    });
+  }
+  return out;
 }
 
 /** Extra context threaded into the interpreter (combat triggers, Magic-Action mods,
@@ -324,6 +344,8 @@ export function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceNam
         if (e.scope === 'ownParty' || e.scope === 'ownCompanions') {
           for (const ent of Object.values(g[lp].board)) {
             if (!ent) continue;
+            // Arc B: "Beasts you control" narrows the same group scope by subtype.
+            if (e.where?.subtype && !hasSubtype(ent, e.where.subtype)) continue;
             if (e.scope === 'ownParty' ? (ent.kind === 'companion' || ent.kind === 'pc') : ent.kind === 'companion') recipients.push(ent.id);
           }
         } else if (e.scope === 'allEnemyCompanions') {
@@ -509,6 +531,20 @@ export function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceNam
         }
         break;
       }
+      case 'ready': {
+        // Arc B (2026-08-19 — Greywind Courser). The inverse of `exhaust`, and the same
+        // mutation extraAttack performs: clear tap/exhaust and free the Major slot.
+        // DELIBERATELY does not touch `fresh`: the entry-turn ban and summoning sickness
+        // are separate gates (stats.ts:758, the beginAttack Zealous check), so readying a
+        // companion that entered this turn restores its state without granting it
+        // permission it never had. Diagnosed 2026-08-19; no ambiguity to rule on.
+        if (!targetId) break;
+        const loc = findEntityAnywhere(g, targetId);
+        if (!loc) break;
+        g = updateEntity(g, targetId, { acts: { ...loc.ent.acts, major: false }, exhausted: false, tapped: 'none' });
+        msgs.push(`${loc.ent.name} readies`);
+        break;
+      }
       case 'extraAttack': {
         if (!targetId) break;
         const loc = findEntityAnywhere(g, targetId);
@@ -605,6 +641,9 @@ export function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceNam
         break;
       }
       case 'returnFromDead': {
+        // Arc B (2026-08-19): `subtype` narrows recovery ("Return target Beast from your
+        // Dead Zone"). Dead Zone entries are full Card objects carrying the same authored
+        // `subtypes` as the board, so the same matcher serves both — verified, not assumed.
         // Recover a card from the controller's Dead Zone (Memory Stone onDestroy). If a
         // `sink` was supplied, defer to a player-facing picker (the calling reducer arms
         // `pendingDeadPick`); otherwise auto-pick the most-recent eligible card.
@@ -612,7 +651,8 @@ export function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceNam
         const dead = g[lp].dead;
         const options = dead.map((card, idx) => ({ card, idx }))
           .filter(o => !e.cardType || o.card.type === e.cardType)
-          .filter(o => !e.itemKind || o.card.itemKind === e.itemKind);
+          .filter(o => !e.itemKind || o.card.itemKind === e.itemKind)
+          .filter(o => !e.subtype || cardHasSubtype(o.card, e.subtype));
         if (options.length === 0) { msgs.push('Dead Zone has no eligible card'); break; }
         if (sink) {
           sink.push({ source: sourceName, lp, sourceId, options, postEffects: [], optional: e.optional ?? false });

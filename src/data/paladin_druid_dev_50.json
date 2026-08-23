@@ -1,5 +1,5 @@
 {
-  "_comment": "DEV DECK - Sworn Wild (Paladin / Druid), 50 hand-authored dev cards (owner-designed, 2026-08-19). NON-CANON: every card carries dev:true so shipped-pool queries can exclude them. Phase 1 = AUTHOR + FLAG: cards whose behavior has a live engine path carry structured effects; every behavior the engine cannot yet honor carries an effectsFlag starting 'DEV NOT-IMPLEMENTED' (visible machinery debt; the validator reports it and does not fail). That flag list IS the arc plan for the implementation sessions that follow. Type lines carry the Beast modifier per the 2026-08-18 ruling (Beast = non-magical non-sapient animal, printed never derived, ordered Modifier-Organism-Role); Angels are sapient and are NOT Beasts. Armor carriers print the FULL inverted companion clause (2026-08-18 inversion) with X substituted. Vocal subtypes corrected 2026-08-19 (owner ruling): Druid Vocal Constructs are RITE, Paladin's are BLESSING. 'Performance' was retired entirely and the borrowed Utterance (a Doom-Whisperer subtype) was wrong for the same reason. ARC A (2026-08-19): the destroy primitive landed — the seven destroy cards are LIVE. Destroy is a DIFFERENT EVENT from sacrifice (owner ruling): it never fires on-sacrifice listeners, while generic leave/death triggers fire for both, and the card lands in its OWNER's Dead Zone either way.",
+  "_comment": "DEV DECK - Sworn Wild (Paladin / Druid), 50 hand-authored dev cards (owner-designed, 2026-08-19). NON-CANON: every card carries dev:true so shipped-pool queries can exclude them. Phase 1 = AUTHOR + FLAG: cards whose behavior has a live engine path carry structured effects; every behavior the engine cannot yet honor carries an effectsFlag starting 'DEV NOT-IMPLEMENTED' (visible machinery debt; the validator reports it and does not fail). That flag list IS the arc plan for the implementation sessions that follow. Type lines carry the Beast modifier per the 2026-08-18 ruling (Beast = non-magical non-sapient animal, printed never derived, ordered Modifier-Organism-Role); Angels are sapient and are NOT Beasts. Armor carriers print the FULL inverted companion clause (2026-08-18 inversion) with X substituted. Vocal subtypes corrected 2026-08-19 (owner ruling): Druid Vocal Constructs are RITE, Paladin's are BLESSING. 'Performance' was retired entirely and the borrowed Utterance (a Doom-Whisperer subtype) was wrong for the same reason. ARC A (2026-08-19): the destroy primitive landed — the seven destroy cards are LIVE. Destroy is a DIFFERENT EVENT from sacrifice (owner ruling): it never fires on-sacrifice listeners, while generic leave/death triggers fire for both, and the card lands in its OWNER's Dead Zone either way. ARC B (2026-08-20): Beast-subtype reach landed — subtype targeting, group scopes, the Dead Zone filter and the `ready` op. Subtype tokens are AUTHORED in this file and read through catalog lookups; they are deliberately NOT carried on the runtime Card, because Card objects serialize into recordings.",
   "cards": [
     {
       "id": "dd000051",
@@ -24,7 +24,11 @@
       "dev": true,
       "createdAt": "2026-08-19T00:00:00.000000Z",
       "updatedAt": "2026-08-19T00:00:00.000000Z",
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): Untamed is a continuous encounter-wide state (KEYWORDS.Untamed done:false) — no engine evaluates it, and the per-card bonus has no carrier shape."
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): Untamed is a continuous encounter-wide state (KEYWORDS.Untamed done:false) — no engine evaluates it, and the per-card bonus has no carrier shape.",
+      "subtypes": [
+        "Beast",
+        "Boar"
+      ]
     },
     {
       "id": "dd000052",
@@ -48,7 +52,11 @@
       "flavor": "",
       "dev": true,
       "createdAt": "2026-08-19T00:00:00.000000Z",
-      "updatedAt": "2026-08-19T00:00:00.000000Z"
+      "updatedAt": "2026-08-19T00:00:00.000000Z",
+      "subtypes": [
+        "Beast",
+        "Badger"
+      ]
     },
     {
       "id": "dd000053",
@@ -73,7 +81,11 @@
       "flavor": "",
       "dev": true,
       "createdAt": "2026-08-19T00:00:00.000000Z",
-      "updatedAt": "2026-08-19T00:00:00.000000Z"
+      "updatedAt": "2026-08-19T00:00:00.000000Z",
+      "subtypes": [
+        "Beast",
+        "Tortoise"
+      ]
     },
     {
       "id": "dd000054",
@@ -99,7 +111,11 @@
       "dev": true,
       "createdAt": "2026-08-19T00:00:00.000000Z",
       "updatedAt": "2026-08-19T00:00:00.000000Z",
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): Untamed (see dd000051); additionally the Untamed bonus here is a KEYWORD GRANT, needing a conditional grantKeywords shape keyed to the state."
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): Untamed (see dd000051); additionally the Untamed bonus here is a KEYWORD GRANT, needing a conditional grantKeywords shape keyed to the state.",
+      "subtypes": [
+        "Beast",
+        "Fox"
+      ]
     },
     {
       "id": "dd000055",
@@ -124,7 +140,11 @@
       "flavor": "",
       "dev": true,
       "createdAt": "2026-08-19T00:00:00.000000Z",
-      "updatedAt": "2026-08-19T00:00:00.000000Z"
+      "updatedAt": "2026-08-19T00:00:00.000000Z",
+      "subtypes": [
+        "Beast",
+        "Owl"
+      ]
     },
     {
       "id": "dd000056",
@@ -147,7 +167,22 @@
       "dev": true,
       "createdAt": "2026-08-19T00:00:00.000000Z",
       "updatedAt": "2026-08-19T00:00:00.000000Z",
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): two gaps: (a) no `ready` op exists (only `exhaust`); (b) no Beast-subtype TARGET spec — `targetIsSubtype` is a clause CONDITION, not a target filter, so 'target Beast you control' cannot be expressed."
+      "subtypes": [
+        "Beast",
+        "Horse"
+      ],
+      "effects": [
+        {
+          "trigger": "onEnter",
+          "effects": [
+            {
+              "op": "ready",
+              "target": "ownCompanion",
+              "subtype": "Beast"
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "dd000057",
@@ -180,6 +215,11 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Fungal",
+        "Beast",
+        "Toad"
       ]
     },
     {
@@ -206,7 +246,12 @@
       "dev": true,
       "createdAt": "2026-08-19T00:00:00.000000Z",
       "updatedAt": "2026-08-19T00:00:00.000000Z",
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): Warded has no engine path and was not even in the keyword vocabulary (added this session as done:false). Note `wardedLines` is an UNRELATED mechanic (lineWard Fortifications), not this keyword."
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): Warded has no engine path and was not even in the keyword vocabulary (added this session as done:false). Note `wardedLines` is an UNRELATED mechanic (lineWard Fortifications), not this keyword.",
+      "subtypes": [
+        "Spirit",
+        "Beast",
+        "Deer"
+      ]
     },
     {
       "id": "dd000059",
@@ -231,7 +276,11 @@
       "dev": true,
       "createdAt": "2026-08-19T00:00:00.000000Z",
       "updatedAt": "2026-08-19T00:00:00.000000Z",
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): no SELF-hosted 'this character is attacked' trigger exists. The nearest are trap windows (oppCompanionAttacksCompanion, board-hosted) and onEquippedAttacked (ITEM-hosted). A companion-hosted attacked-window trigger plus an 'attacker' target spec are both missing."
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): no SELF-hosted 'this character is attacked' trigger exists. The nearest are trap windows (oppCompanionAttacksCompanion, board-hosted) and onEquippedAttacked (ITEM-hosted). A companion-hosted attacked-window trigger plus an 'attacker' target spec are both missing.",
+      "subtypes": [
+        "Beast",
+        "Porcupine"
+      ]
     },
     {
       "id": "dd000060",
@@ -255,7 +304,11 @@
       "flavor": "",
       "dev": true,
       "createdAt": "2026-08-19T00:00:00.000000Z",
-      "updatedAt": "2026-08-19T00:00:00.000000Z"
+      "updatedAt": "2026-08-19T00:00:00.000000Z",
+      "subtypes": [
+        "Beast",
+        "Elk"
+      ]
     },
     {
       "id": "dd000061",
@@ -281,7 +334,11 @@
       "dev": true,
       "createdAt": "2026-08-19T00:00:00.000000Z",
       "updatedAt": "2026-08-19T00:00:00.000000Z",
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): Untamed (see dd000051)."
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): Untamed (see dd000051).",
+      "subtypes": [
+        "Beast",
+        "Lynx"
+      ]
     },
     {
       "id": "dd000062",
@@ -305,7 +362,11 @@
       "flavor": "",
       "dev": true,
       "createdAt": "2026-08-19T00:00:00.000000Z",
-      "updatedAt": "2026-08-19T00:00:00.000000Z"
+      "updatedAt": "2026-08-19T00:00:00.000000Z",
+      "subtypes": [
+        "Beast",
+        "Crow"
+      ]
     },
     {
       "id": "dd000063",
@@ -330,7 +391,11 @@
       "flavor": "",
       "dev": true,
       "createdAt": "2026-08-19T00:00:00.000000Z",
-      "updatedAt": "2026-08-19T00:00:00.000000Z"
+      "updatedAt": "2026-08-19T00:00:00.000000Z",
+      "subtypes": [
+        "Beast",
+        "Bear"
+      ]
     },
     {
       "id": "dd000064",
@@ -365,6 +430,10 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Beast",
+        "Badger"
       ]
     },
     {
@@ -391,7 +460,11 @@
       "dev": true,
       "createdAt": "2026-08-19T00:00:00.000000Z",
       "updatedAt": "2026-08-19T00:00:00.000000Z",
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): Untamed (see dd000051), keyword-grant form (see dd000054)."
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): Untamed (see dd000051), keyword-grant form (see dd000054).",
+      "subtypes": [
+        "Beast",
+        "Lizard"
+      ]
     },
     {
       "id": "dd000066",
@@ -417,7 +490,11 @@
       "dev": true,
       "createdAt": "2026-08-19T00:00:00.000000Z",
       "updatedAt": "2026-08-19T00:00:00.000000Z",
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): three gaps: (a) Untamed as an ENTRY-SNAPSHOT intervening-if (checked once at entry, distinct from the continuous state); (b) no op places armor counters — armorCounters is written only at entry by parseArmorKeyword; (c) no Beast-subtype GROUP scope. This is the marquee card of the deck."
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): family B is DONE — a Beast-subtype group scope now exists for the 'each Beast companion you control' enumeration. Still blocked on TWO other families: (C) Untamed as an ENTRY-SNAPSHOT intervening-if, and (G) an op that PLACES armor counters. The deck's marquee card; it completes when C and G land.",
+      "subtypes": [
+        "Beast",
+        "Turtle"
+      ]
     },
     {
       "id": "dd000067",
@@ -452,6 +529,10 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Elf",
+        "Scout"
       ]
     },
     {
@@ -485,6 +566,10 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Elf",
+        "Forager"
       ]
     },
     {
@@ -520,6 +605,10 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Elf",
+        "Shaman"
       ]
     },
     {
@@ -543,7 +632,26 @@
       "dev": true,
       "createdAt": "2026-08-19T00:00:00.000000Z",
       "updatedAt": "2026-08-19T00:00:00.000000Z",
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): no Beast-subtype SCOPE for a static buff — `buff.where` narrows by line and cls only, never subtype."
+      "subtypes": [
+        "Incantation"
+      ],
+      "effects": [
+        {
+          "trigger": "static",
+          "effects": [
+            {
+              "op": "buff",
+              "stat": "atk",
+              "amount": 1,
+              "scope": "ownCompanions",
+              "duration": "while",
+              "where": {
+                "subtype": "Beast"
+              }
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "dd000071",
@@ -568,7 +676,10 @@
       "dev": true,
       "createdAt": "2026-08-19T00:00:00.000000Z",
       "updatedAt": "2026-08-19T00:00:00.000000Z",
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): Untamed (see dd000051) AND the Beast-subtype buff scope (see dd000070)."
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): family B is DONE — the Beast-subtype buff scope now exists (buff.where.subtype) and this card's aura would be one line. Held back for family C: its bonus is gated on UNTAMED, and authoring the buff now would apply it unconditionally, which is worse than a flag. When C lands, gate this scope on the Untamed state and the card is complete.",
+      "subtypes": [
+        "Incantation"
+      ]
     },
     {
       "id": "dd000072",
@@ -601,6 +712,9 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Incantation"
       ]
     },
     {
@@ -623,8 +737,11 @@
       "flavor": "",
       "dev": true,
       "createdAt": "2026-08-19T00:00:00.000000Z",
-      "updatedAt": "2026-08-19T00:00:00.000000Z",
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): no 'your companion ENTERS' trigger exists — ownPlaysCompanion is a PLAY-from-hand window, and canon holds plays and enters to be distinct events. Also needs the Beast-subtype filter."
+      "updatedAt": "2026-08-20T00:00:00.000000Z",
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): family B is DONE — the Beast-subtype filter now exists. Blocked on family D alone: no 'your companion ENTERS' trigger window exists. ownPlaysCompanion is a PLAY-from-hand window, and canon holds plays and enters to be distinct events, so the window itself is the missing piece.",
+      "subtypes": [
+        "Rite"
+      ]
     },
     {
       "id": "dd000074",
@@ -649,7 +766,26 @@
       "dev": true,
       "createdAt": "2026-08-19T00:00:00.000000Z",
       "updatedAt": "2026-08-19T00:00:00.000000Z",
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): Oathsworn itself is live; the Beast-subtype buff scope is not (see dd000070)."
+      "subtypes": [
+        "Rite"
+      ],
+      "effects": [
+        {
+          "trigger": "static",
+          "effects": [
+            {
+              "op": "buff",
+              "stat": "atk",
+              "amount": 1,
+              "scope": "ownCompanions",
+              "duration": "while",
+              "where": {
+                "subtype": "Beast"
+              }
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "dd000075",
@@ -682,6 +818,9 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Magic"
       ]
     },
     {
@@ -719,6 +858,9 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Magic"
       ]
     },
     {
@@ -756,6 +898,9 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Magic"
       ]
     },
     {
@@ -779,7 +924,26 @@
       "dev": true,
       "createdAt": "2026-08-19T00:00:00.000000Z",
       "updatedAt": "2026-08-19T00:00:00.000000Z",
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): no Beast-subtype target spec (see dd000056b)."
+      "subtypes": [
+        "Magic"
+      ],
+      "effects": [
+        {
+          "trigger": "onPlay",
+          "effects": [
+            {
+              "op": "buff",
+              "stat": "atk",
+              "amount": 3,
+              "scope": "ownCompanion",
+              "duration": "endOfTurn",
+              "where": {
+                "subtype": "Beast"
+              }
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "dd000079",
@@ -812,6 +976,9 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Magic"
       ]
     },
     {
@@ -835,7 +1002,27 @@
       "dev": true,
       "createdAt": "2026-08-19T00:00:00.000000Z",
       "updatedAt": "2026-08-19T00:00:00.000000Z",
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): Beast-subtype target spec (see dd000056b); the buff.grant path itself is live."
+      "subtypes": [
+        "Physical"
+      ],
+      "effects": [
+        {
+          "trigger": "onPlay",
+          "effects": [
+            {
+              "op": "buff",
+              "grant": [
+                "Zealous"
+              ],
+              "scope": "ownCompanion",
+              "duration": "endOfTurn",
+              "where": {
+                "subtype": "Beast"
+              }
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "dd000081",
@@ -858,7 +1045,11 @@
       "dev": true,
       "createdAt": "2026-08-19T00:00:00.000000Z",
       "updatedAt": "2026-08-19T00:00:00.000000Z",
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): the flat +2 is expressible, but the conditional replacement keyed to the BEARER's subtype is not — clause `if` offers targetIsSubtype against a TARGET, not against the equipped host."
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): the flat +2 is expressible, but the conditional replacement keyed to the BEARER's subtype is not — clause `if` offers targetIsSubtype against a TARGET, not against the equipped host.",
+      "subtypes": [
+        "Weapon",
+        "Fang"
+      ]
     },
     {
       "id": "dd000082",
@@ -896,6 +1087,9 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Magic"
       ]
     },
     {
@@ -919,7 +1113,26 @@
       "dev": true,
       "createdAt": "2026-08-19T00:00:00.000000Z",
       "updatedAt": "2026-08-19T00:00:00.000000Z",
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): returnFromDead is live but filters by cardType/itemKind only — no subtype filter, so 'target Beast' cannot be expressed."
+      "subtypes": [
+        "Magic"
+      ],
+      "effects": [
+        {
+          "trigger": "onPlay",
+          "effects": [
+            {
+              "op": "returnFromDead",
+              "cardType": "Companion",
+              "subtype": "Beast",
+              "to": "hand"
+            },
+            {
+              "op": "draw",
+              "count": 2
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "dd000084",
@@ -943,7 +1156,11 @@
       "flavor": "",
       "dev": true,
       "createdAt": "2026-08-19T00:00:00.000000Z",
-      "updatedAt": "2026-08-19T00:00:00.000000Z"
+      "updatedAt": "2026-08-19T00:00:00.000000Z",
+      "subtypes": [
+        "Human",
+        "Sentry"
+      ]
     },
     {
       "id": "dd000085",
@@ -968,7 +1185,11 @@
       "flavor": "",
       "dev": true,
       "createdAt": "2026-08-19T00:00:00.000000Z",
-      "updatedAt": "2026-08-19T00:00:00.000000Z"
+      "updatedAt": "2026-08-19T00:00:00.000000Z",
+      "subtypes": [
+        "Human",
+        "Knight"
+      ]
     },
     {
       "id": "dd000086",
@@ -993,7 +1214,11 @@
       "flavor": "",
       "dev": true,
       "createdAt": "2026-08-19T00:00:00.000000Z",
-      "updatedAt": "2026-08-19T00:00:00.000000Z"
+      "updatedAt": "2026-08-19T00:00:00.000000Z",
+      "subtypes": [
+        "Dwarf",
+        "Warden"
+      ]
     },
     {
       "id": "dd000087",
@@ -1029,6 +1254,10 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Human",
+        "Champion"
       ]
     },
     {
@@ -1066,6 +1295,10 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Human",
+        "Healer"
       ]
     },
     {
@@ -1092,8 +1325,11 @@
       "flavor": "",
       "dev": true,
       "createdAt": "2026-08-19T00:00:00.000000Z",
-      "updatedAt": "2026-08-19T00:00:00.000000Z",
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): Tribute (additional cost to PLAY) has no engine path and was not in the keyword vocabulary (added this session as done:false); the Cost schema covers ACTIVATED abilities only, not play-time costs. Also needs a Beast-subtype sacrifice filter. Angel is NOT a Beast, so this can never pay its own Tribute."
+      "updatedAt": "2026-08-20T00:00:00.000000Z",
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): family B is DONE — a Beast-subtype matcher now exists for the sacrifice filter. Blocked on family E alone: Tribute is an additional cost to PLAY, and the Cost schema covers ACTIVATED abilities only — there is no play-time cost chokepoint. (Angel is NOT a Beast, so this can never pay its own Tribute.)",
+      "subtypes": [
+        "Angel"
+      ]
     },
     {
       "id": "dd000090",
@@ -1117,7 +1353,10 @@
       "flavor": "",
       "dev": true,
       "createdAt": "2026-08-19T00:00:00.000000Z",
-      "updatedAt": "2026-08-19T00:00:00.000000Z"
+      "updatedAt": "2026-08-19T00:00:00.000000Z",
+      "subtypes": [
+        "Blessing"
+      ]
     },
     {
       "id": "dd000091",
@@ -1140,7 +1379,10 @@
       "dev": true,
       "createdAt": "2026-08-19T00:00:00.000000Z",
       "updatedAt": "2026-08-19T00:00:00.000000Z",
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): heal and startOfTurn are both live, but no scope filters by KEYWORD — `where` narrows by line and cls only."
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): heal and startOfTurn are both live, but no scope filters by KEYWORD — `where` narrows by line and cls only.",
+      "subtypes": [
+        "Blessing"
+      ]
     },
     {
       "id": "dd000092",
@@ -1173,6 +1415,9 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Blessing"
       ]
     },
     {
@@ -1208,6 +1453,9 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Blessing"
       ]
     },
     {
@@ -1242,6 +1490,9 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Magic"
       ]
     },
     {
@@ -1280,6 +1531,9 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Magic"
       ]
     },
     {
@@ -1314,6 +1568,9 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Magic"
       ]
     },
     {
@@ -1348,6 +1605,9 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Magic"
       ]
     },
     {
@@ -1371,7 +1631,10 @@
       "dev": true,
       "createdAt": "2026-08-19T00:00:00.000000Z",
       "updatedAt": "2026-08-19T00:00:00.000000Z",
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): no condition tests CONTROL OF A KEYWORD — controlsType keys on cardType/subtype, never a keyword. Also needs replacement ('instead') rather than additive draw."
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): no condition tests CONTROL OF A KEYWORD — controlsType keys on cardType/subtype, never a keyword. Also needs replacement ('instead') rather than additive draw.",
+      "subtypes": [
+        "Magic"
+      ]
     },
     {
       "id": "dd000099",
@@ -1405,6 +1668,9 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Magic"
       ]
     },
     {
@@ -1441,6 +1707,10 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Weapon",
+        "Blade"
       ]
     }
   ]

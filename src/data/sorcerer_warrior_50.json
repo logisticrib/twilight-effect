@@ -20,7 +20,11 @@
     "text": "ZEALOUS. This character may attack without needing to first pass a willpower check.",
     "flavor": "",
     "createdAt": "2026-05-16T19:05:55.110733Z",
-    "updatedAt": "2026-05-16T19:05:55.110791Z"
+    "updatedAt": "2026-05-16T19:05:55.110791Z",
+    "subtypes": [
+      "Human",
+      "Sorcerer"
+    ]
   },
   {
     "id": "285748d0",
@@ -55,6 +59,10 @@
           }
         ]
       }
+    ],
+    "subtypes": [
+      "Human",
+      "Sorcerer"
     ]
   },
   {
@@ -79,7 +87,11 @@
     "text": "ZEALOUS, RECKLESS. When this character attacks, it deals 1 damage to itself.",
     "flavor": "",
     "createdAt": "2026-05-16T19:05:55.110820Z",
-    "updatedAt": "2026-05-16T19:05:55.110822Z"
+    "updatedAt": "2026-05-16T19:05:55.110822Z",
+    "subtypes": [
+      "Human",
+      "Sorcerer"
+    ]
   },
   {
     "id": "8f6336a9",
@@ -125,6 +137,10 @@
           }
         ]
       }
+    ],
+    "subtypes": [
+      "Elf",
+      "Sorcerer"
     ]
   },
   {
@@ -163,6 +179,10 @@
           }
         ]
       }
+    ],
+    "subtypes": [
+      "Human",
+      "Sorcerer"
     ]
   },
   {
@@ -200,6 +220,10 @@
           }
         ]
       }
+    ],
+    "subtypes": [
+      "Spirit",
+      "Sorcerer"
     ]
   },
   {
@@ -235,6 +259,10 @@
           }
         ]
       }
+    ],
+    "subtypes": [
+      "Human",
+      "Sorcerer"
     ]
   },
   {
@@ -278,6 +306,11 @@
           }
         ]
       }
+    ],
+    "subtypes": [
+      "Legendary",
+      "Human",
+      "Sorcerer"
     ]
   },
   {
@@ -311,6 +344,9 @@
           }
         ]
       }
+    ],
+    "subtypes": [
+      "Incantation"
     ]
   },
   {
@@ -343,6 +379,9 @@
           }
         ]
       }
+    ],
+    "subtypes": [
+      "Incantation"
     ]
   },
   {
@@ -383,6 +422,9 @@
           }
         ]
       }
+    ],
+    "subtypes": [
+      "Incantation"
     ]
   },
   {
@@ -415,6 +457,9 @@
           }
         ]
       }
+    ],
+    "subtypes": [
+      "Incantation"
     ]
   },
   {
@@ -472,6 +517,9 @@
           }
         ]
       }
+    ],
+    "subtypes": [
+      "Incantation"
     ]
   },
   {
@@ -506,16 +554,22 @@
             "duration": "while"
           }
         ]
+      },
+      {
+        "trigger": "onEquippedPlaysMagicAction",
+        "oncePerTurn": true,
+        "effects": [
+          {
+            "op": "draw",
+            "count": 1
+          }
+        ]
       }
-    ,
-        {
-          "trigger": "onEquippedPlaysMagicAction",
-          "oncePerTurn": true,
-          "effects": [
-            { "op": "draw", "count": 1 }
-          ]
-        }
-      ]
+    ],
+    "subtypes": [
+      "Weapon",
+      "Wand"
+    ]
   },
   {
     "id": "55cf25ec",
@@ -564,6 +618,10 @@
           }
         ]
       }
+    ],
+    "subtypes": [
+      "Weapon",
+      "Wand"
     ]
   },
   {
@@ -598,15 +656,19 @@
             "duration": "while"
           }
         ]
+      },
+      {
+        "trigger": "equipped",
+        "effects": [
+          {
+            "op": "firstMagicUncounterable"
+          }
+        ]
       }
-    ,
-        {
-          "trigger": "equipped",
-          "effects": [
-            { "op": "firstMagicUncounterable" }
-          ]
-        }
-      ]
+    ],
+    "subtypes": [
+      "Trinket"
+    ]
   },
   {
     "id": "7a0b3177",
@@ -643,6 +705,9 @@
           }
         ]
       }
+    ],
+    "subtypes": [
+      "Armor"
     ]
   },
   {
@@ -677,6 +742,9 @@
           }
         ]
       }
+    ],
+    "subtypes": [
+      "Trinket"
     ]
   },
   {
@@ -710,6 +778,9 @@
           }
         ]
       }
+    ],
+    "subtypes": [
+      "Magic"
     ]
   },
   {
@@ -744,6 +815,9 @@
           }
         ]
       }
+    ],
+    "subtypes": [
+      "Magic"
     ]
   },
   {
@@ -779,6 +853,9 @@
           }
         ]
       }
+    ],
+    "subtypes": [
+      "Magic"
     ]
   },
   {
@@ -813,6 +890,9 @@
           }
         ]
       }
+    ],
+    "subtypes": [
+      "Magic"
     ]
   },
   {
@@ -851,6 +931,9 @@
           }
         ]
       }
+    ],
+    "subtypes": [
+      "Magic"
     ]
   },
   {
@@ -893,6 +976,9 @@
           }
         ]
       }
+    ],
+    "subtypes": [
+      "Magic"
     ]
   },
   {
@@ -930,6 +1016,9 @@
           }
         ]
       }
+    ],
+    "subtypes": [
+      "Magic"
     ]
   },
   {
@@ -953,7 +1042,11 @@
     "text": "ZEALOUS. This character may attack without needing to first pass a willpower check.",
     "flavor": "",
     "createdAt": "2026-05-16T19:05:55.111143Z",
-    "updatedAt": "2026-05-16T19:05:55.111147Z"
+    "updatedAt": "2026-05-16T19:05:55.111147Z",
+    "subtypes": [
+      "Human",
+      "Soldier"
+    ]
   },
   {
     "id": "fd0a72f4",
@@ -976,7 +1069,11 @@
     "text": "ZEALOUS.",
     "flavor": "",
     "createdAt": "2026-05-16T19:05:55.111198Z",
-    "updatedAt": "2026-05-16T19:05:55.111202Z"
+    "updatedAt": "2026-05-16T19:05:55.111202Z",
+    "subtypes": [
+      "Human",
+      "Soldier"
+    ]
   },
   {
     "id": "b1ac0a6d",
@@ -999,7 +1096,11 @@
     "text": "KIT-MASTER. When this companion enters the encounter, you may move target item from one character you control to another character you control.",
     "flavor": "",
     "createdAt": "2026-05-16T19:05:55.111215Z",
-    "updatedAt": "2026-05-16T19:05:55.111216Z"
+    "updatedAt": "2026-05-16T19:05:55.111216Z",
+    "subtypes": [
+      "Dwarf",
+      "Soldier"
+    ]
   },
   {
     "id": "7f52101a",
@@ -1023,7 +1124,11 @@
     "text": "ZEALOUS, RECKLESS.",
     "flavor": "",
     "createdAt": "2026-05-16T19:05:55.111224Z",
-    "updatedAt": "2026-05-16T19:05:55.111225Z"
+    "updatedAt": "2026-05-16T19:05:55.111225Z",
+    "subtypes": [
+      "Human",
+      "Warrior"
+    ]
   },
   {
     "id": "3fdf6dd6",
@@ -1046,7 +1151,11 @@
     "text": "CLEAVE. (When this character attacks, it deals damage equal to its attack to each character on the same line as the target. CLEAVE requires a two-handed weapon to function.)",
     "flavor": "",
     "createdAt": "2026-05-16T19:05:55.111231Z",
-    "updatedAt": "2026-05-16T19:05:55.111233Z"
+    "updatedAt": "2026-05-16T19:05:55.111233Z",
+    "subtypes": [
+      "Dwarf",
+      "Warrior"
+    ]
   },
   {
     "id": "14699d49",
@@ -1085,6 +1194,10 @@
           }
         ]
       }
+    ],
+    "subtypes": [
+      "Human",
+      "Warrior"
     ]
   },
   {
@@ -1118,6 +1231,10 @@
           }
         ]
       }
+    ],
+    "subtypes": [
+      "Human",
+      "Soldier"
     ]
   },
   {
@@ -1142,7 +1259,11 @@
     "text": "ZEALOUS, CLEAVE. (CLEAVE requires a two-handed weapon to function.)",
     "flavor": "He had been at every gate. He knew which fell first.",
     "createdAt": "2026-05-16T19:05:55.111287Z",
-    "updatedAt": "2026-05-16T19:05:55.111292Z"
+    "updatedAt": "2026-05-16T19:05:55.111292Z",
+    "subtypes": [
+      "Human",
+      "Warrior"
+    ]
   },
   {
     "id": "764adebe",
@@ -1180,6 +1301,11 @@
           }
         ]
       }
+    ],
+    "subtypes": [
+      "Legendary",
+      "Human",
+      "Warrior"
     ]
   },
   {
@@ -1215,7 +1341,11 @@
       }
     ],
     "createdAt": "2026-05-16T19:05:55.111312Z",
-    "updatedAt": "2026-05-16T19:05:55.111313Z"
+    "updatedAt": "2026-05-16T19:05:55.111313Z",
+    "subtypes": [
+      "Weapon",
+      "Sword"
+    ]
   },
   {
     "id": "06e59422",
@@ -1250,6 +1380,10 @@
           }
         ]
       }
+    ],
+    "subtypes": [
+      "Weapon",
+      "Sword"
     ]
   },
   {
@@ -1287,6 +1421,10 @@
           }
         ]
       }
+    ],
+    "subtypes": [
+      "Weapon",
+      "Dagger"
     ]
   },
   {
@@ -1324,6 +1462,11 @@
           }
         ]
       }
+    ],
+    "subtypes": [
+      "Two-Handed",
+      "Weapon",
+      "Axe"
     ]
   },
   {
@@ -1361,6 +1504,11 @@
           }
         ]
       }
+    ],
+    "subtypes": [
+      "Two-Handed",
+      "Weapon",
+      "Spear"
     ]
   },
   {
@@ -1410,6 +1558,11 @@
           }
         ]
       }
+    ],
+    "subtypes": [
+      "Two-Handed",
+      "Weapon",
+      "Sword"
     ]
   },
   {
@@ -1433,7 +1586,10 @@
     "text": "ARMOR 2. This item enters the encounter with 2 armor counters. If the equipped character would be dealt damage, prevent all of that damage and remove an armor counter from this item. When the last armor counter is removed, sacrifice this item.",
     "flavor": "",
     "createdAt": "2026-05-16T19:05:55.111389Z",
-    "updatedAt": "2026-08-18T00:00:00.000000Z"
+    "updatedAt": "2026-08-18T00:00:00.000000Z",
+    "subtypes": [
+      "Armor"
+    ]
   },
   {
     "id": "3cf13287",
@@ -1456,7 +1612,11 @@
     "text": "ARMOR 4. This item enters the encounter with 4 armor counters. If the equipped character would be dealt damage, prevent all of that damage and remove an armor counter from this item. When the last armor counter is removed, sacrifice this item. (Equipped character cannot use Magic Actions.)",
     "flavor": "",
     "createdAt": "2026-05-16T19:05:55.111396Z",
-    "updatedAt": "2026-08-18T00:00:00.000000Z"
+    "updatedAt": "2026-08-18T00:00:00.000000Z",
+    "subtypes": [
+      "Heavy",
+      "Armor"
+    ]
   },
   {
     "id": "42db15dc",
@@ -1493,6 +1653,9 @@
           }
         ]
       }
+    ],
+    "subtypes": [
+      "Trinket"
     ]
   },
   {
@@ -1532,6 +1695,9 @@
           }
         ]
       }
+    ],
+    "subtypes": [
+      "Trinket"
     ]
   },
   {
@@ -1564,6 +1730,9 @@
           }
         ]
       }
+    ],
+    "subtypes": [
+      "Physical"
     ]
   },
   {
@@ -1602,6 +1771,9 @@
           }
         ]
       }
+    ],
+    "subtypes": [
+      "Physical"
     ]
   },
   {
@@ -1635,6 +1807,9 @@
           }
         ]
       }
+    ],
+    "subtypes": [
+      "Physical"
     ]
   },
   {
@@ -1670,7 +1845,10 @@
       }
     ],
     "createdAt": "2026-05-16T19:05:55.111501Z",
-    "updatedAt": "2026-05-16T19:05:55.111503Z"
+    "updatedAt": "2026-05-16T19:05:55.111503Z",
+    "subtypes": [
+      "Physical"
+    ]
   },
   {
     "id": "b0da8b81",
@@ -1703,6 +1881,9 @@
           }
         ]
       }
+    ],
+    "subtypes": [
+      "Physical"
     ]
   },
   {
@@ -1744,6 +1925,9 @@
       }
     ],
     "createdAt": "2026-05-16T19:05:55.111519Z",
-    "updatedAt": "2026-05-16T19:05:55.111521Z"
+    "updatedAt": "2026-05-16T19:05:55.111521Z",
+    "subtypes": [
+      "Physical"
+    ]
   }
 ]

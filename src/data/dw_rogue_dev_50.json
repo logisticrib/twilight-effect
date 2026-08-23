@@ -16,12 +16,18 @@
       "actionSub": "",
       "actionPM": "",
       "itemKind": "",
-      "keywords": ["Coercion"],
+      "keywords": [
+        "Coercion"
+      ],
       "text": "COERCION. When this companion enters, target opponent must discard a card or sacrifice a permanent.",
       "flavor": "",
       "dev": true,
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-07-22T00:00:00.000000Z",
+      "subtypes": [
+        "Human",
+        "Acolyte"
+      ]
     },
     {
       "id": "dd000002",
@@ -38,12 +44,18 @@
       "actionSub": "",
       "actionPM": "",
       "itemKind": "",
-      "keywords": ["Coercion"],
+      "keywords": [
+        "Coercion"
+      ],
       "text": "COERCION. When this companion enters, target opponent must discard a card or sacrifice a permanent.",
       "flavor": "",
       "dev": true,
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-07-22T00:00:00.000000Z",
+      "subtypes": [
+        "Human",
+        "Enforcer"
+      ]
     },
     {
       "id": "dd000003",
@@ -60,7 +72,9 @@
       "actionSub": "",
       "actionPM": "",
       "itemKind": "",
-      "keywords": ["Coercion"],
+      "keywords": [
+        "Coercion"
+      ],
       "text": "COERCION. When this companion enters, target opponent must discard a card or sacrifice a permanent. When this enters, look at target opponent's hand.",
       "flavor": "",
       "dev": true,
@@ -68,12 +82,18 @@
         {
           "trigger": "onEnter",
           "effects": [
-            { "op": "revealHand" }
+            {
+              "op": "revealHand"
+            }
           ]
         }
       ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-08-04T00:00:00.000000Z"
+      "updatedAt": "2026-08-04T00:00:00.000000Z",
+      "subtypes": [
+        "Human",
+        "Emissary"
+      ]
     },
     {
       "id": "dd000004",
@@ -90,12 +110,18 @@
       "actionSub": "",
       "actionPM": "",
       "itemKind": "",
-      "keywords": ["Dismay"],
+      "keywords": [
+        "Dismay"
+      ],
       "text": "DISMAY. As long as one or more permanents with Dismay are in the encounter under your control, your opponent is Dismayed. (A Dismayed player has −1 Willpower. Dismayed does not stack.)",
       "flavor": "",
       "dev": true,
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-07-22T00:00:00.000000Z",
+      "subtypes": [
+        "Human",
+        "Prophet"
+      ]
     },
     {
       "id": "dd000005",
@@ -112,7 +138,9 @@
       "actionSub": "",
       "actionPM": "",
       "itemKind": "",
-      "keywords": ["Dismay"],
+      "keywords": [
+        "Dismay"
+      ],
       "text": "DISMAY. As long as one or more permanents with Dismay are in the encounter under your control, your opponent is Dismayed. (A Dismayed player has −1 Willpower. Dismayed does not stack.) When this enters, look at the top 2 cards of your deck. Put them back in any order.",
       "flavor": "",
       "dev": true,
@@ -120,12 +148,23 @@
         {
           "trigger": "onEnter",
           "effects": [
-            { "op": "deckPeek", "look": 2, "dests": ["top"], "reorder": true }
+            {
+              "op": "deckPeek",
+              "look": 2,
+              "dests": [
+                "top"
+              ],
+              "reorder": true
+            }
           ]
         }
       ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-07-22T00:00:00.000000Z",
+      "subtypes": [
+        "Human",
+        "Oracle"
+      ]
     },
     {
       "id": "dd000006",
@@ -142,12 +181,17 @@
       "actionSub": "",
       "actionPM": "",
       "itemKind": "",
-      "keywords": ["Dismay"],
+      "keywords": [
+        "Dismay"
+      ],
       "text": "DISMAY. As long as one or more permanents with Dismay are in the encounter under your control, your opponent is Dismayed. (A Dismayed player has −1 Willpower. Dismayed does not stack.)",
       "flavor": "",
       "dev": true,
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-07-22T00:00:00.000000Z",
+      "subtypes": [
+        "Utterance"
+      ]
     },
     {
       "id": "dd000007",
@@ -164,12 +208,18 @@
       "actionSub": "",
       "actionPM": "",
       "itemKind": "",
-      "keywords": ["Paranoia"],
+      "keywords": [
+        "Paranoia"
+      ],
       "text": "PARANOIA. Whenever an opponent plays a Companion, look at the top card of that player's deck. You may put that card on the top or bottom of their deck.",
       "flavor": "",
       "dev": true,
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-07-22T00:00:00.000000Z",
+      "subtypes": [
+        "Human",
+        "Magistrate"
+      ]
     },
     {
       "id": "dd000008",
@@ -186,12 +236,17 @@
       "actionSub": "",
       "actionPM": "",
       "itemKind": "",
-      "keywords": ["Paranoia"],
+      "keywords": [
+        "Paranoia"
+      ],
       "text": "PARANOIA. Whenever an opponent plays a Companion, look at the top card of that player's deck. You may put that card on the top or bottom of their deck.",
       "flavor": "",
       "dev": true,
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-07-22T00:00:00.000000Z",
+      "subtypes": [
+        "Utterance"
+      ]
     },
     {
       "id": "dd000009",
@@ -208,12 +263,17 @@
       "actionSub": "",
       "actionPM": "",
       "itemKind": "",
-      "keywords": ["Paranoia"],
+      "keywords": [
+        "Paranoia"
+      ],
       "text": "PARANOIA. Whenever an opponent plays a Companion, look at the top card of that player's deck. You may put that card on the top or bottom of their deck.",
       "flavor": "",
       "dev": true,
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-07-22T00:00:00.000000Z",
+      "subtypes": [
+        "Utterance"
+      ]
     },
     {
       "id": "dd000010",
@@ -230,12 +290,18 @@
       "actionSub": "",
       "actionPM": "",
       "itemKind": "",
-      "keywords": ["Evasive"],
+      "keywords": [
+        "Evasive"
+      ],
       "text": "EVASIVE. This character can attack any opponent character regardless of the target's positioning. Still subject to Guardian targeting requirement.",
       "flavor": "",
       "dev": true,
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-07-22T00:00:00.000000Z",
+      "subtypes": [
+        "Silshade",
+        "Whisperer"
+      ]
     },
     {
       "id": "dd000011",
@@ -252,21 +318,32 @@
       "actionSub": "",
       "actionPM": "",
       "itemKind": "",
-      "keywords": ["Reckless"],
+      "keywords": [
+        "Reckless"
+      ],
       "text": "RECKLESS. When this character attacks, it deals 1 damage to itself. When this dies, if it died to damage, return target card from your Dead Zone to your hand.",
       "flavor": "",
       "dev": true,
       "effects": [
         {
           "trigger": "onDestroy",
-          "if": { "kind": "diedToDamage" },
+          "if": {
+            "kind": "diedToDamage"
+          },
           "effects": [
-            { "op": "returnFromDead", "to": "hand" }
+            {
+              "op": "returnFromDead",
+              "to": "hand"
+            }
           ]
         }
       ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-07-22T00:00:00.000000Z",
+      "subtypes": [
+        "Human",
+        "Fanatic"
+      ]
     },
     {
       "id": "dd000012",
@@ -283,12 +360,19 @@
       "actionSub": "",
       "actionPM": "",
       "itemKind": "",
-      "keywords": ["Coercion", "Paranoia"],
+      "keywords": [
+        "Coercion",
+        "Paranoia"
+      ],
       "text": "COERCION. When this companion enters, target opponent must discard a card or sacrifice a permanent. PARANOIA. Whenever an opponent plays a Companion, look at the top card of that player's deck. You may put that card on the top or bottom of their deck.",
       "flavor": "",
       "dev": true,
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-07-22T00:00:00.000000Z",
+      "subtypes": [
+        "Human",
+        "Advisor"
+      ]
     },
     {
       "id": "dd000013",
@@ -313,12 +397,20 @@
         {
           "trigger": "onEnter",
           "effects": [
-            { "op": "bounce", "target": "enemyCompanion", "hpAtMost": 2 }
+            {
+              "op": "bounce",
+              "target": "enemyCompanion",
+              "hpAtMost": 2
+            }
           ]
         }
       ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-08-04T00:00:00.000000Z"
+      "updatedAt": "2026-08-04T00:00:00.000000Z",
+      "subtypes": [
+        "Shade",
+        "Puppeteer"
+      ]
     },
     {
       "id": "dd000014",
@@ -343,12 +435,23 @@
         {
           "trigger": "ownPlaysCompanion",
           "effects": [
-            { "op": "deckPeek", "look": 1, "dests": ["top", "bottom"] }
+            {
+              "op": "deckPeek",
+              "look": 1,
+              "dests": [
+                "top",
+                "bottom"
+              ]
+            }
           ]
         }
       ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-08-04T00:00:00.000000Z"
+      "updatedAt": "2026-08-04T00:00:00.000000Z",
+      "subtypes": [
+        "Human",
+        "Archivist"
+      ]
     },
     {
       "id": "dd000015",
@@ -365,7 +468,9 @@
       "actionSub": "",
       "actionPM": "",
       "itemKind": "",
-      "keywords": ["Dismay"],
+      "keywords": [
+        "Dismay"
+      ],
       "text": "DISMAY. As long as one or more permanents with Dismay are in the encounter under your control, your opponent is Dismayed. (A Dismayed player has −1 Willpower. Dismayed does not stack.) Whenever an opposing companion flees, draw a card.",
       "flavor": "",
       "dev": true,
@@ -373,12 +478,19 @@
         {
           "trigger": "oppCompanionFlees",
           "effects": [
-            { "op": "draw", "count": 1 }
+            {
+              "op": "draw",
+              "count": 1
+            }
           ]
         }
       ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-07-22T00:00:00.000000Z",
+      "subtypes": [
+        "Human",
+        "Chanter"
+      ]
     },
     {
       "id": "dd000016",
@@ -395,7 +507,9 @@
       "actionSub": "",
       "actionPM": "",
       "itemKind": "",
-      "keywords": ["Evasive"],
+      "keywords": [
+        "Evasive"
+      ],
       "text": "EVASIVE. This character can attack any opponent character regardless of the target's positioning. Still subject to Guardian targeting requirement. Whenever this deals damage to a character, that character's controller discards a card.",
       "flavor": "",
       "dev": true,
@@ -403,12 +517,20 @@
         {
           "trigger": "onDealDamage",
           "effects": [
-            { "op": "discard", "count": 1, "target": "damagedController" }
+            {
+              "op": "discard",
+              "count": 1,
+              "target": "damagedController"
+            }
           ]
         }
       ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-07-22T00:00:00.000000Z",
+      "subtypes": [
+        "Spirit",
+        "Whisperer"
+      ]
     },
     {
       "id": "dd000017",
@@ -433,12 +555,25 @@
         {
           "trigger": "static",
           "effects": [
-            { "op": "buff", "stat": "atk", "amount": -1, "scope": "allEnemyCompanions", "duration": "while", "where": { "line": "front" } }
+            {
+              "op": "buff",
+              "stat": "atk",
+              "amount": -1,
+              "scope": "allEnemyCompanions",
+              "duration": "while",
+              "where": {
+                "line": "front"
+              }
+            }
           ]
         }
       ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-07-22T00:00:00.000000Z",
+      "subtypes": [
+        "Human",
+        "Confessor"
+      ]
     },
     {
       "id": "dd000018",
@@ -463,12 +598,17 @@
         {
           "trigger": "static",
           "effects": [
-            { "op": "lineWard" }
+            {
+              "op": "lineWard"
+            }
           ]
         }
       ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-07-22T00:00:00.000000Z",
+      "subtypes": [
+        "Utterance"
+      ]
     },
     {
       "id": "dd000019",
@@ -493,12 +633,19 @@
         {
           "trigger": "static",
           "effects": [
-            { "op": "restrictMove", "scope": "oppCompanions", "between": "lines" }
+            {
+              "op": "restrictMove",
+              "scope": "oppCompanions",
+              "between": "lines"
+            }
           ]
         }
       ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-07-22T00:00:00.000000Z",
+      "subtypes": [
+        "Utterance"
+      ]
     },
     {
       "id": "dd000020",
@@ -523,12 +670,19 @@
         {
           "trigger": "startOfTurn",
           "effects": [
-            { "op": "damage", "amount": 1, "target": "allEnemyCompanions" }
+            {
+              "op": "damage",
+              "amount": 1,
+              "target": "allEnemyCompanions"
+            }
           ]
         }
       ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-07-22T00:00:00.000000Z",
+      "subtypes": [
+        "Utterance"
+      ]
     },
     {
       "id": "dd000021",
@@ -553,12 +707,18 @@
         {
           "trigger": "oppCompanionAttacks",
           "effects": [
-            { "op": "forcedSacrifice", "chooser": "eventSubjectController" }
+            {
+              "op": "forcedSacrifice",
+              "chooser": "eventSubjectController"
+            }
           ]
         }
       ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-08-11T00:00:00.000000Z"
+      "updatedAt": "2026-08-11T00:00:00.000000Z",
+      "subtypes": [
+        "Utterance"
+      ]
     },
     {
       "id": "dd000022",
@@ -583,12 +743,21 @@
         {
           "trigger": "onPlay",
           "effects": [
-            { "op": "buff", "stat": "atk", "amount": -2, "scope": "enemyCompanion", "duration": "untilYourNextTurn" }
+            {
+              "op": "buff",
+              "stat": "atk",
+              "amount": -2,
+              "scope": "enemyCompanion",
+              "duration": "untilYourNextTurn"
+            }
           ]
         }
       ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-07-22T00:00:00.000000Z",
+      "subtypes": [
+        "Magic"
+      ]
     },
     {
       "id": "dd000023",
@@ -613,12 +782,19 @@
         {
           "trigger": "onPlay",
           "effects": [
-            { "op": "discard", "count": 1, "target": "targetPlayer" }
+            {
+              "op": "discard",
+              "count": 1,
+              "target": "targetPlayer"
+            }
           ]
         }
       ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-07-22T00:00:00.000000Z",
+      "subtypes": [
+        "Magic"
+      ]
     },
     {
       "id": "dd000024",
@@ -643,12 +819,23 @@
         {
           "trigger": "onPlay",
           "effects": [
-            { "op": "deckPeek", "look": 3, "dests": ["top"], "reorder": true, "deck": "opp" }
+            {
+              "op": "deckPeek",
+              "look": 3,
+              "dests": [
+                "top"
+              ],
+              "reorder": true,
+              "deck": "opp"
+            }
           ]
         }
       ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-07-22T00:00:00.000000Z",
+      "subtypes": [
+        "Magic"
+      ]
     },
     {
       "id": "dd000025",
@@ -673,12 +860,22 @@
         {
           "trigger": "onPlay",
           "effects": [
-            { "op": "buff", "modifiers": ["cannotAttack"], "scope": "anyCompanion", "duration": "controllersNextTurn" }
+            {
+              "op": "buff",
+              "modifiers": [
+                "cannotAttack"
+              ],
+              "scope": "anyCompanion",
+              "duration": "controllersNextTurn"
+            }
           ]
         }
       ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-07-22T00:00:00.000000Z",
+      "subtypes": [
+        "Magic"
+      ]
     },
     {
       "id": "dd000026",
@@ -703,13 +900,28 @@
         {
           "trigger": "onPlay",
           "effects": [
-            { "op": "gainControl", "target": "enemyCompanion", "duration": "endOfTurn", "hpAtMost": 2 },
-            { "op": "buff", "scope": "enemyCompanion", "grant": ["Zealous"], "duration": "endOfTurn" }
+            {
+              "op": "gainControl",
+              "target": "enemyCompanion",
+              "duration": "endOfTurn",
+              "hpAtMost": 2
+            },
+            {
+              "op": "buff",
+              "scope": "enemyCompanion",
+              "grant": [
+                "Zealous"
+              ],
+              "duration": "endOfTurn"
+            }
           ]
         }
       ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-08-11T00:00:00.000000Z"
+      "updatedAt": "2026-08-11T00:00:00.000000Z",
+      "subtypes": [
+        "Magic"
+      ]
     },
     {
       "id": "dd000027",
@@ -734,13 +946,26 @@
         {
           "trigger": "onPlay",
           "effects": [
-            { "op": "exhaust", "target": "enemyCompanion" },
-            { "op": "buff", "modifiers": ["doesNotReady"], "scope": "enemyCompanion", "duration": "controllersNextTurnStart" }
+            {
+              "op": "exhaust",
+              "target": "enemyCompanion"
+            },
+            {
+              "op": "buff",
+              "modifiers": [
+                "doesNotReady"
+              ],
+              "scope": "enemyCompanion",
+              "duration": "controllersNextTurnStart"
+            }
           ]
         }
       ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-08-04T00:00:00.000000Z"
+      "updatedAt": "2026-08-04T00:00:00.000000Z",
+      "subtypes": [
+        "Magic"
+      ]
     },
     {
       "id": "dd000028",
@@ -765,12 +990,21 @@
         {
           "trigger": "onPlay",
           "effects": [
-            { "op": "buff", "stat": "atk", "amount": -1, "scope": "allEnemyCompanions", "duration": "untilYourNextTurn" }
+            {
+              "op": "buff",
+              "stat": "atk",
+              "amount": -1,
+              "scope": "allEnemyCompanions",
+              "duration": "untilYourNextTurn"
+            }
           ]
         }
       ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-07-22T00:00:00.000000Z",
+      "subtypes": [
+        "Magic"
+      ]
     },
     {
       "id": "dd000029",
@@ -795,12 +1029,18 @@
         {
           "trigger": "onPlay",
           "effects": [
-            { "op": "returnFromDead", "to": "hand" }
+            {
+              "op": "returnFromDead",
+              "to": "hand"
+            }
           ]
         }
       ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-07-22T00:00:00.000000Z",
+      "subtypes": [
+        "Magic"
+      ]
     },
     {
       "id": "dd000030",
@@ -825,12 +1065,19 @@
         {
           "trigger": "onPlay",
           "effects": [
-            { "op": "anchor", "delta": -2, "target": "anyConstruct" }
+            {
+              "op": "anchor",
+              "delta": -2,
+              "target": "anyConstruct"
+            }
           ]
         }
       ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-07-22T00:00:00.000000Z",
+      "subtypes": [
+        "Magic"
+      ]
     },
     {
       "id": "dd000031",
@@ -855,12 +1102,17 @@
         {
           "trigger": "onPlay",
           "effects": [
-            { "op": "eachPlayerSacrificesOrDiscards" }
+            {
+              "op": "eachPlayerSacrificesOrDiscards"
+            }
           ]
         }
       ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-07-22T00:00:00.000000Z",
+      "subtypes": [
+        "Magic"
+      ]
     },
     {
       "id": "dd000032",
@@ -877,12 +1129,18 @@
       "actionSub": "",
       "actionPM": "",
       "itemKind": "",
-      "keywords": ["Evasive"],
+      "keywords": [
+        "Evasive"
+      ],
       "text": "EVASIVE. This character can attack any opponent character regardless of the target's positioning. Still subject to Guardian targeting requirement.",
       "flavor": "",
       "dev": true,
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-07-22T00:00:00.000000Z",
+      "subtypes": [
+        "Human",
+        "Cutpurse"
+      ]
     },
     {
       "id": "dd000033",
@@ -899,12 +1157,18 @@
       "actionSub": "",
       "actionPM": "",
       "itemKind": "",
-      "keywords": ["Evasive"],
+      "keywords": [
+        "Evasive"
+      ],
       "text": "EVASIVE. This character can attack any opponent character regardless of the target's positioning. Still subject to Guardian targeting requirement.",
       "flavor": "",
       "dev": true,
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-07-22T00:00:00.000000Z",
+      "subtypes": [
+        "Silshade",
+        "Lurker"
+      ]
     },
     {
       "id": "dd000034",
@@ -921,12 +1185,18 @@
       "actionSub": "",
       "actionPM": "",
       "itemKind": "",
-      "keywords": ["Poison"],
+      "keywords": [
+        "Poison"
+      ],
       "text": "POISON. If a character is damaged by this character, exhaust that character and place a Poison counter on it. At the beginning of each player's turn, for each Poisoned character they control, that player rolls a die. If the result is less than or equal to that player's current Willpower, remove all Poison counters from that character and ready it. Otherwise, that character remains exhausted this turn and its controller takes 1 damage for each Poison counter on it.",
       "flavor": "",
       "dev": true,
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-08-18T00:00:00.000000Z"
+      "updatedAt": "2026-08-18T00:00:00.000000Z",
+      "subtypes": [
+        "Beast",
+        "Snake"
+      ]
     },
     {
       "id": "dd000035",
@@ -943,12 +1213,18 @@
       "actionSub": "",
       "actionPM": "",
       "itemKind": "",
-      "keywords": ["Poison"],
+      "keywords": [
+        "Poison"
+      ],
       "text": "POISON. If a character is damaged by this character, exhaust that character and place a Poison counter on it. At the beginning of each player's turn, for each Poisoned character they control, that player rolls a die. If the result is less than or equal to that player's current Willpower, remove all Poison counters from that character and ready it. Otherwise, that character remains exhausted this turn and its controller takes 1 damage for each Poison counter on it.",
       "flavor": "",
       "dev": true,
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-08-18T00:00:00.000000Z"
+      "updatedAt": "2026-08-18T00:00:00.000000Z",
+      "subtypes": [
+        "Beast",
+        "Scorpion"
+      ]
     },
     {
       "id": "dd000036",
@@ -965,7 +1241,9 @@
       "actionSub": "",
       "actionPM": "",
       "itemKind": "Weapon",
-      "keywords": ["Poison"],
+      "keywords": [
+        "Poison"
+      ],
       "text": "+1 attack. Equipped character has POISON. If a character is damaged by this character, exhaust that character and place a Poison counter on it. At the beginning of each player's turn, for each Poisoned character they control, that player rolls a die. If the result is less than or equal to that player's current Willpower, remove all Poison counters from that character and ready it. Otherwise, that character remains exhausted this turn and its controller takes 1 damage for each Poison counter on it.",
       "flavor": "",
       "dev": true,
@@ -973,12 +1251,22 @@
         {
           "trigger": "equipped",
           "effects": [
-            { "op": "buff", "stat": "atk", "amount": 1, "scope": "self", "duration": "while" }
+            {
+              "op": "buff",
+              "stat": "atk",
+              "amount": 1,
+              "scope": "self",
+              "duration": "while"
+            }
           ]
         }
       ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-07-22T00:00:00.000000Z",
+      "subtypes": [
+        "Weapon",
+        "Dagger"
+      ]
     },
     {
       "id": "dd000037",
@@ -995,12 +1283,18 @@
       "actionSub": "",
       "actionPM": "",
       "itemKind": "",
-      "keywords": ["Scavenger"],
+      "keywords": [
+        "Scavenger"
+      ],
       "text": "SCAVENGER. When this companion enters the encounter, you may return an item from your Dead Zone and immediately attach it to this companion.",
       "flavor": "",
       "dev": true,
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-08-18T00:00:00.000000Z"
+      "updatedAt": "2026-08-18T00:00:00.000000Z",
+      "subtypes": [
+        "Beast",
+        "Crow"
+      ]
     },
     {
       "id": "dd000038",
@@ -1017,12 +1311,18 @@
       "actionSub": "",
       "actionPM": "",
       "itemKind": "",
-      "keywords": ["Scavenger"],
+      "keywords": [
+        "Scavenger"
+      ],
       "text": "SCAVENGER. When this companion enters the encounter, you may return an item from your Dead Zone and immediately attach it to this companion.",
       "flavor": "",
       "dev": true,
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-07-22T00:00:00.000000Z",
+      "subtypes": [
+        "Human",
+        "Thief"
+      ]
     },
     {
       "id": "dd000039",
@@ -1039,7 +1339,9 @@
       "actionSub": "",
       "actionPM": "",
       "itemKind": "",
-      "keywords": ["Scavenger"],
+      "keywords": [
+        "Scavenger"
+      ],
       "text": "SCAVENGER. When this companion enters the encounter, you may return an item from your Dead Zone and immediately attach it to this companion. When this enters, you may return target item from your Dead Zone to your hand.",
       "flavor": "",
       "dev": true,
@@ -1047,12 +1349,21 @@
         {
           "trigger": "onEnter",
           "effects": [
-            { "op": "returnFromDead", "to": "hand", "cardType": "Item", "optional": true }
+            {
+              "op": "returnFromDead",
+              "to": "hand",
+              "cardType": "Item",
+              "optional": true
+            }
           ]
         }
       ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-08-04T00:00:00.000000Z"
+      "updatedAt": "2026-08-04T00:00:00.000000Z",
+      "subtypes": [
+        "Human",
+        "Fence"
+      ]
     },
     {
       "id": "dd000040",
@@ -1069,12 +1380,18 @@
       "actionSub": "",
       "actionPM": "",
       "itemKind": "",
-      "keywords": ["Acrobatics"],
+      "keywords": [
+        "Acrobatics"
+      ],
       "text": "ACROBATICS. This companion cannot be damaged by any source that does not target it directly.",
       "flavor": "",
       "dev": true,
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-07-22T00:00:00.000000Z",
+      "subtypes": [
+        "Human",
+        "Acrobat"
+      ]
     },
     {
       "id": "dd000041",
@@ -1091,12 +1408,18 @@
       "actionSub": "",
       "actionPM": "",
       "itemKind": "",
-      "keywords": ["Acrobatics"],
+      "keywords": [
+        "Acrobatics"
+      ],
       "text": "ACROBATICS. This companion cannot be damaged by any source that does not target it directly.",
       "flavor": "",
       "dev": true,
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-08-18T00:00:00.000000Z"
+      "updatedAt": "2026-08-18T00:00:00.000000Z",
+      "subtypes": [
+        "Beast",
+        "Rat"
+      ]
     },
     {
       "id": "dd000042",
@@ -1113,13 +1436,18 @@
       "actionSub": "",
       "actionPM": "",
       "itemKind": "Trinket",
-      "keywords": ["Acrobatics"],
+      "keywords": [
+        "Acrobatics"
+      ],
       "text": "Equipped character has ACROBATICS. This companion cannot be damaged by any source that does not target it directly.",
       "flavor": "",
       "dev": true,
       "effectsFlag": "DEV reminder-only (2026-07-22): the grant is carried by the printed keyword via ITEM_GRANTED_KEYWORDS (Acrobatics is whitelisted) — no structured effects exist to author",
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-07-22T00:00:00.000000Z",
+      "subtypes": [
+        "Trinket"
+      ]
     },
     {
       "id": "dd000043",
@@ -1136,12 +1464,18 @@
       "actionSub": "",
       "actionPM": "",
       "itemKind": "",
-      "keywords": ["Paladin's Bane"],
+      "keywords": [
+        "Paladin's Bane"
+      ],
       "text": "PALADIN'S BANE. This deals double damage to Companions whose subtype or class is Paladin.",
       "flavor": "",
       "dev": true,
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-07-22T00:00:00.000000Z",
+      "subtypes": [
+        "Human",
+        "Assassin"
+      ]
     },
     {
       "id": "dd000044",
@@ -1158,7 +1492,9 @@
       "actionSub": "",
       "actionPM": "",
       "itemKind": "Weapon",
-      "keywords": ["Druid's Bane"],
+      "keywords": [
+        "Druid's Bane"
+      ],
       "text": "+1 attack. Equipped character has DRUID'S BANE. This deals double damage to Companions whose subtype or class is Druid.",
       "flavor": "",
       "dev": true,
@@ -1166,12 +1502,22 @@
         {
           "trigger": "equipped",
           "effects": [
-            { "op": "buff", "stat": "atk", "amount": 1, "scope": "self", "duration": "while" }
+            {
+              "op": "buff",
+              "stat": "atk",
+              "amount": 1,
+              "scope": "self",
+              "duration": "while"
+            }
           ]
         }
       ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-07-22T00:00:00.000000Z",
+      "subtypes": [
+        "Weapon",
+        "Knife"
+      ]
     },
     {
       "id": "dd000045",
@@ -1196,12 +1542,19 @@
         {
           "trigger": "oppCompanionEnters",
           "effects": [
-            { "op": "discard", "count": 1, "target": "eventSubject" }
+            {
+              "op": "discard",
+              "count": 1,
+              "target": "eventSubject"
+            }
           ]
         }
       ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-07-22T00:00:00.000000Z",
+      "subtypes": [
+        "Trap"
+      ]
     },
     {
       "id": "dd000046",
@@ -1226,12 +1579,19 @@
         {
           "trigger": "oppCompanionMovesToFront",
           "effects": [
-            { "op": "applyPoison", "count": 1, "target": "eventSubject" }
+            {
+              "op": "applyPoison",
+              "count": 1,
+              "target": "eventSubject"
+            }
           ]
         }
       ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-07-22T00:00:00.000000Z",
+      "subtypes": [
+        "Trap"
+      ]
     },
     {
       "id": "dd000047",
@@ -1256,12 +1616,19 @@
         {
           "trigger": "onEquippedAttacked",
           "effects": [
-            { "op": "damage", "amount": 1, "target": "eventSubject" }
+            {
+              "op": "damage",
+              "amount": 1,
+              "target": "eventSubject"
+            }
           ]
         }
       ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-07-22T00:00:00.000000Z",
+      "subtypes": [
+        "Trinket"
+      ]
     },
     {
       "id": "dd000048",
@@ -1278,13 +1645,18 @@
       "actionSub": "",
       "actionPM": "",
       "itemKind": "Trinket",
-      "keywords": ["Hit & Run"],
+      "keywords": [
+        "Hit & Run"
+      ],
       "text": "Equipped character has HIT & RUN. After this character attacks, it may take an extra move action.",
       "flavor": "",
       "dev": true,
       "effectsFlag": "DEV reminder-only (2026-07-22): the grant is carried by the printed keyword via ITEM_GRANTED_KEYWORDS (Hit & Run is whitelisted) — no structured effects exist to author",
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-07-22T00:00:00.000000Z",
+      "subtypes": [
+        "Trinket"
+      ]
     },
     {
       "id": "dd000049",
@@ -1308,14 +1680,24 @@
       "effects": [
         {
           "trigger": "activated",
-          "cost": { "kind": "exhaustItem" },
+          "cost": {
+            "kind": "exhaustItem"
+          },
           "effects": [
-            { "op": "returnFromDead", "to": "hand", "cardType": "Item", "itemKind": "Weapon" }
+            {
+              "op": "returnFromDead",
+              "to": "hand",
+              "cardType": "Item",
+              "itemKind": "Weapon"
+            }
           ]
         }
       ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-07-22T00:00:00.000000Z",
+      "subtypes": [
+        "Trinket"
+      ]
     },
     {
       "id": "dd000050",
@@ -1340,12 +1722,18 @@
         {
           "trigger": "onPlay",
           "effects": [
-            { "op": "revealHand", "pick": "toBottomDraw" }
+            {
+              "op": "revealHand",
+              "pick": "toBottomDraw"
+            }
           ]
         }
       ],
       "createdAt": "2026-07-22T00:00:00.000000Z",
-      "updatedAt": "2026-07-22T00:00:00.000000Z"
+      "updatedAt": "2026-07-22T00:00:00.000000Z",
+      "subtypes": [
+        "Physical"
+      ]
     }
   ]
 }

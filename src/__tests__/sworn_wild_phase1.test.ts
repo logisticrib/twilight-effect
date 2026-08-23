@@ -50,7 +50,10 @@ describe('Sworn Wild — deck data contract', () => {
       expect(c.effectsFlag, `${id} ${c.name} went live in Arc A`).toBeUndefined();
       expect(c.effects?.length, `${id} carries real effects`).toBeGreaterThan(0);
     }
-    expect(flagged.length, "19 cards still await engine arcs (26 minus Arc A's seven)").toBe(19);
+    // RETIRED + REWRITTEN 2026-08-20 (Arc B): was 19 after Arc A. Arc B cleared the
+    // six family-B cards, leaving 13 — dd000066 and dd000071 keep NARROWED flags
+    // because their remaining gaps belong to families C and G, not B.
+    expect(flagged.length, "13 cards still await engine arcs (Arc B cleared six)").toBe(13);
     // A card is SILENT only if nothing at all carries its behavior: no effects, no
     // flag, and no printed keyword either. (Keyword reminder text is not silent — the
     // Armor carriers print a full clause that the live keyword honours, which is

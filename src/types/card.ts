@@ -10,6 +10,13 @@ export interface RawCard {
   level: number;
   type: CardType;
   subtype: string;
+  /** The type line's tokens, AUTHORED in the card data (owner ruling 2026-08-20) —
+   *  never inferred at load and never split at runtime. "Spirit Beast Deer" is
+   *  ["Spirit","Beast","Deer"]; "Weapon - Sword" is ["Weapon","Sword"]. Matching is
+   *  SET MEMBERSHIP over this array, so stacked modifiers work regardless of position
+   *  and the engine never parses a type line. `subtype` remains the display string;
+   *  validateCards enforces that the two stay in sync. */
+  subtypes: string[];
   rarity: string;
   class1: string;
   class2: string;
@@ -40,7 +47,16 @@ export interface RawCard {
 }
 
 /** Normalized card used throughout the app. */
-export interface Card extends RawCard {
+/**
+ * The RUNTIME card. `subtypes` is DELIBERATELY OMITTED — it lives in
+ * catalog.ts's SUBTYPES_BY_ID / SUBTYPES_BY_NAME lookups instead.
+ *
+ * STANDING RULE (owner, 2026-08-20): nothing new serializes into GameState unless a
+ * RECORDING needs it; derived data lives in lookups. Card objects sit inside recorded
+ * snapshots (hand, deck, dead, classZone.cardData), so a new key here re-hashes every
+ * fixture — which is exactly what broke t3 when `subtypes` was briefly a Card field.
+ */
+export interface Card extends Omit<RawCard, 'subtypes'> {
   cls: string;         // alias for class1 (primary class)
 }
 

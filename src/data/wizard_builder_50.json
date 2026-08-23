@@ -34,6 +34,10 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Human",
+        "Scholar"
       ]
     },
     {
@@ -66,6 +70,10 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Elf",
+        "Archivist"
       ]
     },
     {
@@ -91,7 +99,20 @@
       "createdAt": "2026-05-16T19:02:21.324090Z",
       "updatedAt": "2026-05-16T19:02:21.324091Z",
       "effects": [
-        { "trigger": "ownPlaysMagicalConstruct", "effects": [{ "op": "heal", "amount": 1, "target": "self" }] }
+        {
+          "trigger": "ownPlaysMagicalConstruct",
+          "effects": [
+            {
+              "op": "heal",
+              "amount": 1,
+              "target": "self"
+            }
+          ]
+        }
+      ],
+      "subtypes": [
+        "Human",
+        "Wizard"
       ]
     },
     {
@@ -125,6 +146,10 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Human",
+        "Artificer"
       ]
     },
     {
@@ -159,6 +184,10 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Elf",
+        "Wizard"
       ]
     },
     {
@@ -195,6 +224,10 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Elf",
+        "Sage"
       ]
     },
     {
@@ -231,6 +264,11 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Legendary",
+        "Elf",
+        "Mage"
       ]
     },
     {
@@ -266,6 +304,9 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Incantation"
       ]
     },
     {
@@ -297,6 +338,9 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Incantation"
       ]
     },
     {
@@ -329,6 +373,9 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Incantation"
       ]
     },
     {
@@ -355,9 +402,20 @@
         {
           "trigger": "startOfTurn",
           "effects": [
-            { "op": "deckPeek", "look": 1, "dests": ["top", "bottom"], "deck": "any" }
+            {
+              "op": "deckPeek",
+              "look": 1,
+              "dests": [
+                "top",
+                "bottom"
+              ],
+              "deck": "any"
+            }
           ]
         }
+      ],
+      "subtypes": [
+        "Incantation"
       ]
     },
     {
@@ -381,7 +439,22 @@
       "createdAt": "2026-05-16T19:02:21.324227Z",
       "updatedAt": "2026-05-16T19:02:21.324229Z",
       "effects": [
-        { "trigger": "static", "effects": [{ "op": "preventDamage", "amount": 1, "scope": "ownCompanions", "where": { "cls": "Wizard" } }] }
+        {
+          "trigger": "static",
+          "effects": [
+            {
+              "op": "preventDamage",
+              "amount": 1,
+              "scope": "ownCompanions",
+              "where": {
+                "cls": "Wizard"
+              }
+            }
+          ]
+        }
+      ],
+      "subtypes": [
+        "Incantation"
       ]
     },
     {
@@ -415,6 +488,9 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Incantation"
       ]
     },
     {
@@ -438,7 +514,21 @@
       "createdAt": "2026-05-16T19:02:21.324242Z",
       "updatedAt": "2026-05-16T19:02:21.324243Z",
       "effects": [
-        { "trigger": "static", "effects": [{ "op": "restrictAttack", "scope": "oppCompanions", "where": { "line": "back" } }] }
+        {
+          "trigger": "static",
+          "effects": [
+            {
+              "op": "restrictAttack",
+              "scope": "oppCompanions",
+              "where": {
+                "line": "back"
+              }
+            }
+          ]
+        }
+      ],
+      "subtypes": [
+        "Incantation"
       ]
     },
     {
@@ -475,6 +565,9 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Incantation"
       ]
     },
     {
@@ -516,6 +609,9 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Incantation"
       ]
     },
     {
@@ -551,6 +647,9 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Incantation"
       ]
     },
     {
@@ -585,15 +684,27 @@
               "duration": "while"
             }
           ]
-        }
-      ,
+        },
         {
           "trigger": "activated",
-          "cost": { "kind": "exhaustItem" },
+          "cost": {
+            "kind": "exhaustItem"
+          },
           "effects": [
-            { "op": "deckPeek", "look": 1, "dests": ["top"], "deck": "any" }
+            {
+              "op": "deckPeek",
+              "look": 1,
+              "dests": [
+                "top"
+              ],
+              "deck": "any"
+            }
           ]
         }
+      ],
+      "subtypes": [
+        "Weapon",
+        "Staff"
       ]
     },
     {
@@ -617,7 +728,10 @@
       "text": "ARMOR 1. This item enters the encounter with 1 armor counter. If the equipped character would be dealt damage, prevent all of that damage and remove an armor counter from this item. When the last armor counter is removed, sacrifice this item.",
       "flavor": "",
       "createdAt": "2026-05-16T19:02:21.324278Z",
-      "updatedAt": "2026-08-18T00:00:00.000000Z"
+      "updatedAt": "2026-08-18T00:00:00.000000Z",
+      "subtypes": [
+        "Armor"
+      ]
     },
     {
       "id": "6948a781",
@@ -649,6 +763,9 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Trinket"
       ]
     },
     {
@@ -697,6 +814,9 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Trinket"
       ]
     },
     {
@@ -729,6 +849,9 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Magic"
       ]
     },
     {
@@ -766,6 +889,9 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Magic"
       ]
     },
     {
@@ -808,6 +934,9 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Magic"
       ]
     },
     {
@@ -844,6 +973,9 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Magic"
       ]
     },
     {
@@ -877,6 +1009,10 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Human",
+        "Laborer"
       ]
     },
     {
@@ -910,6 +1046,10 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Human",
+        "Builder"
       ]
     },
     {
@@ -933,7 +1073,11 @@
       "text": "REINFORCE 2. When this enters play, add 2 Anchor counters to target Physical Construct.",
       "flavor": "",
       "createdAt": "2026-05-16T19:02:21.324384Z",
-      "updatedAt": "2026-05-16T19:02:21.324386Z"
+      "updatedAt": "2026-05-16T19:02:21.324386Z",
+      "subtypes": [
+        "Dwarf",
+        "Builder"
+      ]
     },
     {
       "id": "2025e6a5",
@@ -956,7 +1100,11 @@
       "text": "DISMANTLE 2. When this enters play, remove up to 2 Anchor counters from target Physical Construct. If it has no Anchor counters remaining, sacrifice it.",
       "flavor": "",
       "createdAt": "2026-05-16T19:02:21.324417Z",
-      "updatedAt": "2026-05-16T19:02:21.324421Z"
+      "updatedAt": "2026-05-16T19:02:21.324421Z",
+      "subtypes": [
+        "Dwarf",
+        "Builder"
+      ]
     },
     {
       "id": "774949cd",
@@ -979,7 +1127,11 @@
       "text": "GUARDIAN. While this character is ready and a legal target, opponents must attack it before any other character.",
       "flavor": "",
       "createdAt": "2026-05-16T19:02:21.324432Z",
-      "updatedAt": "2026-05-16T19:02:21.324433Z"
+      "updatedAt": "2026-05-16T19:02:21.324433Z",
+      "subtypes": [
+        "Human",
+        "Builder"
+      ]
     },
     {
       "id": "a7fdf1b5",
@@ -1012,6 +1164,10 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Dwarf",
+        "Architect"
       ]
     },
     {
@@ -1047,6 +1203,11 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Legendary",
+        "Dwarf",
+        "Builder"
       ]
     },
     {
@@ -1084,6 +1245,9 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Trap"
       ]
     },
     {
@@ -1120,6 +1284,9 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Trap"
       ]
     },
     {
@@ -1153,6 +1320,9 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Fortification"
       ]
     },
     {
@@ -1184,6 +1354,9 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Fortification"
       ]
     },
     {
@@ -1217,6 +1390,9 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Trap"
       ]
     },
     {
@@ -1255,6 +1431,9 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Fortification"
       ]
     },
     {
@@ -1278,7 +1457,19 @@
       "createdAt": "2026-05-16T19:02:21.324573Z",
       "updatedAt": "2026-05-16T19:02:21.324574Z",
       "effects": [
-        { "trigger": "static", "effects": [{ "op": "restrictMove", "scope": "oppCompanions", "between": "lines" }] }
+        {
+          "trigger": "static",
+          "effects": [
+            {
+              "op": "restrictMove",
+              "scope": "oppCompanions",
+              "between": "lines"
+            }
+          ]
+        }
+      ],
+      "subtypes": [
+        "Fortification"
       ]
     },
     {
@@ -1315,6 +1506,9 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Trap"
       ]
     },
     {
@@ -1338,7 +1532,18 @@
       "createdAt": "2026-05-16T19:02:21.324587Z",
       "updatedAt": "2026-05-16T19:02:21.324588Z",
       "effects": [
-        { "trigger": "ownPhysicalConstructSacrificed", "effects": [{ "op": "draw", "count": 1 }] }
+        {
+          "trigger": "ownPhysicalConstructSacrificed",
+          "effects": [
+            {
+              "op": "draw",
+              "count": 1
+            }
+          ]
+        }
+      ],
+      "subtypes": [
+        "Fortification"
       ]
     },
     {
@@ -1377,6 +1582,9 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Fortification"
       ]
     },
     {
@@ -1425,6 +1633,10 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Weapon",
+        "Hammer"
       ]
     },
     {
@@ -1448,7 +1660,10 @@
       "text": "ARMOR 2. This item enters the encounter with 2 armor counters. If the equipped character would be dealt damage, prevent all of that damage and remove an armor counter from this item. When the last armor counter is removed, sacrifice this item.",
       "flavor": "",
       "createdAt": "2026-05-16T19:02:21.324608Z",
-      "updatedAt": "2026-08-18T00:00:00.000000Z"
+      "updatedAt": "2026-08-18T00:00:00.000000Z",
+      "subtypes": [
+        "Armor"
+      ]
     },
     {
       "id": "46e94ea1",
@@ -1473,7 +1688,9 @@
       "effects": [
         {
           "trigger": "activated",
-          "cost": { "kind": "exhaustItem" },
+          "cost": {
+            "kind": "exhaustItem"
+          },
           "effects": [
             {
               "op": "anchor",
@@ -1482,6 +1699,9 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Trinket"
       ]
     },
     {
@@ -1519,6 +1739,11 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Two-Handed",
+        "Weapon",
+        "Hammer"
       ]
     },
     {
@@ -1556,6 +1781,9 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Trinket"
       ]
     },
     {
@@ -1589,6 +1817,9 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Physical"
       ]
     },
     {
@@ -1622,6 +1853,9 @@
             }
           ]
         }
+      ],
+      "subtypes": [
+        "Physical"
       ]
     },
     {
@@ -1663,7 +1897,10 @@
         }
       ],
       "createdAt": "2026-05-16T19:02:21.324681Z",
-      "updatedAt": "2026-05-16T19:02:21.324683Z"
+      "updatedAt": "2026-05-16T19:02:21.324683Z",
+      "subtypes": [
+        "Physical"
+      ]
     }
   ]
 }

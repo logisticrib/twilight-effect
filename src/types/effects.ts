@@ -165,7 +165,7 @@ export type Effect =
   // not yet live at the ready step (Arc H finding, 2026-08-04). The entry stays
   // inertly live for the rest of that turn (nothing re-reads 'doesNotReady' after
   // the turn-start window) and strips at its end.
-  | { op: 'buff'; stat?: 'atk' | 'hp'; amount?: number; grant?: string[]; modifiers?: Modifier[]; scope: TargetSpec; duration: 'endOfTurn' | 'while' | 'untilYourNextTurn' | 'controllersNextTurn' | 'controllersNextTurnStart'; where?: { line?: 'front' | 'back'; cls?: string } }
+  | { op: 'buff'; stat?: 'atk' | 'hp'; amount?: number; grant?: string[]; modifiers?: Modifier[]; scope: TargetSpec; duration: 'endOfTurn' | 'while' | 'untilYourNextTurn' | 'controllersNextTurn' | 'controllersNextTurnStart'; where?: { line?: 'front' | 'back'; cls?: string; subtype?: string } }
   // card / zone movement
   // perDestroyed (Arc A, 2026-08-19 — Let the Wild In: "draw a card for each Gear
   // destroyed this way"): the count is how many permanents THIS resolution actually
@@ -204,7 +204,10 @@ export type Effect =
   | { op: 'applyPoison'; count: number; target: TargetSpec }
   // itemKind narrows an Item recovery to Weapon/Armor/Trinket ("return target Weapon" —
   // Fence's Ledger, dev deck 2026-07-22); optional makes the pick skippable ("you may").
-  | { op: 'returnFromDead'; cardType?: string; itemKind?: string; optional?: boolean; to: 'hand' | 'encounter' }
+  // subtype (Arc B, 2026-08-19): "Return target Beast from your Dead Zone" — matched
+  // by SET MEMBERSHIP on the card's authored `subtypes`, never by string equality
+  // against the display type line (a Beast Crow IS a Beast).
+  | { op: 'returnFromDead'; cardType?: string; itemKind?: string; subtype?: string; optional?: boolean; to: 'hand' | 'encounter' }
   | { op: 'search'; cardType: string }
   // board manipulation
   | { op: 'move'; target: TargetSpec; to: 'anySlot' | 'adjacent'; forced?: boolean }
@@ -247,6 +250,13 @@ export type Effect =
   | { op: 'preventAnchorDecay' }                 // (static) your Physical Constructs skip start-of-turn anchor decay
   | { op: 'lineWard' }                           // (static) opposing companions can't attack characters on the line opposite this construct
   | { op: 'exhaustSelf' }                        // exhaust the source permanent (e.g. Library of Memory's "if you do")
+  // ready (Arc B, 2026-08-19 — Greywind Courser). The exact inverse of `exhaust`, and
+  // the same mutation extraAttack already performs: clears tap/exhaust and frees the
+  // Major slot. It does NOT clear `fresh` — the entry-turn gate is a SEPARATE check
+  // (stats.ts canTakeMajor / the summoning-sickness gate), so readying a companion that
+  // entered this turn still cannot take a Major Action unless it has Zealous. `subtype`
+  // narrows the eligible picks (see filterEligibleByEffects).
+  | { op: 'ready'; target: TargetSpec; subtype?: string }
   | { op: 'exhaust'; target: TargetSpec }        // exhaust the target (Pit Trap: 'eventSubject'). Mandatory triggers
                                                  // still fire when this is a no-op (already-exhausted target — R4)
   // future (declared so authored cards validate; interpreter support added later)

@@ -3,7 +3,7 @@ import type { CardEffect, Modifier } from '../types/effects';
 import type { GameState, PlayerState } from './state';
 import type { SlotId } from './geometry';
 import { isFront } from './geometry';
-import { CATALOG } from '../data/catalog';
+import { CATALOG, SUBTYPES_BY_NAME, authoredSubtypesOf } from '../data/catalog';
 
 /**
  * Keyword effect engine.
@@ -174,6 +174,11 @@ function staticAuraStat(ent: BoardEntity, game: GameState, stat: 'atk' | 'hp'): 
       if (!scopeHit) continue;
       if (e.where?.line && e.where.line !== entLine) continue;
       if (e.where?.cls && e.where.cls !== ent.cls) continue;
+      // Arc B (2026-08-19): "Beasts you control get +1 attack". Set membership over
+      // authored tokens. This scan re-derives from the board on EVERY read, so a Beast
+      // entering after the aura is already in play is covered, and the aura dies with
+      // its source — no stamping, nothing to clean up.
+      if (e.where?.subtype && !hasSubtype(ent, e.where.subtype)) continue;
       sum += e.amount ?? 0;
     }
   }
@@ -522,7 +527,12 @@ export function parseBanes(keywords: string[]): string[] {
  *  Companions only (per the Master List); matches subtype OR class. */
 export function isBaneTarget(banes: string[], defender: BoardEntity): boolean {
   if (defender.kind !== 'companion') return false;
-  return banes.some(b => b === defender.subtype || b === defender.cls);
+  // Arc B (owner ruling 2026-08-20): match the type line by SET MEMBERSHIP, not by
+  // whole-string equality. Before this, "Crow's Bane" missed a `Beast Crow` entirely —
+  // latent since the 2026-08-18 Beast re-cut, and invisible only because both shipped
+  // Bane carriers key to a CLASS. Canon reads "Companions whose subtype or class is
+  // [NAME]", and with modifiers stacking a Beast Crow IS a Crow.
+  return banes.some(b => hasSubtype(defender, b) || b === defender.cls);
 }
 
 /**
@@ -578,6 +588,46 @@ export function poisonHitPatch(ent: BoardEntity): Partial<BoardEntity> {
     tapped: 'major',
     exhausted: true,
   };
+}
+
+// ─── Subtype matching (Arc B, owner-ratified 2026-08-20) ──────────────────────
+/**
+ * The structured type-line tokens for a board entity.
+ *
+ * Read from the entity's CARD, where they are authored — deliberately NOT stored on
+ * BoardEntity: an always-present new key on every entity would re-hash every recorded
+ * snapshot, the exact trap that cost fixtures t8/t9 when `inspired` was written
+ * unconditionally (2026-08-19).
+ *
+ * When a type-changing effect has rewritten the entity's live subtype (Animate Magic
+ * stamps 'Manifest'), the LIVE value wins and stands alone — it is a single token, so
+ * nothing is parsed here either.
+ */
+export function subtypesOf(ent: BoardEntity): readonly string[] {
+  const card = CATALOG.find(c => c.name === ent.name);
+  if (card && card.subtype === ent.subtype) return SUBTYPES_BY_NAME.get(ent.name) ?? [];
+  // Name not in the catalog (a synthetic test seed), or a type-changing effect rewrote
+  // the live subtype (Animate Magic stamps 'Manifest'): the live value stands alone. It
+  // is a single token, so nothing is parsed here either. Documented consequence: tests
+  // seed REAL card names, which exercises the authored data end to end.
+  return ent.subtype ? [ent.subtype] : [];
+}
+
+/**
+ * Does this entity's type line carry `want`?
+ *
+ * SET MEMBERSHIP over authored tokens — never a substring test, never derived from the
+ * organism. Canon (owner, 2026-08-18): Beast is PRINTED. A griffin is a Beast because
+ * its type line says so; an Angel never is; "Beast" inside a NAME means nothing. Case
+ * matters as authored, matching every other subtype comparison in the engine.
+ */
+export function hasSubtype(ent: BoardEntity, want: string): boolean {
+  return subtypesOf(ent).includes(want);
+}
+
+/** Same test against a CARD (Dead Zone recovery, hand/pool queries). */
+export function cardHasSubtype(card: Card, want: string): boolean {
+  return authoredSubtypesOf(card).includes(want);
 }
 
 /** Characters (not constructs) can hold items and be Kit-Master endpoints. */

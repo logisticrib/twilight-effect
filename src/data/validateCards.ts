@@ -56,6 +56,7 @@ const OPS = [
   'grantKeywords', 'backLineAttack', 'preventDamage', 'firstMagicUncounterable', 'restrictAttack', 'restrictMove',
   'forcedSacrifice',
   'destroy',
+  'ready',
 ] as const satisfies readonly Effect['op'][];
 export type _ExhaustiveOps = AssertNever<Exclude<Effect['op'], (typeof OPS)[number]>>;
 
@@ -74,6 +75,12 @@ const CONDITION_KINDS = [
 export type _ExhaustiveConditions = AssertNever<Exclude<Condition['kind'], (typeof CONDITION_KINDS)[number]>>;
 
 const AMOUNT_KEYS = ['die', 'halfDie', 'halfDieUp', 'perControlled'] as const;
+
+/** The type line's tokens: " - " separates segments, whitespace separates stacked
+ *  modifiers. Hyphenated single tokens ("Two-Handed") survive — only SPACE-hyphen-SPACE
+ *  is a separator. Used ONLY to verify authored data, never to derive it at runtime. */
+export const subtypeTokens = (sub: string | undefined): string[] =>
+  (sub ?? '').split(' - ').flatMap(seg => seg.split(/\s+/)).filter(Boolean);
 
 const CARD_TYPES = ['Companion', 'Item', 'Construct', 'Action'] as const;
 const ACTION_COSTS = ['', 'Minor', 'Major', 'Special'] as const;
@@ -153,6 +160,7 @@ function validateEffect(e: Effect, path: string, p: (msg: string) => void, keywo
       for (const m of e.modifiers ?? []) if (!has(MODIFIERS, m)) p(`${path}(buff): unknown modifier "${String(m)}"`);
       for (const g of e.grant ?? []) if (!(keywordBase(g) in keywords)) p(`${path}(buff): grants unknown keyword "${g}"`);
       if (e.where?.line !== undefined && e.where.line !== 'front' && e.where.line !== 'back') p(`${path}(buff): bad where.line`);
+      if (e.where?.subtype !== undefined && typeof e.where.subtype !== 'string') p(`${path}(buff): bad where.subtype`);
       break;
     case 'draw':
       // perDestroyed (Arc A, 2026-08-19) supplies the count at resolution — how many
@@ -401,6 +409,22 @@ export function validateCards(
     const p = (msg: string) => problems.push(`${card.name}: ${msg}`);
     if (ids.has(card.id)) p(`duplicate id "${card.id}" (also used by ${ids.get(card.id)})`);
     else ids.set(card.id, card.name);
+    // Arc B (2026-08-20): `subtypes` is AUTHORED in the card DATA, so it can drift from
+    // the display string — this is the sync check that makes hand-authoring safe.
+    //
+    // Checked whenever the card under validation CARRIES the authored array: the raw deck
+    // data and any mint candidate, which is exactly where drift can be introduced. Runtime
+    // Cards deliberately no longer carry it (it lives in catalog's SUBTYPES_BY_ID, so
+    // nothing new serializes into recordings), so validating CATALOG skips this leg — the
+    // raw files have their own dedicated pin. Keeping the check object-local also avoids
+    // coupling the mint gate to the shipped catalog.
+    const authoredSubs = (card as { subtypes?: readonly string[] }).subtypes;
+    if (authoredSubs) {
+      const wantSubs = subtypeTokens(card.subtype);
+      if (wantSubs.length !== authoredSubs.length || wantSubs.some((t, i) => t !== authoredSubs[i])) {
+        p(`subtypes ${JSON.stringify(authoredSubs)} do not match the type line ${JSON.stringify(card.subtype)} (expected ${JSON.stringify(wantSubs)})`);
+      }
+    }
     if (minted.has(card.name)) p('name already taken by a previously minted card (names are unique; mechanics may repeat)');
     else if (names.has(card.name)) p('duplicate name within this set (name-keyed lookups would silently pick the wrong card)');
     else names.add(card.name);

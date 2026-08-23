@@ -4,8 +4,14 @@ import wbRaw from './wizard_builder_50.json';
 import devRaw from './dw_rogue_dev_50.json';
 import swornRaw from './paladin_druid_dev_50.json';
 
+/** Normalize a raw deck entry into a runtime Card.
+ *
+ *  `subtypes` is dropped HERE, on purpose: the authored tokens move into the lookups
+ *  below rather than onto an object that gets serialized into recordings (owner ruling
+ *  2026-08-20 — nothing new serializes into GameState unless a recording needs it). */
 function normalize(raw: RawCard): Card {
-  return { ...raw, cls: raw.class1 || 'Classless' };
+  const { subtypes: _authored, ...rest } = raw;
+  return { ...rest, cls: raw.class1 || 'Classless' };
 }
 
 // sorcerer_warrior deck is a raw array; wizard_builder is { cards: [...] }
@@ -24,6 +30,35 @@ export const CATALOG: Card[] = [...swCards, ...wbCards, ...devCards, ...swornCar
 /** Shipped (canon) pool only — dev cards excluded. Coverage audits and any
  *  "shipped decks" query MUST use this, never CATALOG (dev-deck rule, 2026-07-22). */
 export const SHIPPED_CATALOG: Card[] = CATALOG.filter(c => !c.dev);
+
+// ─── Authored subtype tokens (Arc B, owner ruling 2026-08-20) ─────────────────
+/** Every raw entry across all four decks — the authoring source for the lookups. */
+const ALL_RAW: RawCard[] = [
+  ...(swRaw as RawCard[]),
+  ...((wbRaw as { cards: RawCard[] }).cards),
+  ...((devRaw as { cards: RawCard[] }).cards),
+  ...((swornRaw as { cards: RawCard[] }).cards),
+];
+
+/** id → the type line's AUTHORED tokens. The split happened once, in the card data;
+ *  nothing parses a type line at runtime and nothing carries the tokens into game state. */
+export const SUBTYPES_BY_ID: ReadonlyMap<string, readonly string[]> =
+  new Map(ALL_RAW.map(r => [r.id, Object.freeze([...(r.subtypes ?? [])])]));
+
+/** name → the same tokens. Board entities carry a NAME, not a card id, so this is the
+ *  entry point `subtypesOf` uses. Names are unique catalog-wide (the identity rule,
+ *  pinned in tier4_validator), so the mapping is unambiguous. */
+export const SUBTYPES_BY_NAME: ReadonlyMap<string, readonly string[]> =
+  new Map(ALL_RAW.map(r => [r.name, Object.freeze([...(r.subtypes ?? [])])]));
+
+/** The authored tokens for one raw/candidate card — used by the mint gate, where the
+ *  card is not in the catalog yet and carries its own authored array. */
+export function authoredSubtypesOf(card: { id?: string; name?: string; subtypes?: readonly string[] }): readonly string[] {
+  if (card.subtypes) return card.subtypes;
+  if (card.id && SUBTYPES_BY_ID.has(card.id)) return SUBTYPES_BY_ID.get(card.id)!;
+  if (card.name && SUBTYPES_BY_NAME.has(card.name)) return SUBTYPES_BY_NAME.get(card.name)!;
+  return [];
+}
 
 /** Look up a card by id. */
 export function getCard(id: string): Card | undefined {

@@ -155,6 +155,7 @@ This document consolidates all keywords from Game Rules, Keyword Glossary, and C
   - Undead's Bane: Deals double damage to Undead Companions
   - Paladin's Bane: Deals double damage to Paladin Companions
   - Blight's Bane: Deals double damage to Blighted Companions
+- **Rules Note (owner-ruled 2026-08-20) — "subtype is [NAME]" means TOKEN MEMBERSHIP.** A type line's modifiers stack onto its organism WITHOUT erasing it, so a Bane matches when [NAME] is ANY token of the target's type line — not only when it equals the whole line. **A Beast Crow IS a Crow**, and a Spirit Beast Crow is still a Crow; Crow's Bane doubles against both. It does NOT reach an Elf Scout, and a card merely NAMED "Crow-something" is untouched — the type line is the only thing read (Beast is printed, never derived; see §12 of Card_Design_Parameters). The class leg of the keyword is unchanged. *(Recorded when the Beast modifier made the distinction reachable: the engine had compared the whole type line as one string, so a subtype-keyed Bane would silently have missed every modifier-carrying organism. No shipped card was affected — both current Bane carriers key a CLASS — so this ruling changed no live behaviour.)*
 
 **PARANOIA** - Whenever an opponent plays a Companion, look at the top card of that player's deck. You may put that card on the top or bottom of their deck.
 - Represents Duke Flintwake's increasing suspicion and control
