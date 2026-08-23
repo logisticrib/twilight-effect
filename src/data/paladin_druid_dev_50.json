@@ -1,5 +1,5 @@
 {
-  "_comment": "DEV DECK - Sworn Wild (Paladin / Druid), 50 hand-authored dev cards (owner-designed, 2026-08-19). NON-CANON: every card carries dev:true so shipped-pool queries can exclude them. Phase 1 = AUTHOR + FLAG: cards whose behavior has a live engine path carry structured effects; every behavior the engine cannot yet honor carries an effectsFlag starting 'DEV NOT-IMPLEMENTED' (visible machinery debt; the validator reports it and does not fail). That flag list IS the arc plan for the implementation sessions that follow. Type lines carry the Beast modifier per the 2026-08-18 ruling (Beast = non-magical non-sapient animal, printed never derived, ordered Modifier-Organism-Role); Angels are sapient and are NOT Beasts. Armor carriers print the FULL inverted companion clause (2026-08-18 inversion) with X substituted. Vocal subtypes corrected 2026-08-19 (owner ruling): Druid Vocal Constructs are RITE, Paladin's are BLESSING. 'Performance' was retired entirely and the borrowed Utterance (a Doom-Whisperer subtype) was wrong for the same reason. ARC A (2026-08-19): the destroy primitive landed — the seven destroy cards are LIVE. Destroy is a DIFFERENT EVENT from sacrifice (owner ruling): it never fires on-sacrifice listeners, while generic leave/death triggers fire for both, and the card lands in its OWNER's Dead Zone either way. ARC B (2026-08-20): Beast-subtype reach landed — subtype targeting, group scopes, the Dead Zone filter and the `ready` op. Subtype tokens are AUTHORED in this file and read through catalog lookups; they are deliberately NOT carried on the runtime Card, because Card objects serialize into recordings.",
+  "_comment": "DEV DECK - Sworn Wild (Paladin / Druid), 50 hand-authored dev cards (owner-designed, 2026-08-19). NON-CANON: every card carries dev:true so shipped-pool queries can exclude them. Phase 1 = AUTHOR + FLAG: cards whose behavior has a live engine path carry structured effects; every behavior the engine cannot yet honor carries an effectsFlag starting 'DEV NOT-IMPLEMENTED' (visible machinery debt; the validator reports it and does not fail). That flag list IS the arc plan for the implementation sessions that follow. Type lines carry the Beast modifier per the 2026-08-18 ruling (Beast = non-magical non-sapient animal, printed never derived, ordered Modifier-Organism-Role); Angels are sapient and are NOT Beasts. Armor carriers print the FULL inverted companion clause (2026-08-18 inversion) with X substituted. Vocal subtypes corrected 2026-08-19 (owner ruling): Druid Vocal Constructs are RITE, Paladin's are BLESSING. 'Performance' was retired entirely and the borrowed Utterance (a Doom-Whisperer subtype) was wrong for the same reason. ARC A (2026-08-19): the destroy primitive landed — the seven destroy cards are LIVE. Destroy is a DIFFERENT EVENT from sacrifice (owner ruling): it never fires on-sacrifice listeners, while generic leave/death triggers fire for both, and the card lands in its OWNER's Dead Zone either way. ARC B (2026-08-20): Beast-subtype reach landed — subtype targeting, group scopes, the Dead Zone filter and the `ready` op. Subtype tokens are AUTHORED in this file and read through catalog lookups; they are deliberately NOT carried on the runtime Card, because Card objects serialize into recordings. ARC C (2026-08-23): UNTAMED landed — the five continuous carriers and Elder Shellback are LIVE. Untamed is DERIVED ON READ (isUntamedEncounter, engine/stats.ts): no Gear and no Physical Constructs in the encounter, counting BOTH players (encounter-wide, 2026-08-18) and never a Weapon (Gear only, 2026-08-18 — enforced structurally, weapons live in their own loadout slot). OWNER RULING 2026-08-23: Untamed is KEYWORD-INDEPENDENT — it is a property of the ENCOUNTER that any character can be asked about, and the UNTAMED keyword's only job is to attach a per-card bonus. That is why Elder Shellback asks \"if it is Untamed\" while printing Guardian and Oathsworn: its authored keyword array is CORRECT and no card face changed. The five static carriers gate a `static` clause on `if: {kind:'untamed'}` and re-read it every stat/keyword read (nothing stamped, so an opponent's Gear drops the bonus and Rust and Root destroying that Gear returns it); Elder Shellback gates an `onEnter` clause, read ONCE when the trigger resolves and never re-evaluated (the entry-snapshot exception). Its `placeArmor` op only PLACES counters — prevention needed zero new work, because the universal counter rule (2026-08-18) already made armor counters BE the ability however they arrived.",
   "cards": [
     {
       "id": "dd000051",
@@ -23,11 +23,27 @@
       "flavor": "",
       "dev": true,
       "createdAt": "2026-08-19T00:00:00.000000Z",
-      "updatedAt": "2026-08-19T00:00:00.000000Z",
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): Untamed is a continuous encounter-wide state (KEYWORDS.Untamed done:false) — no engine evaluates it, and the per-card bonus has no carrier shape.",
+      "updatedAt": "2026-08-23T00:00:00.000000Z",
       "subtypes": [
         "Beast",
         "Boar"
+      ],
+      "effects": [
+        {
+          "trigger": "static",
+          "if": {
+            "kind": "untamed"
+          },
+          "effects": [
+            {
+              "op": "buff",
+              "stat": "atk",
+              "amount": 1,
+              "scope": "self",
+              "duration": "while"
+            }
+          ]
+        }
       ]
     },
     {
@@ -110,11 +126,27 @@
       "flavor": "",
       "dev": true,
       "createdAt": "2026-08-19T00:00:00.000000Z",
-      "updatedAt": "2026-08-19T00:00:00.000000Z",
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): Untamed (see dd000051); additionally the Untamed bonus here is a KEYWORD GRANT, needing a conditional grantKeywords shape keyed to the state.",
+      "updatedAt": "2026-08-23T00:00:00.000000Z",
       "subtypes": [
         "Beast",
         "Fox"
+      ],
+      "effects": [
+        {
+          "trigger": "static",
+          "if": {
+            "kind": "untamed"
+          },
+          "effects": [
+            {
+              "op": "grantKeywords",
+              "keywords": [
+                "Hit & Run"
+              ],
+              "scope": "self"
+            }
+          ]
+        }
       ]
     },
     {
@@ -333,11 +365,27 @@
       "flavor": "",
       "dev": true,
       "createdAt": "2026-08-19T00:00:00.000000Z",
-      "updatedAt": "2026-08-19T00:00:00.000000Z",
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): Untamed (see dd000051).",
+      "updatedAt": "2026-08-23T00:00:00.000000Z",
       "subtypes": [
         "Beast",
         "Lynx"
+      ],
+      "effects": [
+        {
+          "trigger": "static",
+          "if": {
+            "kind": "untamed"
+          },
+          "effects": [
+            {
+              "op": "buff",
+              "stat": "atk",
+              "amount": 2,
+              "scope": "self",
+              "duration": "while"
+            }
+          ]
+        }
       ]
     },
     {
@@ -459,11 +507,27 @@
       "flavor": "",
       "dev": true,
       "createdAt": "2026-08-19T00:00:00.000000Z",
-      "updatedAt": "2026-08-19T00:00:00.000000Z",
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): Untamed (see dd000051), keyword-grant form (see dd000054).",
+      "updatedAt": "2026-08-23T00:00:00.000000Z",
       "subtypes": [
         "Beast",
         "Lizard"
+      ],
+      "effects": [
+        {
+          "trigger": "static",
+          "if": {
+            "kind": "untamed"
+          },
+          "effects": [
+            {
+              "op": "grantKeywords",
+              "keywords": [
+                "Guardian"
+              ],
+              "scope": "self"
+            }
+          ]
+        }
       ]
     },
     {
@@ -489,11 +553,26 @@
       "flavor": "",
       "dev": true,
       "createdAt": "2026-08-19T00:00:00.000000Z",
-      "updatedAt": "2026-08-19T00:00:00.000000Z",
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): family B is DONE — a Beast-subtype group scope now exists for the 'each Beast companion you control' enumeration. Still blocked on TWO other families: (C) Untamed as an ENTRY-SNAPSHOT intervening-if, and (G) an op that PLACES armor counters. The deck's marquee card; it completes when C and G land.",
+      "updatedAt": "2026-08-23T00:00:00.000000Z",
       "subtypes": [
         "Beast",
         "Turtle"
+      ],
+      "effects": [
+        {
+          "trigger": "onEnter",
+          "if": {
+            "kind": "untamed"
+          },
+          "effects": [
+            {
+              "op": "placeArmor",
+              "count": 1,
+              "target": "ownCompanions",
+              "subtype": "Beast"
+            }
+          ]
+        }
       ]
     },
     {
@@ -675,10 +754,29 @@
       "flavor": "",
       "dev": true,
       "createdAt": "2026-08-19T00:00:00.000000Z",
-      "updatedAt": "2026-08-19T00:00:00.000000Z",
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): family B is DONE — the Beast-subtype buff scope now exists (buff.where.subtype) and this card's aura would be one line. Held back for family C: its bonus is gated on UNTAMED, and authoring the buff now would apply it unconditionally, which is worse than a flag. When C lands, gate this scope on the Untamed state and the card is complete.",
+      "updatedAt": "2026-08-23T00:00:00.000000Z",
       "subtypes": [
         "Incantation"
+      ],
+      "effects": [
+        {
+          "trigger": "static",
+          "if": {
+            "kind": "untamed"
+          },
+          "effects": [
+            {
+              "op": "buff",
+              "stat": "atk",
+              "amount": 2,
+              "scope": "ownCompanions",
+              "duration": "while",
+              "where": {
+                "subtype": "Beast"
+              }
+            }
+          ]
+        }
       ]
     },
     {

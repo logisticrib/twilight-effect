@@ -5,7 +5,7 @@
 // slice 5: it is one mutually-recursive group with applyDamage/destroyEntity/
 // resolveRemovalTriggers (combat.ts / entities.ts).
 import type { BoardEntity, Card } from '../types/card';
-import type { Effect, Amount, Condition, TargetSpec, Trigger, Cost, CardEffect } from '../types/effects';
+import type { Effect, Amount, TargetSpec, Trigger, Cost, CardEffect } from '../types/effects';
 import { CATALOG } from '../data/catalog';
 import { isFront } from './geometry';
 import type { GameState, PendingDeadPick, ArmorChoiceData } from './state';
@@ -13,7 +13,7 @@ import { charsOf, companionIds, constructIds, findEntityAnywhere, updateEntity,
          removeEntity, destroyEntity, setPcHp, pcIdOf, itemCardsOf, itemTransferOf, canBeSacrificed,
          gearItemsOf, destroyItemById } from './entities';
 import { hasSubtype, cardHasSubtype } from './stats';
-import { isPhysicalConstruct, currentWillpower, effectiveAttack, effectiveMaxHp, isImmuneToSplash, isCharacter, poisonHitPatch } from './stats';
+import { isPhysicalConstruct, conditionMet, effectiveAttack, effectiveMaxHp, isImmuneToSplash, isCharacter, poisonHitPatch } from './stats';
 // Function-level cycle with combat.ts (resolveActionEffects deals damage; combat
 // triggers resolve effects). Safe: hoisted functions, called only at runtime.
 import { applyDamage } from './combat';
@@ -110,23 +110,13 @@ export function eligibleTargets(game: GameState, lp: 'p1' | 'p2', spec: TargetSp
   }
 }
 
-export function conditionMet(game: GameState, lp: 'p1' | 'p2', cond: Condition): boolean {
-  switch (cond.kind) {
-    case 'controlsType': {
-      return Object.values(game[lp].board).some(e => {
-        if (!e) return false;
-        const typeOk = cond.cardType === 'Construct' ? e.kind === 'construct' : e.kind === 'companion';
-        return typeOk && (!cond.subtype || e.subtype === cond.subtype);
-      });
-    }
-    case 'controlsCount': {
-      const n = Object.values(game[lp].board).filter(e => e && (cond.of === 'companions' ? e.kind === 'companion' : e.kind === 'construct')).length;
-      return n >= cond.min;
-    }
-    case 'willpowerAtLeast': return currentWillpower(game[lp]) >= cond.value;
-    default: return true;
-  }
-}
+/** RETIRED FROM THIS FILE 2026-08-23 (Arc C) — `conditionMet` MOVED to engine/stats.ts
+ *  and is re-exported here so all seven call sites keep working. It had to move down to
+ *  the leaf module because the static derive-on-read paths in stats.ts now honour
+ *  clause-level `if` (the conditional Untamed carriers), and stats.ts is upstream of
+ *  this file. Two condition evaluators is how two readings of `if` drift apart.
+ *  Definition and doc comment live at the new site — do not re-add a copy here. */
+export { conditionMet } from './stats';
 
 /** The interactive target an effect needs (the single board pick), or null. */
 export function effectTargetSpec(e: Effect): TargetSpec | null {
@@ -751,6 +741,40 @@ export function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceNam
             : { ...g, pendingDiscard: pd };
         }
         msgs.push(`${g[victim].name} must discard ${e.count === 1 ? 'a card' : `${e.count} cards`}`);
+        break;
+      }
+      case 'placeArmor': {
+        // Arc C (2026-08-23, Elder Shellback) — the G-piece: an op that PLACES armor
+        // counters. It places and NOTHING ELSE. Prevention needed zero new work: the
+        // universal counter rule (MKL:52, 2026-08-18) already made the counters the
+        // ability, and armorCandidatesOf / removeArmorCounter already read and spend an
+        // entity's own `armorCounters` without asking where they came from.
+        //
+        // `armorStart` is deliberately left alone — it records the PRINTED X for display
+        // and is documented absent for effect-placed counters. A companion that already
+        // holds printed counters simply gains more on the same field; there is one
+        // counter pool per entity, not one per source.
+        //
+        // Group scope only (auto-scoped, no pick), narrowed by authored subtype token —
+        // the Arc B enumeration, same `hasSubtype` set membership the buff scope uses.
+        // INTERIM (2026-08-20 design-intent note): a resolution that reaches zero
+        // eligible companions is a LOUD fizzle, never a silent pass.
+        if (e.target !== 'ownCompanions' && e.target !== 'ownParty') break; // engine-supported scopes only
+        const recipients: BoardEntity[] = [];
+        for (const ent of Object.values(g[lp].board)) {
+          if (!ent) continue;
+          if (e.target === 'ownCompanions' ? ent.kind !== 'companion' : !(ent.kind === 'companion' || ent.kind === 'pc')) continue;
+          if (e.subtype && !hasSubtype(ent, e.subtype)) continue;
+          recipients.push(ent);
+        }
+        if (!recipients.length) {
+          msgs.push(`${sourceName} finds no ${e.subtype ? `${e.subtype} ` : ''}companion to armor`);
+          break;
+        }
+        for (const ent of recipients) {
+          g = updateEntity(g, ent.id, { armorCounters: (ent.armorCounters ?? 0) + e.count });
+        }
+        msgs.push(`${recipients.map(r => r.name).join(', ')} ${recipients.length === 1 ? 'gains' : 'gain'} ${e.count} armor counter${e.count === 1 ? '' : 's'}`);
         break;
       }
       case 'applyPoison': {

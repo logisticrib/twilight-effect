@@ -4,10 +4,11 @@
 // the DATA contract (ids, dev flags, printed canon wording, type-line modifiers) and
 // that the cards riding SHIPPED ops drive real engine paths end-to-end.
 //
-// NOT covered here (visible debt, DEV NOT-IMPLEMENTED flags in the deck JSON): Untamed,
-// Tribute, Warded, `destroy`, Beast-subtype targeting/scoping, the self-attacked
-// trigger, own-companion-enters, keyword-filtered scopes, "up to N", controls-a-keyword.
-// Those cards' pins land with their arcs — the dw_rogue_dev Phase 1 discipline.
+// NOT covered here (visible debt, DEV NOT-IMPLEMENTED flags in the deck JSON): Tribute,
+// Warded, the self-attacked trigger, own-companion-enters, keyword-filtered scopes,
+// bearer-subtype item clauses, controls-a-keyword. Those cards' pins land with their
+// arcs — the dw_rogue_dev Phase 1 discipline. Struck from this list as they landed:
+// `destroy` (Arc A), Beast-subtype targeting/scoping (Arc B), Untamed (Arc C).
 import { describe, it, expect } from 'vitest';
 import { gs, freshGame, mkComp, mkPc, mkCz } from './helpers';
 import { CATALOG, SWORN_WILD_DEV_CARDS } from '../data/catalog';
@@ -50,10 +51,12 @@ describe('Sworn Wild — deck data contract', () => {
       expect(c.effectsFlag, `${id} ${c.name} went live in Arc A`).toBeUndefined();
       expect(c.effects?.length, `${id} carries real effects`).toBeGreaterThan(0);
     }
-    // RETIRED + REWRITTEN 2026-08-20 (Arc B): was 19 after Arc A. Arc B cleared the
-    // six family-B cards, leaving 13 — dd000066 and dd000071 keep NARROWED flags
-    // because their remaining gaps belong to families C and G, not B.
-    expect(flagged.length, "13 cards still await engine arcs (Arc B cleared six)").toBe(13);
+    // RETIRED + REWRITTEN 2026-08-23 (Arc C): was 13 after Arc B. Arc C cleared the six
+    // Untamed cards — including dd000066 and dd000071, whose Arc B flags had been
+    // narrowed to exactly this dependency — leaving 7. The per-card roster lives in
+    // sworn_wild_arcC_untamed.test.ts; the bare count here would let a silent re-flag
+    // slip past, so it is deliberately paired with that pin, not a substitute for it.
+    expect(flagged.length, "7 cards still await engine arcs (Arc C cleared six)").toBe(7);
     // A card is SILENT only if nothing at all carries its behavior: no effects, no
     // flag, and no printed keyword either. (Keyword reminder text is not silent — the
     // Armor carriers print a full clause that the live keyword honours, which is

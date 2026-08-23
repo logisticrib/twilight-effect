@@ -1,5 +1,5 @@
 import type { ActiveBuff, BoardEntity, Card, EquippedItem } from '../types/card';
-import type { CardEffect, Modifier } from '../types/effects';
+import type { CardEffect, Condition, Modifier } from '../types/effects';
 import type { GameState, PlayerState } from './state';
 import type { SlotId } from './geometry';
 import { isFront } from './geometry';
@@ -95,6 +95,104 @@ export function isPhysicalConstruct(ent: BoardEntity): boolean {
   return ent.kind === 'construct' && (ent.subtype === 'Trap' || ent.subtype === 'Fortification');
 }
 
+// --- The Gear universe + UNTAMED (Arc C, owner-ratified 2026-08-23) -----------
+// `gearItemsOf` MOVED HERE from engine/entities.ts this date (re-exported there, so
+// no call site changed). Reason: `isUntamedEncounter` below must be readable from
+// stats.ts -- the LEAF engine module every other one imports -- and a second Gear scan
+// living next to the predicate is exactly the drift the Arc A extraction removed.
+// One Gear universe, one definition, both consumers reading it.
+
+/** Every Gear item currently equipped, across BOTH boards, as {itemId, bearerId, owner,
+ *  name}. Gear only -- weapons are excluded (canon splits Items into Weapons and Gear;
+ *  "target Gear" never reaches a weapon). The exclusion is STRUCTURAL, not a filter:
+ *  Loadout has a dedicated `weapon` slot and every write path (equipOnto, the Kit-Master
+ *  transfer, sacrificeItem) routes by itemProfileOf().isWeapon, so a weapon can never
+ *  occupy a gear slot. Deduped by item id: a heavy piece occupies both gear slots but is
+ *  ONE item and must be offered once. (Arc A, 2026-08-19; moved to stats.ts Arc C.) */
+export function gearItemsOf(game: GameState): { itemId: string; bearerId: string; owner: 'p1' | 'p2'; name: string }[] {
+  const out: { itemId: string; bearerId: string; owner: 'p1' | 'p2'; name: string }[] = [];
+  for (const side of ['p1', 'p2'] as const) {
+    for (const ent of Object.values(game[side].board)) {
+      if (!ent?.loadout) continue;
+      const seen = new Set<string>();
+      for (const gi of ent.loadout.gear) {
+        if (!gi || seen.has(gi.id)) continue;
+        seen.add(gi.id);
+        // Ownership routes zones, never board membership (Arc I ruling 4).
+        out.push({ itemId: gi.id, bearerId: ent.id, owner: ent.stolenFrom ?? side, name: gi.name });
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * UNTAMED -- the canonical condition (Master_Keyword_List.md:133, wording ruled
+ * 2026-08-18): "While there are no Gear or Physical Constructs in the encounter,
+ * this character is Untamed."
+ *
+ * Three properties, all owner-ruled and all load-bearing:
+ *
+ *  - GEAR ONLY. Gear is a strict subset of Items (Items split into Weapons and Gear);
+ *    a WEAPON never suppresses Untamed. Enforced structurally by reading only
+ *    `loadout.gear` -- see gearItemsOf above.
+ *  - ENCOUNTER-WIDE. Both players' Gear and Physical Constructs count, never
+ *    controller-only -- hence no `lp` parameter. Passing one would invite a
+ *    controller-scoped miscount.
+ *  - KEYWORD-INDEPENDENT (owner ruling 2026-08-23). Untamed is a property of the
+ *    ENCOUNTER that any character can be asked about; the UNTAMED keyword's only job
+ *    is to attach a per-card bonus to the state. This is what lets dd000066 Elder
+ *    Shellback ask "if it is Untamed" while printing Guardian and Oathsworn -- its
+ *    authored keyword array is CORRECT as printed, and no card face changed.
+ *
+ * DERIVED ON READ, never stamped. Deliberately NOT part of recomputeStatics: Dismay
+ * and Inspire write player flags into GameState because Willpower is a stored number,
+ * but Untamed has no stored consumer, and a serialized key would re-hash every
+ * recording for a value the board already answers. Nothing about Untamed enters
+ * GameState (standing serialization rule).
+ */
+export function isUntamedEncounter(game: GameState): boolean {
+  if (gearItemsOf(game).length > 0) return false;
+  for (const side of ['p1', 'p2'] as const) {
+    for (const ent of Object.values(game[side].board)) {
+      if (ent && isPhysicalConstruct(ent)) return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Is a card-clause condition satisfied right now? MOVED HERE from engine/interpreter.ts
+ * (Arc C, 2026-08-23; re-exported there, so no call site changed). Reason: the static
+ * derive-on-read paths in this file now honour clause-level `if` (see staticBuffsOf),
+ * and stats.ts is upstream of interpreter.ts -- evaluating conditions in two places is
+ * how the two readings drift apart. ONE evaluator, seven call sites.
+ *
+ * `default: true` covers the combat-event kinds, which are checked against the
+ * damage/kill event by their own gates (combat.ts), never here.
+ */
+export function conditionMet(game: GameState, lp: 'p1' | 'p2', cond: Condition): boolean {
+  switch (cond.kind) {
+    case 'controlsType': {
+      return Object.values(game[lp].board).some(e => {
+        if (!e) return false;
+        const typeOk = cond.cardType === 'Construct' ? e.kind === 'construct' : e.kind === 'companion';
+        return typeOk && (!cond.subtype || e.subtype === cond.subtype);
+      });
+    }
+    case 'controlsCount': {
+      const n = Object.values(game[lp].board).filter(e => e && (cond.of === 'companions' ? e.kind === 'companion' : e.kind === 'construct')).length;
+      return n >= cond.min;
+    }
+    case 'willpowerAtLeast': return currentWillpower(game[lp]) >= cond.value;
+    // Arc C (2026-08-23): encounter-wide, controller-agnostic -- `lp` is deliberately
+    // unused. The five continuous carriers read this on EVERY stat/keyword read; the
+    // dd000066 entry-snapshot reads it exactly once, when its enter trigger resolves.
+    case 'untamed': return isUntamedEncounter(game);
+    default: return true;
+  }
+}
+
 /** ONE definition of "carries Anchor counters" (Rules Note 2026-07-20 — decay keys
  *  on COUNTERS, not card type): the Ready Phase decay predicate and the UI pip
  *  display both consult this. Constructs always carry counters; an animated
@@ -144,15 +242,31 @@ function controllerOf(game: GameState, entId: string): 'p1' | 'p2' | null {
 }
 
 /** Static `buff` effects projected by a source permanent: its own card's static
- *  clauses plus those of its equipped items (e.g. a Banner trinket's team aura). */
-function staticBuffsOf(src: BoardEntity): import('../types/effects').Effect[] {
+ *  clauses plus those of its equipped items (e.g. a Banner trinket's team aura).
+ *
+ *  CONDITIONAL STATICS (Arc C, 2026-08-23): a static clause may carry `if`, and the
+ *  gate is evaluated HERE, on every read. That is the whole of "continuous while-state"
+ *  -- The Long Green Silence's +2 is not stamped anywhere, so an opponent equipping Gear
+ *  drops it and Rust and Root destroying that Gear returns it, with no event to listen
+ *  for and nothing to clean up. Swept 2026-08-23: ZERO static clauses across all four
+ *  decks carried `if` before this arc, so every pre-existing aura reads byte-identically.
+ *
+ *  `srcSide` is the SOURCE's controller -- the side the condition is asked about. For
+ *  the encounter-wide `untamed` kind it makes no difference; for a controller-scoped
+ *  kind (controlsType/controlsCount) the projecting permanent's own controller is the
+ *  only defensible reading. */
+function staticBuffsOf(src: BoardEntity, game: GameState, srcSide: 'p1' | 'p2'): import('../types/effects').Effect[] {
   const lists = [effectsOf(src.name)];
   const lo = src.loadout;
   if (lo) for (const it of [lo.weapon, ...lo.gear]) if (it) lists.push(effectsOf(it.name));
   const out: import('../types/effects').Effect[] = [];
   for (const effs of lists) {
     if (!effs) continue;
-    for (const ce of effs) if (ce.trigger === 'static') for (const e of ce.effects) if (e.op === 'buff') out.push(e);
+    for (const ce of effs) {
+      if (ce.trigger !== 'static') continue;
+      if (ce.if && !conditionMet(game, srcSide, ce.if)) continue;
+      for (const e of ce.effects) if (e.op === 'buff') out.push(e);
+    }
   }
   return out;
 }
@@ -168,9 +282,15 @@ function staticAuraStat(ent: BoardEntity, game: GameState, stat: 'atk' | 'hp'): 
   let sum = 0;
   for (const src of Object.values(game[side].board)) {
     if (!src) continue;
-    for (const e of staticBuffsOf(src)) {
+    for (const e of staticBuffsOf(src, game, side)) {
       if (e.op !== 'buff' || e.stat !== stat) continue;
-      const scopeHit = e.scope === 'ownParty' || (e.scope === 'ownCompanions' && isCompanion);
+      // Arc C (2026-08-23): scope 'self' -- "UNTAMED: THIS character gets +1 attack"
+      // (Bristlemane Boar, Ashfen Lynx). The source loop already visits `ent` itself,
+      // so a self-scoped static needs no separate pass: it is the ordinary aura scan
+      // with the source-is-recipient case admitted. Same derive-on-read liveness as
+      // every other static -- nothing stamped, nothing to strip.
+      const scopeHit = e.scope === 'ownParty' || (e.scope === 'ownCompanions' && isCompanion)
+        || (e.scope === 'self' && src.id === ent.id);
       if (!scopeHit) continue;
       if (e.where?.line && e.where.line !== entLine) continue;
       if (e.where?.cls && e.where.cls !== ent.cls) continue;
@@ -191,7 +311,7 @@ function staticAuraStat(ent: BoardEntity, game: GameState, stat: 'atk' | 'hp'): 
     const opp: 'p1' | 'p2' = side === 'p1' ? 'p2' : 'p1';
     for (const src of Object.values(game[opp].board)) {
       if (!src) continue;
-      for (const e of staticBuffsOf(src)) {
+      for (const e of staticBuffsOf(src, game, opp)) {
         if (e.op !== 'buff' || e.stat !== stat || e.scope !== 'allEnemyCompanions') continue;
         if (e.where?.line && e.where.line !== entLine) continue;
         if (e.where?.cls && e.where.cls !== ent.cls) continue;
@@ -314,10 +434,19 @@ function auraGrantedKeywords(ent: BoardEntity, game: GameState): string[] {
     if (!src) continue;
     for (const ce of effectsOf(src.name) ?? []) {
       if (ce.trigger !== 'static') continue;
+      // Arc C (2026-08-23): the CONDITIONAL keyword grant -- "UNTAMED: this character
+      // gains Hit & Run" (Mistfur Fox) / "gains Guardian" (Stonefern Wyrm). Same
+      // derive-on-read gate as the stat auras: the grant is not a stamped buff entry,
+      // so it appears and disappears with the encounter, with no toggle to clean up.
+      if (ce.if && !conditionMet(game, side, ce.if)) continue;
       for (const e of ce.effects) {
         if (e.op !== 'grantKeywords') continue;
-        if (e.scope === 'ownCompanions' && ent.kind !== 'companion') continue;
-        if (e.scope !== 'ownCompanions' && e.scope !== 'ownParty') continue;
+        // scope 'self' -- the source IS the recipient (the aura loop already visits it).
+        if (e.scope === 'self') { if (src.id !== ent.id) continue; }
+        else {
+          if (e.scope === 'ownCompanions' && ent.kind !== 'companion') continue;
+          if (e.scope !== 'ownCompanions' && e.scope !== 'ownParty') continue;
+        }
         if (e.where?.line && e.where.line !== entLine) continue;
         out.push(...e.keywords);
       }

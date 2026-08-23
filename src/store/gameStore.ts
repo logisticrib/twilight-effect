@@ -10,7 +10,8 @@ import { recomputeStatics, isImmuneToSplash, HIT_RUN_STATUS,
          canPlayActionCard, specialActionActor, minorActionReason, actionTypeOf, currentWillpower, parseBanes,
          POISONED_STATUS, parseAnimateMagic, parseArmorKeyword,
          attackRestrictedBy, moveRestrictedBy, hasModifier,
-         canAttackFromPosition, isLegalAttackTarget, bindingGuardianIds, legalAttackTargetIds } from './keywords';
+         canAttackFromPosition, isLegalAttackTarget, bindingGuardianIds, legalAttackTargetIds,
+         conditionMet } from './keywords';
 
 // Everything relocated to the headless engine stays importable from this module —
 // external import sites don't churn during the extraction (see src/engine/index.ts).
@@ -525,7 +526,10 @@ function runOnEnter(
 
   // Structured on-enter effects (the non-keyword "When this enters, …" text).
   // Only when no keyword trigger already claimed the enter (avoids double pending).
-  const onEnter = (card.effects ?? []).filter(c => c.trigger === 'onEnter').flatMap(c => c.effects);
+  // Arc C (2026-08-23): clause-level `if` is evaluated HERE and only here -- the entry
+  // snapshot. A refused clause fizzles loudly below rather than vanishing.
+  const { effects: onEnter, gatedOut: enterGatedOut } = onEnterEffects(card, g, lp);
+  if (enterGatedOut && onEnter.length === 0) enterMsg = `${card.name} enters -- its condition is not met.`;
   if (!pendingTrigger && !pendingKit && !scavengerPick && !animatePick && !pendingCoercion && onEnter.length > 0) {
     // Equip-from-hand (Veteran of the Ashgrove): pick an item from hand for this character.
     if (onEnter.some(e => e.op === 'equipFromHand')) {
@@ -641,6 +645,30 @@ function armSegmentedWindow(
 }
 
 /**
+ * A card's onEnter effects with clause-level `if` HONOURED (Arc C, 2026-08-23 --
+ * Elder Shellback's entry-snapshot intervening-if). Before this arc the three onEnter
+ * sites flattened clauses straight to effects and silently dropped `if`; no card
+ * carried one, so nothing changed behaviorally, but the contract advertised a gate the
+ * engine ignored.
+ *
+ * THE SNAPSHOT IS THIS CALL. The condition is read once, here, at the moment the enter
+ * trigger resolves -- and nothing re-reads it afterwards. That is the whole of the
+ * "entry snapshot, never re-evaluated" ruling: an Untamed check that fails because Gear
+ * was on the board places nothing, and an encounter that clears three turns later
+ * places nothing retroactively, because there is no live reader left to fire.
+ *
+ * `gatedOut` reports that a clause was present and refused, so the caller can fizzle
+ * LOUDLY (R4: mandatory triggers fire even when their effects no-op; no silent
+ * outcomes, 2026-07-12) instead of looking like a card with no enter text at all.
+ */
+function onEnterEffects(card: Card, game: GameState, lp: 'p1' | 'p2'):
+  { effects: Effect[]; gatedOut: boolean } {
+  const clauses = (card.effects ?? []).filter(c => c.trigger === 'onEnter');
+  const live = clauses.filter(c => !c.if || conditionMet(game, lp, c.if));
+  return { effects: live.flatMap(c => c.effects), gatedOut: live.length < clauses.length };
+}
+
+/**
  * The GAME-LEVEL enter triggers a card statically carries (Arc G 2026-08-04, the
  * multi-pending enter window). A card with >1 splits into owner-ordered 'enterUnit'
  * stack entries instead of letting the first claimant drop the rest (the Phase-1
@@ -656,6 +684,10 @@ function enterUnitsOf(card: Card): ('scavenger' | 'coercion' | 'structured')[] {
   const units: ('scavenger' | 'coercion' | 'structured')[] = [];
   if (isCompanion && card.keywords.includes('Scavenger')) units.push('scavenger');
   if (isCompanion && card.keywords.includes('Coercion')) units.push('coercion');
+  // DELIBERATELY UNGATED (Arc C, 2026-08-23): this is a static SHAPE query with no
+  // GameState to read, and the enter trigger exists whether or not its condition will
+  // hold -- a mandatory trigger fires and no-ops (R4). The `if` is evaluated when the
+  // unit RESOLVES, in armEnterUnit below.
   const onEnter = (card.effects ?? []).filter(c => c.trigger === 'onEnter').flatMap(c => c.effects);
   if (onEnter.length > 0) units.push('structured');
   if (units.length > 1) {
@@ -715,7 +747,11 @@ function armEnterUnit(
   // (enterUnitsOf refuses the rest), resolved through the interpreter. The dead
   // sink defers returnFromDead to the player-facing picker; revealHand/deckPeek
   // arm their game-level prompts directly.
-  const onEnter = (entry.card.effects ?? []).filter(c => c.trigger === 'onEnter').flatMap(c => c.effects);
+  // Arc C (2026-08-23): the entry snapshot on the queued path. Evaluated FRESH as of
+  // now, matching this function's per-event contract -- an earlier unit that destroyed
+  // the last Gear is visible to this one.
+  const { effects: onEnter, gatedOut } = onEnterEffects(entry.card, g, lp);
+  if (gatedOut && onEnter.length === 0) return { game: g, msg: `${name} -- its condition is not met.` };
   const r = resolveActionEffects(g, lp, name, onEnter, undefined, entry.entId, undefined, deadSink, armorSink);
   return { game: r.game, msg: r.msgs.length ? `${name}: ${r.msgs.join(' | ')}` : '' };
 }

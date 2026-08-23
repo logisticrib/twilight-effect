@@ -52,8 +52,16 @@ export const KEYWORDS: Record<string, KeywordSpec> = {
   // an on-enter self peek and a victim-decides own-deck check. Both wrong; see canon.)
   Paranoia:       { event: 'oppPlay', done: true,  note: "placeCard arms a controller-owned PendingPeek over the PLACING player's deck (top/bottom only)" },
 
+  // Arc C (2026-08-23). isUntamedEncounter (engine/stats.ts) is the ONE predicate,
+  // derived on read and never serialized. KEYWORD-INDEPENDENT by owner ruling this
+  // date: the state belongs to the ENCOUNTER, and this keyword's only job is to attach
+  // a per-card bonus to it — which is why dd000066 can ask "if it is Untamed" without
+  // printing UNTAMED. Two clause shapes carry the bonuses: `static` + if:{untamed}
+  // (continuous, re-read every stat/keyword read) and `onEnter` + if:{untamed} (the
+  // entry snapshot, read exactly once).
+  Untamed:        { event: 'static',  done: true,  note: 'isUntamedEncounter: no Gear and no Physical Constructs, BOTH boards (encounter-wide); Weapons never suppress. Bonuses ride clause-level if:{kind:untamed} — static = continuous, onEnter = entry snapshot (dd000066)' },
+
   // ── Not yet implemented ───────────────────────────────────────────────────────
-  Untamed:        { event: 'static',  done: false, note: 'continuous encounter-wide state (no Gear / Physical Constructs) + the dd000066 entry-snapshot form; per-card text bonus' },
   // Vocabulary added 2026-08-19 for the Sworn Wild dev deck. Both are DECLARED so their
   // carriers validate; NEITHER has engine behavior yet (the Untamed precedent — the
   // contract must not advertise implemented space, but it must name what cards print).

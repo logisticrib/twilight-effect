@@ -113,11 +113,18 @@ describe('subtype + controller compose (targeted picks)', () => {
     expect(gs.getState().pendingActionTarget!.eligibleIds, 'controller AND subtype compose').toEqual(['my-beast']);
   });
 
+  // AMENDED 2026-08-23 (Arc C): these boards are UNTAMED — no Gear, no Physical
+  // Constructs — and Bristlemane Boar is an Untamed carrier, so its printed
+  // "UNTAMED: this character gets +1 attack" is now live and every Boar total below
+  // gained 1. The fixtures are deliberately UNCHANGED: they are real cards on a real
+  // board, and swapping in a bonus-free Beast to protect the old arithmetic would hide
+  // a genuine interaction. (Rootbind Ritual is an Incantation — a MAGIC construct — so
+  // the aura's own source never suppresses the state.)
   it('Wild Growth grants +3 attack until end of turn through the existing timed-buff path', () => {
     seedWith(sw('Wild Growth'), 'Druid', { f1: ent('my-beast', 'Bristlemane Boar', { atk: 1 }) });
     gs.getState().playAction(sw('Wild Growth').id);
     gs.getState().resolveActionTarget('my-beast');
-    expect(effectiveAttack(g().p1.board.f1!, g()), '1 + 3').toBe(4);
+    expect(effectiveAttack(g().p1.board.f1!, g()), '1 + 3 buff + 1 Untamed').toBe(5);
   });
 
   it('Instinct grants Zealous until end of turn — the same buff.grant path, no new engine', () => {
@@ -155,8 +162,10 @@ describe('group scope: "Beasts you control"', () => {
       } },
       p2: { ...s.game.p2, board: { f1: ent('their-beast', 'Cairn Elk', { atk: 3 }) } },
     } }));
-    expect(effectiveAttack(g().p1.board.f1!, g()), 'own Beast: 1 + 1').toBe(2);
+    expect(effectiveAttack(g().p1.board.f1!, g()), 'own Beast: 1 + 1 aura + 1 Untamed').toBe(3);
     expect(effectiveAttack(g().p1.board.f2!, g()), 'own non-Beast: unchanged').toBe(2);
+    // Cairn Elk is a Beast but carries no Untamed clause, so it stays the clean
+    // negative it was authored to be — the aura is still controller-scoped.
     expect(effectiveAttack(g().p2.board.f1!, g()), 'opposing Beast: unchanged').toBe(3);
   });
 
@@ -169,13 +178,15 @@ describe('group scope: "Beasts you control"', () => {
     gs.setState(s => ({ game: { ...s.game,
       p1: { ...s.game.p1, board: { ...s.game.p1.board, f1: ent('late', 'Bristlemane Boar', { atk: 1 }) } },
     } }));
-    expect(effectiveAttack(g().p1.board.f1!, g()), 'covered on arrival — the scan re-derives every read').toBe(2);
+    expect(effectiveAttack(g().p1.board.f1!, g()),
+      'covered on arrival — the scan re-derives every read (1 + 1 aura + 1 Untamed)').toBe(3);
 
     // And the construct leaving takes the bonus with it (nothing was stamped).
     gs.setState(s => ({ game: { ...s.game,
       p1: { ...s.game.p1, board: { f1: s.game.p1.board.f1! } },
     } }));
-    expect(effectiveAttack(g().p1.board.f1!, g()), 'aura gone with its source').toBe(1);
+    expect(effectiveAttack(g().p1.board.f1!, g()),
+      'aura gone with its source — the Untamed +1 remains, it has a different source').toBe(2);
   });
 });
 

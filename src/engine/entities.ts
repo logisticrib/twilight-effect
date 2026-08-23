@@ -8,7 +8,7 @@ import type { BoardEntity, Card } from '../types/card';
 import { CATALOG } from '../data/catalog';
 import { isFront, FRONT_SLOTS, BACK_SLOTS, type Board, type SlotId } from './geometry';
 import type { GameState, PendingItemTransfer, PendingDeadPick, ArmorChoiceData } from './state';
-import { isCharacter, canHoldItem, isPhysicalConstruct } from './stats';
+import { isCharacter, canHoldItem, isPhysicalConstruct, gearItemsOf } from './stats';
 // Function-level cycle with combat.ts (destroyEntity fires removal triggers; the
 // trigger machinery damages/destroys entities) and interpreter.ts (on-sacrifice
 // listeners resolve card effects). Safe: hoisted functions, called only at
@@ -65,26 +65,13 @@ export function deadCardsOf(ent: BoardEntity): Card[] {
   return names.map(n => CATALOG.find(c => c.name === n)).filter((c): c is Card => !!c);
 }
 
-/** Every Gear item currently equipped, across BOTH boards, as {itemId, bearerId, owner,
- *  name}. Gear only — weapons are excluded (canon splits Items into Weapons and Gear;
- *  "target Gear" never reaches a weapon). Deduped by item id: a heavy piece occupies
- *  both gear slots but is ONE item and must be offered once. (Arc A, 2026-08-19.) */
-export function gearItemsOf(game: GameState): { itemId: string; bearerId: string; owner: 'p1' | 'p2'; name: string }[] {
-  const out: { itemId: string; bearerId: string; owner: 'p1' | 'p2'; name: string }[] = [];
-  for (const side of ['p1', 'p2'] as const) {
-    for (const ent of Object.values(game[side].board)) {
-      if (!ent?.loadout) continue;
-      const seen = new Set<string>();
-      for (const gi of ent.loadout.gear) {
-        if (!gi || seen.has(gi.id)) continue;
-        seen.add(gi.id);
-        // Ownership routes zones, never board membership (Arc I ruling 4).
-        out.push({ itemId: gi.id, bearerId: ent.id, owner: ent.stolenFrom ?? side, name: gi.name });
-      }
-    }
-  }
-  return out;
-}
+/** RETIRED FROM THIS FILE 2026-08-23 (Arc C) — `gearItemsOf` MOVED to engine/stats.ts
+ *  and is re-exported here so every existing import keeps working. It had to move down
+ *  to the leaf module because `isUntamedEncounter` reads the Gear universe and stats.ts
+ *  is upstream of this file; the alternative was a second Gear scan, which is precisely
+ *  the drift Arc A's extraction removed. Definition and doc comment live at the new
+ *  site — do not re-add a copy here. */
+export { gearItemsOf } from './stats';
 
 /** Destroy one equipped Gear item: strip it from its bearer's loadout and put its CARD
  *  in the OWNER's Dead Zone (recoverable). Extracted from the inline disarm path so the

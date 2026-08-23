@@ -114,6 +114,18 @@ export type Condition =
   | { kind: 'controlsCount'; of: 'companions' | 'constructs'; min: number }
   | { kind: 'willpowerAtLeast'; value: number }
   | { kind: 'targetIsSubtype'; subtype: string }
+  // UNTAMED (Arc C, 2026-08-23) — "no Gear or Physical Constructs in the encounter"
+  // (Master_Keyword_List.md:133). ENCOUNTER-WIDE and controller-agnostic: it carries no
+  // side, and conditionMet ignores its `lp`. KEYWORD-INDEPENDENT (owner ruling
+  // 2026-08-23): the condition asks about the encounter, not about whether the asking
+  // card prints UNTAMED — which is what lets Elder Shellback's "if it is Untamed" work
+  // while the card prints Guardian and Oathsworn.
+  //   · on a `static` clause  → CONTINUOUS: re-read on every stat/keyword read, so the
+  //     bonus tracks the board in both directions with nothing stamped.
+  //   · on an `onEnter` clause → ENTRY SNAPSHOT: read once, when the trigger resolves.
+  //     Deliberately never re-evaluated — an encounter that clears later places nothing
+  //     retroactively (the dd000066 exception shape, owner-ratified).
+  | { kind: 'untamed' }
   // combat-trigger event gates (checked against the damage/kill event, not the board)
   | { kind: 'damagedIsEnemyCompanion' }
   | { kind: 'killedIsCompanion' }
@@ -202,6 +214,17 @@ export type Effect =
   // entry points apart. Choiceless — no prompt. Engine-supported target:
   // eventSubject (trap windows).
   | { op: 'applyPoison'; count: number; target: TargetSpec }
+  // placeArmor (Arc C, 2026-08-23 — Elder Shellback): put N armor counters on each
+  // entity in scope. This op ONLY PLACES; it wires up no prevention, because the
+  // universal counter rule (MKL:52, ruled 2026-08-18) already made the counters BE the
+  // ability: "armor counters on a companion ARE the prevention … regardless of how the
+  // counters arrived — printed keyword or card effect". armorCandidatesOf already
+  // offers an entity's own counters and removeArmorCounter already spends them, so
+  // effect-placed and keyword-native counters are indistinguishable downstream.
+  // `armorStart` is deliberately NOT written: it records the PRINTED X and is absent
+  // for effect-placed counters (the documented contract on BoardEntity).
+  // `subtype` narrows the group by AUTHORED token membership, matching `ready` (Arc B).
+  | { op: 'placeArmor'; count: number; target: TargetSpec; subtype?: string }
   // itemKind narrows an Item recovery to Weapon/Armor/Trinket ("return target Weapon" —
   // Fence's Ledger, dev deck 2026-07-22); optional makes the pick skippable ("you may").
   // subtype (Arc B, 2026-08-19): "Return target Beast from your Dead Zone" — matched

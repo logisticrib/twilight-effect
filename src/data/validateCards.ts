@@ -57,6 +57,7 @@ const OPS = [
   'forcedSacrifice',
   'destroy',
   'ready',
+  'placeArmor',
 ] as const satisfies readonly Effect['op'][];
 export type _ExhaustiveOps = AssertNever<Exclude<Effect['op'], (typeof OPS)[number]>>;
 
@@ -71,6 +72,7 @@ export type _ExhaustiveCosts = AssertNever<Exclude<Cost['kind'], (typeof COST_KI
 const CONDITION_KINDS = [
   'controlsType', 'controlsCount', 'willpowerAtLeast', 'targetIsSubtype',
   'damagedIsEnemyCompanion', 'killedIsCompanion', 'killedIsPhysicalConstruct', 'diedToDamage',
+  'untamed',
 ] as const satisfies readonly Condition['kind'][];
 export type _ExhaustiveConditions = AssertNever<Exclude<Condition['kind'], (typeof CONDITION_KINDS)[number]>>;
 
@@ -201,6 +203,15 @@ function validateEffect(e: Effect, path: string, p: (msg: string) => void, keywo
       count('count');
       // Engine-supported scope only (Arc D 2026-07-23; the preventDamage precedent).
       if (e.target !== 'eventSubject') p(`${path}(applyPoison): target must be eventSubject (trap windows)`);
+      break;
+    case 'placeArmor':
+      count('count');
+      // Engine-supported scopes only (Arc C 2026-08-23; the applyPoison precedent —
+      // the contract must not advertise design space the interpreter cannot resolve).
+      if (e.target !== 'ownCompanions' && e.target !== 'ownParty') {
+        p(`${path}(placeArmor): target must be ownCompanions or ownParty (auto-scoped groups)`);
+      }
+      if (e.subtype !== undefined && typeof e.subtype !== 'string') p(`${path}(placeArmor): bad subtype`);
       break;
     case 'returnFromDead':
       if (e.to !== 'hand' && e.to !== 'encounter') p(`${path}(returnFromDead): bad to "${String(e.to)}"`);
