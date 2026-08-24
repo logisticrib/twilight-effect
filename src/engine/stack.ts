@@ -23,24 +23,19 @@
 import type { Trigger } from '../types/effects';
 import type { BoardEntity } from '../types/card';
 import { FRONT_SLOTS, BACK_SLOTS } from './geometry';
-import type { GameState, StackEntry, ReactiveStackEntry, PendingDeadPick, ArmorChoiceData } from './state';
+import type { GameState, ReactiveStackEntry, PendingDeadPick, ArmorChoiceData } from './state';
 import { effectiveKeywords, hasSubtype } from './stats';
 import { findEntityAnywhere } from './entities';
 import { effectsOfCard, resolveActionEffects, conditionMet } from './interpreter';
 
-/** Write the stack back, keeping the OPTIONAL-field invariant: `undefined` (not `[]`)
- *  when empty, so games that never queue a trigger — and games after every stack
- *  drains — hash identically to pre-arc state (stableStringify omits undefined keys;
- *  committed replay fixtures must not all retire over a phantom field). */
-export function setStack(game: GameState, stack: StackEntry[]): GameState {
-  return { ...game, triggerStack: stack.length ? stack : undefined };
-}
-
-/** Push entries onto the stack (later elements end up nearer the top). */
-export function pushStack(game: GameState, entries: StackEntry[]): GameState {
-  if (!entries.length) return game;
-  return setStack(game, [...(game.triggerStack ?? []), ...entries]);
-}
+/** RETIRED FROM THIS FILE 2026-08-21 (Final Sweep) — `setStack` and `pushStack` MOVED
+ *  to engine/state.ts and re-exported here, so no call site changed. They are pure
+ *  GameState writers with no dependency on anything in this module, and the interpreter
+ *  now needs to push (forced attacks queue as stack entries) — importing stack.ts from
+ *  interpreter.ts would close a cycle, since stack.ts imports the interpreter. Moving
+ *  the two primitives DOWN to the module that already defines GameState and StackEntry
+ *  removes the cycle instead of working around it (the Arc C gearItemsOf precedent). */
+export { setStack, pushStack } from './state';
 
 /** The subject-side deterministic scan order for a board (front then back). */
 const SLOT_SCAN = [...FRONT_SLOTS, ...BACK_SLOTS];

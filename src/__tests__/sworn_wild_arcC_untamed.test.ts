@@ -381,11 +381,11 @@ describe('serialization + contract discipline', () => {
     expect(offenders, 'extend the static `if` gate before shipping these').toEqual([]);
   });
 
-  // AMENDED 2026-08-23 (Arc E, then Arc D): dd000089 left when Tribute landed; dd000059
-  // and dd000073 left when the two trigger windows landed. Arc C's own six are unchanged
-  // — the roster below is the LIVE debt, so it is expected to shrink as later arcs close;
-  // the Arc C assertions above it are not.
-  it('the arc cleared exactly its six cards, and the rest stay flagged', () => {
+  // AMENDED 2026-08-21 (Final Sweep): the roster reached ZERO. Arc C's own six are
+  // unchanged and still assert what this file is for; the debt list is now the
+  // program-close assertion, and it lives here as well as in the phase-1 pin because a
+  // count alone would let a silent RE-flag slip past.
+  it('the arc cleared exactly its six cards, and NOTHING is flagged any more', () => {
     const ARC_C = ['dd000051', 'dd000054', 'dd000061', 'dd000065', 'dd000066', 'dd000071'];
     for (const id of ARC_C) {
       const c = SWORN_WILD_DEV_CARDS.find(x => x.id === id)!;
@@ -394,7 +394,6 @@ describe('serialization + contract discipline', () => {
     }
     const flagged = SWORN_WILD_DEV_CARDS.filter(c =>
       c.effectsFlag?.startsWith('DEV NOT-IMPLEMENTED'));
-    expect(flagged.map(c => c.id), 'the remaining arc debt, by card').toEqual(
-      ['dd000058', 'dd000081', 'dd000091', 'dd000098']);
+    expect(flagged.map(c => c.id), 'PROGRAM 2 COMPLETE — every dev card carries authored behavior').toEqual([]);
   });
 });

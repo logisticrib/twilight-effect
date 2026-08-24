@@ -295,7 +295,8 @@ describe('window plumbing — discipline', () => {
     expect(g().triggerStack ?? null).toBeFalsy();
   });
 
-  it('the arc cleared exactly its two cards', () => {
+  // AMENDED 2026-08-21 (Final Sweep): the debt roster reached ZERO.
+  it('the arc cleared exactly its two cards, and NOTHING is flagged any more', () => {
     for (const id of ['dd000059', 'dd000073']) {
       const c = SWORN_WILD_DEV_CARDS.find(x => x.id === id)!;
       expect(c.effectsFlag, `${id} ${c.name} went live in Arc D`).toBeUndefined();
@@ -303,16 +304,21 @@ describe('window plumbing — discipline', () => {
     }
     const flagged = SWORN_WILD_DEV_CARDS.filter(c =>
       c.effectsFlag?.startsWith('DEV NOT-IMPLEMENTED'));
-    expect(flagged.map(c => c.id), 'the final sweep arc, by card').toEqual(
-      ['dd000058', 'dd000081', 'dd000091', 'dd000098']);
+    expect(flagged.map(c => c.id), 'PROGRAM 2 COMPLETE').toEqual([]);
   });
 
-  it('targetIsSubtype is implemented for the REACTIVE family ONLY', () => {
-    // Recorded so the scope is not over-read: dd000081 needs the same condition kind
-    // against an equipped card's BEARER, which is a different binding and is still
-    // unimplemented — it is one of the four cards left above.
+  // RETIRED + REWRITTEN 2026-08-21 (Final Sweep). This used to pin that dd000081 was
+  // STILL BLOCKED on the bearer binding. That binding now exists — as its OWN condition
+  // kind, `bearerIsSubtype`, deliberately not folded into targetIsSubtype. The fact
+  // worth protecting flipped from "still missing" to "kept separate", because collapsing
+  // the two would let a condition be evaluated against the wrong subject.
+  it('the three subtype bindings are THREE distinct kinds, never one overloaded kind', () => {
     const fang = SWORN_WILD_DEV_CARDS.find(c => c.id === 'dd000081')!;
-    expect(fang.effectsFlag, 'still flagged, still blocked on the bearer binding').toBeTruthy();
-    expect(fang.effectsFlag).toMatch(/targetIsSubtype against a TARGET/);
+    expect(fang.effectsFlag, 'live since the Final Sweep').toBeUndefined();
+    const kinds = (fang.effects ?? []).map(ce => ce.if?.kind).filter(Boolean);
+    expect(kinds, 'the ITEM binds its BEARER').toContain('bearerIsSubtype');
+    const chorus = SWORN_WILD_DEV_CARDS.find(c => c.id === 'dd000073')!;
+    expect((chorus.effects ?? [])[0].if?.kind, 'the reactive binds its event SUBJECT')
+      .toBe('targetIsSubtype');
   });
 });

@@ -150,6 +150,19 @@ export type Condition =
   //     Deliberately never re-evaluated — an encounter that clears later places nothing
   //     retroactively (the dd000066 exception shape, owner-ratified).
   | { kind: 'untamed' }
+  // FINAL SWEEP (2026-08-21). Two new bindings, each answered where its subject is in
+  // scope — deliberately NOT folded into targetIsSubtype, whose binding is the reactive
+  // EVENT SUBJECT. Overloading one kind across three different bindings is how a
+  // condition ends up evaluated against the wrong thing.
+  //   bearerIsSubtype  → the character an ITEM is equipped to (Fang of the First Hunt).
+  //                      Answered in selfItemStat; legal only on an Item's
+  //                      equipped/static clauses.
+  //   controlsKeyword  → do you control ANY permanent whose keywords include [keyword]
+  //                      (Call to the Vow). Board-state: answered by conditionMet, so it
+  //                      is legal anywhere. Companion OR construct host counts; the
+  //                      OPPONENT's carriers never do.
+  | { kind: 'bearerIsSubtype'; subtype: string }
+  | { kind: 'controlsKeyword'; keyword: string }
   // combat-trigger event gates (checked against the damage/kill event, not the board)
   | { kind: 'damagedIsEnemyCompanion' }
   | { kind: 'killedIsCompanion' }
@@ -186,7 +199,11 @@ export type Effect =
   // damage / healing
   | { op: 'damage'; amount: Amount; target: TargetSpec; splash?: 'line' | 'board' }
   | { op: 'damageSelfPC'; amount: Amount }
-  | { op: 'heal'; amount: Amount; target: TargetSpec }
+  // `where.keyword` (Final Sweep, 2026-08-21 — Declaration of Wardship): narrow a GROUP
+  // heal to companions carrying a keyword. Read through effectiveKeywords, so an
+  // item-granted Guardian counts and a suppressed one does not — the keyword as the
+  // board actually has it, never the printed array.
+  | { op: 'heal'; amount: Amount; target: TargetSpec; where?: { keyword?: string } }
   // attack/stat modification (HP buffs ONLY as continuous statics — no temp +HP per rules §8).
   // Durations (Arc B, 2026-07-23): 'endOfTurn' (shipped stamp) · 'while' (static aura,
   // never stamped — negative amounts with scope allEnemyCompanions are hostile debuff

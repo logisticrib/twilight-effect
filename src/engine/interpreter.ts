@@ -9,11 +9,13 @@ import type { Effect, Amount, TargetSpec, Trigger, Cost, CardEffect } from '../t
 import { CATALOG } from '../data/catalog';
 import { isFront } from './geometry';
 import type { GameState, PendingDeadPick, ArmorChoiceData } from './state';
+import { pushStack } from './state';
 import { charsOf, companionIds, constructIds, findEntityAnywhere, updateEntity,
          removeEntity, destroyEntity, setPcHp, pcIdOf, itemCardsOf, itemTransferOf, canBeSacrificed,
          gearItemsOf, destroyItemById } from './entities';
 import { hasSubtype, cardHasSubtype } from './stats';
-import { isPhysicalConstruct, conditionMet, effectiveAttack, effectiveMaxHp, isImmuneToSplash, isCharacter, poisonHitPatch } from './stats';
+import { isPhysicalConstruct, conditionMet, effectiveMaxHp, isImmuneToSplash, isCharacter, poisonHitPatch,
+         effectiveKeywords, isWardedAgainst } from './stats';
 // Function-level cycle with combat.ts (resolveActionEffects deals damage; combat
 // triggers resolve effects). Safe: hoisted functions, called only at runtime.
 import { applyDamage } from './combat';
@@ -154,8 +156,30 @@ export function effectTargetSpec(e: Effect): TargetSpec | null {
  * interactive pick, and re-checked at resolution (per-event state). No shipped card
  * carries a narrowing field, so every shipped arm site returns `ids` unchanged.
  */
-export function filterEligibleByEffects(game: GameState, ids: string[], effects: Effect[]): string[] {
+export function filterEligibleByEffects(game: GameState, ids: string[], effects: Effect[], sourceCard?: Card): string[] {
   let out = ids;
+  // WARDED AGAINST [X] (Final Sweep, 2026-08-21) — canon's TARGETING gate, applied at
+  // the one chokepoint every interactive pick already passes through, so no arming site
+  // can forget it. `sourceCard` is the card doing the targeting; sites that pass none
+  // (abilities hosted on permanents, modal options) are unchanged.
+  //
+  // The other two verbs in canon's "targeted, attacked, or damaged":
+  //  · ATTACKED — inapplicable to a ward against a CARD CLASS of Actions: an attack is
+  //    made by a character, and no Action card attacks. Pale Hart is therefore fully
+  //    attackable, which is deliberate, not an omission.
+  //  · DAMAGED — DORMANT: swept 2026-08-21, no Physical Action in any of the four decks
+  //    deals damage without targeting, so the targeting gate above already covers every
+  //    live producer. When an untargeted damaging Action of a warded class is authored,
+  //    the damage gate must land in applyDamage; deliberately not built for an absent
+  //    producer (the perControlled precedent).
+  //
+  // FORWARD DEPENDENCY: the cast-time legality gate (deferred, Game_Rules_Updated
+  // §Action Supertypes) will read the same filtered set — a Physical Action whose ONLY
+  // legal target is warded should become uncastable rather than fizzle.
+  if (sourceCard) out = out.filter(id => {
+    const loc = findEntityAnywhere(game, id);
+    return !loc || !isWardedAgainst(loc.ent, sourceCard, game);
+  });
   const cap = effects.find((e): e is Extract<Effect, { op: 'bounce' | 'gainControl' }> =>
     (e.op === 'bounce' || e.op === 'gainControl') && e.hpAtMost != null);
   if (cap) {
@@ -441,7 +465,18 @@ export function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceNam
         let ids: string[] = [];
         if (e.target === 'self') { if (sourceId) ids = [sourceId]; }
         else if (e.target === 'ownParty') ids = charsOf(g, lp);
+        else if (e.target === 'ownCompanions') ids = companionIds(g, lp);
         else if (isInteractiveSpec(e.target) && targetId) ids = [targetId];
+        // Final Sweep (2026-08-21, Declaration of Wardship): narrow a GROUP heal by
+        // keyword. effectiveKeywords, so an item-granted Guardian heals and a
+        // suppressed one does not — the keyword as the board actually has it.
+        if (e.where?.keyword) {
+          const want = e.where.keyword;
+          ids = ids.filter(id => {
+            const loc = findEntityAnywhere(g, id);
+            return !!loc && effectiveKeywords(loc.ent, g).includes(want);
+          });
+        }
         for (const id of ids) {
           const loc = findEntityAnywhere(g, id);
           if (!loc) continue;
@@ -550,17 +585,26 @@ export function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceNam
         break;
       }
       case 'forceAttack': {
+        // RETIRED + REWRITTEN 2026-08-21 (owner ruling: FORCED ATTACKS ARE ATTACKS).
+        // This used to call applyDamage directly, which meant a forced attack opened
+        // NO declaration window and the entire family stayed silent on it — Iron
+        // Spikes, The Final Word, Caltrop Pouch, Quillspine. The ruling makes a forced
+        // attack identical in kind to a chosen one, and the fix is HERE, once, for the
+        // whole family rather than per listener.
+        //
+        // Each attacker becomes a 'forcedAttack' stack entry, expanded by runStack
+        // through the SAME assembly a chosen attack uses. Pushed in REVERSE so the
+        // slot-scan order resolves first (the stack is LIFO), and NOT pre-declared:
+        // each attack takes its own declaration snapshot when its entry resolves (R2),
+        // so an earlier attacker that removes a buff source correctly lowers a later
+        // attacker's damage.
         if (!targetId) break;
         const attackers = charsOf(g, lp, 'front').filter(id => findEntityAnywhere(g, id)?.ent.kind === 'companion');
-        for (const aid of attackers) {
-          if (!findEntityAnywhere(g, targetId)) break; // target already removed
-          const aloc = findEntityAnywhere(g, aid);
-          if (!aloc) continue;
-          const dmg = effectiveAttack(aloc.ent, g);
-          const r = applyDamage(g, targetId, dmg, aloc.ent.name, lp, sink, undefined, armorSink);
-          g = r.game; msgs.push(...r.msgs);
-          g = updateEntity(g, aid, { acts: { ...aloc.ent.acts, major: true }, exhausted: true, tapped: 'major' });
-        }
+        if (!attackers.length) { msgs.push(`${sourceName} finds no front-line companion to attack with`); break; }
+        g = pushStack(g, attackers.slice().reverse().map(aid => ({
+          kind: 'forcedAttack' as const, attackerId: aid, targetId, side: lp, sourceName,
+        })));
+        msgs.push(`${attackers.length} companion${attackers.length > 1 ? 's' : ''} attack${attackers.length > 1 ? '' : 's'}`);
         break;
       }
       case 'anchor': {

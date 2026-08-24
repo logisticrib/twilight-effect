@@ -28,6 +28,53 @@ import { CATALOG, SUBTYPES_BY_NAME, authoredSubtypesOf } from '../data/catalog';
  */
 export { KEYWORDS, type KeywordSpec, type KwEvent } from '../data/keywordRegistry';
 
+/**
+ * WARDED AGAINST [X] (Final Sweep, 2026-08-21). Canon (Card_Design_Parameters.md:669):
+ * "Warded creatures cannot be targeted, attacked, or damaged by cards of type or
+ * subtype [X]." Printed parameterized, so the [X] is parsed off the KEYWORD STRING —
+ * structured card data, exactly like "Armor 2" and "[NAME]'s Bane" — never sniffed out
+ * of rules prose.
+ *
+ * NOT TO BE CONFUSED with `wardedLines` further down: that is lineWard, an unrelated
+ * Fortification mechanic that protects a LINE. This one protects a creature from a
+ * class of CARDS.
+ */
+export function parseWardedAgainst(keywords: readonly string[]): string[] {
+  const out: string[] = [];
+  for (const kw of keywords) {
+    const m = /^Warded against\s+(.+)$/i.exec(kw.trim());
+    if (m) out.push(m[1].trim());
+  }
+  return out;
+}
+
+/** Singular form of a printed ward token ("Actions" -> "Action"), so [X] can be printed
+ *  naturally ("Physical Actions") and still match a card's type structurally. */
+const singular = (t: string) => (/s$/i.test(t) && !/ss$/i.test(t) ? t.slice(0, -1) : t);
+
+/**
+ * Does `card` fall inside the class [X] names? Every token of [X] must match either the
+ * card's TYPE or one of its AUTHORED subtypes (the Arc B lookup) — so "Physical Actions"
+ * needs subtype Physical AND type Action, while a bare "Undead" needs only the subtype.
+ * Structural on both sides: nothing here reads printed rules text.
+ */
+export function cardMatchesWardClass(card: Card, wardClass: string): boolean {
+  const tokens = wardClass.split(/\s+/).filter(Boolean);
+  if (!tokens.length) return false;
+  const subs = authoredSubtypesOf(card).map(x => x.toLowerCase());
+  const type = card.type.toLowerCase();
+  return tokens.every(tok => {
+    const t = singular(tok).toLowerCase();
+    return t === type || subs.includes(t);
+  });
+}
+
+/** Is `ent` warded against `card` — i.e. may that card not target it? Reads the entity's
+ *  LIVE keywords so a granted/suppressed ward behaves like every other keyword. */
+export function isWardedAgainst(ent: BoardEntity, card: Card, game: GameState): boolean {
+  return parseWardedAgainst(effectiveKeywords(ent, game)).some(w => cardMatchesWardClass(card, w));
+}
+
 /** Transient status marking an entity that may take its Hit & Run bonus move. */
 export const HIT_RUN_STATUS = 'hit-run-ready';
 
@@ -189,7 +236,46 @@ export function conditionMet(game: GameState, lp: 'p1' | 'p2', cond: Condition):
     // unused. The five continuous carriers read this on EVERY stat/keyword read; the
     // dd000066 entry-snapshot reads it exactly once, when its enter trigger resolves.
     case 'untamed': return isUntamedEncounter(game);
-    default: return true;
+    // Final Sweep (2026-08-21, Call to the Vow): do you control ANY permanent whose
+    // keywords include this one? Companion or construct host both count; the OPPONENT's
+    // carriers never do (the scan never leaves `lp`'s board). effectiveKeywords, so a
+    // granted keyword counts and a suppressed one does not.
+    case 'controlsKeyword':
+      return Object.values(game[lp].board).some(e => !!e && effectiveKeywords(e, game).includes(cond.keyword));
+
+    // ── EVERY OTHER KIND FAILS LOUDLY (Final Sweep, owner-approved 2026-08-21) ──
+    // This used to be `default: return true`, which meant a condition kind with no
+    // evaluator here was SILENTLY UNCONDITIONAL. That is not hypothetical: it is
+    // exactly how `targetIsSubtype` sat declared-but-never-evaluated for a whole arc,
+    // and any card authoring it would have applied its effect with no gate at all.
+    //
+    // The kinds below DO have evaluators — just not here, because each needs context
+    // this function structurally cannot see (it receives only game + side):
+    //   · the damage-event kinds  → eventMatches (engine/combat.ts), which is handed
+    //     the DamageEvent;
+    //   · diedToDamage            → resolveRemovalTriggers, which is handed the exit's
+    //     threaded cause;
+    //   · targetIsSubtype         → resolveReactiveEntry, which is handed the subject.
+    // Reaching one of them HERE means a clause was routed to the wrong evaluator, so
+    // the name is reported rather than quietly passed. validateCards refuses this
+    // combination at authoring time, so a throw here means a programmatic injection,
+    // never a card.
+    case 'damagedIsEnemyCompanion':
+    case 'killedIsCompanion':
+    case 'killedIsPhysicalConstruct':
+      throw new Error(`conditionMet: "${cond.kind}" is a damage-EVENT condition — it is answered by eventMatches (engine/combat.ts), which receives the event. A clause carrying it belongs on onDealDamage/onKill.`);
+    case 'diedToDamage':
+      throw new Error('conditionMet: "diedToDamage" is a death-CAUSE condition — it is answered in resolveRemovalTriggers against the exit\'s threaded cause. A clause carrying it belongs on onDestroy/onLeave.');
+    case 'targetIsSubtype':
+      throw new Error('conditionMet: "targetIsSubtype" is an event-SUBJECT condition — it is answered in resolveReactiveEntry, which receives the subject. A clause carrying it belongs on a reactive trigger.');
+    case 'bearerIsSubtype':
+      throw new Error('conditionMet: "bearerIsSubtype" binds to the character an ITEM is equipped to — it is answered in selfItemStat, the one site holding both. A clause carrying it belongs on an Item\'s equipped/static clause.');
+    default: {
+      // Unknown kind: the union grew and this switch did not. The `never` binding makes
+      // that a COMPILE error first; this throw covers runtime injection.
+      const bad: never = cond;
+      throw new Error(`conditionMet: unknown condition kind ${JSON.stringify(bad)} — add an evaluator before authoring it.`);
+    }
   }
 }
 
@@ -221,13 +307,20 @@ function effectsOf(name: string): CardEffect[] | undefined {
   return CATALOG.find(c => c.name === name)?.effects;
 }
 
-/** Sum of `buff <stat>` with scope 'self' from an item's equipped/static clauses. */
-function selfItemStat(item: EquippedItem, stat: 'atk' | 'hp'): number {
+/** Sum of `buff <stat>` with scope 'self' from an item's equipped/static clauses.
+ *
+ *  `bearer` (Final Sweep, 2026-08-21) is the character the item is equipped to, and it
+ *  is what makes a BEARER-conditional bonus possible — Fang of the First Hunt's "+3
+ *  instead if the equipped character is a Beast". This is the ONE site that holds both
+ *  the item's clauses and the character wearing them, which is why the binding lives
+ *  here rather than in conditionMet (which sees neither). */
+function selfItemStat(item: EquippedItem, stat: 'atk' | 'hp', bearer: BoardEntity): number {
   const effects = effectsOf(item.name);
   if (!effects) return 0;
   let sum = 0;
   for (const ce of effects) {
     if (ce.trigger !== 'equipped' && ce.trigger !== 'static') continue;
+    if (ce.if?.kind === 'bearerIsSubtype' && !hasSubtype(bearer, ce.if.subtype)) continue;
     for (const e of ce.effects) {
       if (e.op === 'buff' && e.stat === stat && e.scope === 'self') sum += e.amount ?? 0;
     }
@@ -341,8 +434,8 @@ function itemAndAuraStat(ent: BoardEntity, game: GameState, stat: 'atk' | 'hp'):
   let sum = 0;
   const lo = ent.loadout;
   if (lo) {
-    if (lo.weapon) sum += selfItemStat(lo.weapon, stat);
-    for (const g of lo.gear) if (g) sum += selfItemStat(g, stat);
+    if (lo.weapon) sum += selfItemStat(lo.weapon, stat, ent);
+    for (const g of lo.gear) if (g) sum += selfItemStat(g, stat, ent);
   }
   return sum + staticAuraStat(ent, game, stat);
 }

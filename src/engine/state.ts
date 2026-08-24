@@ -230,7 +230,42 @@ export type StackEntry =
    *  Resolving it drives the hit queue — unless the attacker is dead by then, in
    *  which case damage is never queued and the attack fizzles. */
   | { kind: 'attackDamage'; ctx: AttackCtx }
+  /** ONE forced attack, not yet declared (FINAL SWEEP, owner ruling 2026-08-21:
+   *  FORCED ATTACKS ARE ATTACKS). Press the Line makes each front-line companion
+   *  attack, and each of those is a real attack that opens the FULL declaration
+   *  window — Iron Spikes, The Final Word, Quillspine and every other member of the
+   *  family fire exactly as they would on a chosen attack.
+   *
+   *  It is an ENTRY rather than inline damage for two reasons that both matter:
+   *  · SEQUENCING. The window can PAUSE (an ordering prompt, an armor choice, a
+   *    Final Word demand). The stack already knows how to pause and resume; a loop
+   *    inside the interpreter does not.
+   *  · PER-ATTACK DECLARATION SNAPSHOT (R2). Each attack's damage and keywords are
+   *    stamped when ITS OWN declaration resolves, not when the card was played — so
+   *    a first attacker that kills a buff source correctly lowers the second
+   *    attacker's damage. Pushing a pre-built AttackCtx per attacker would have
+   *    frozen all N snapshots at play time, which is the bug this shape avoids.
+   *
+   *  Pushed in REVERSE by the interpreter so slot-scan order resolves first (LIFO).
+   *  Expanded by runStack through the SAME assembly a chosen attack uses. */
+  | { kind: 'forcedAttack'; attackerId: string; targetId: string; side: 'p1' | 'p2'; sourceName: string }
   | ReactiveStackEntry;
+
+/** Write the stack back, keeping the OPTIONAL-field invariant: `undefined` (not `[]`)
+ *  when empty, so games that never queue a trigger — and games after every stack
+ *  drains — hash identically to pre-arc state (stableStringify omits undefined keys;
+ *  committed replay fixtures must not all retire over a phantom field).
+ *  MOVED HERE from engine/stack.ts 2026-08-21 (re-exported there) — see the note at
+ *  the old site: the interpreter must push, and stack.ts imports the interpreter. */
+export function setStack(game: GameState, stack: StackEntry[]): GameState {
+  return { ...game, triggerStack: stack.length ? stack : undefined };
+}
+
+/** Push entries onto the stack (later elements end up nearer the top). */
+export function pushStack(game: GameState, entries: StackEntry[]): GameState {
+  if (!entries.length) return game;
+  return setStack(game, [...(game.triggerStack ?? []), ...entries]);
+}
 
 /** Simultaneous-trigger ordering prompt. `items` are the reactive triggers that
  *  queued at once; their OWNER (`lp` = the batch's controller — Rules Note

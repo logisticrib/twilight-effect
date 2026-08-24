@@ -75,8 +75,52 @@ const CONDITION_KINDS = [
   'controlsType', 'controlsCount', 'willpowerAtLeast', 'targetIsSubtype',
   'damagedIsEnemyCompanion', 'killedIsCompanion', 'killedIsPhysicalConstruct', 'diedToDamage',
   'untamed',
+  'bearerIsSubtype', 'controlsKeyword',
 ] as const satisfies readonly Condition['kind'][];
 export type _ExhaustiveConditions = AssertNever<Exclude<Condition['kind'], (typeof CONDITION_KINDS)[number]>>;
+
+// ── Condition kind ↔ trigger compatibility (Final Sweep, 2026-08-21) ──────────
+// EVERY condition kind has an evaluator, but they live in FOUR different places, each
+// holding context the others cannot see. A kind routed to the wrong evaluator used to
+// pass SILENTLY (both conditionMet and eventMatches returned true by default) — which
+// is how `targetIsSubtype` sat declared-but-unevaluated for a whole arc, unconditional
+// on any card that authored it. Both defaults now throw; this table stops a card from
+// ever reaching that throw, so authoring errors surface at validate:decks instead.
+//
+// Board-state kinds are answered by conditionMet, which is reachable from every clause
+// path, so they are legal on ANY trigger and in an op-level `if`. The other three
+// families are legal only where their evaluator actually runs.
+const BOARD_STATE_CONDITIONS = ['controlsType', 'controlsCount', 'willpowerAtLeast', 'untamed', 'controlsKeyword'];
+/** kind → the ONLY triggers whose resolution path reaches its evaluator. */
+const CONDITION_TRIGGER_HOME: Readonly<Record<string, readonly string[]>> = {
+  // eventMatches, handed the DamageEvent
+  damagedIsEnemyCompanion: ['onDealDamage'],
+  killedIsCompanion: ['onKill'],
+  killedIsPhysicalConstruct: ['onKill'],
+  // resolveRemovalTriggers, handed the exit's threaded cause
+  diedToDamage: ['onDestroy', 'onLeave'],
+  // selfItemStat, the one site holding both the item's clauses and its bearer.
+  // Item-hosted only — enforced additionally by the card-type check in validateClause.
+  bearerIsSubtype: ['equipped', 'static'],
+  // resolveReactiveEntry, handed the event subject
+  targetIsSubtype: [
+    'oppCompanionEnters', 'oppCompanionMovesToFront', 'oppCompanionAttacksCompanion',
+    'oppCompanionAttacks', 'oppCompanionFlees', 'onEquippedAttacked', 'onAttacked',
+    'ownPlaysMagicalConstruct', 'ownPlaysCompanion', 'ownCompanionEnters',
+    'ownPhysicalConstructSacrificed', 'onEquippedPlaysMagicAction',
+  ],
+};
+
+/** Report a clause-level `if` that sits on a trigger whose path cannot evaluate it. */
+function conditionHomeProblem(kind: string, trigger: string): string | null {
+  if (BOARD_STATE_CONDITIONS.includes(kind)) return null;
+  const home = CONDITION_TRIGGER_HOME[kind];
+  if (!home) return `condition "${kind}" has no evaluator — add one before authoring it`;
+  if (!home.includes(trigger)) {
+    return `condition "${kind}" cannot be evaluated on trigger "${trigger}" (its evaluator runs only for: ${home.join(', ')})`;
+  }
+  return null;
+}
 
 const AMOUNT_KEYS = ['die', 'halfDie', 'halfDieUp', 'perControlled'] as const;
 
@@ -127,7 +171,7 @@ function validCost(c: unknown): boolean {
   return true;
 }
 
-function validateEffect(e: Effect, path: string, p: (msg: string) => void, keywords: Readonly<Record<string, unknown>>): void {
+function validateEffect(e: Effect, path: string, p: (msg: string) => void, keywords: Readonly<Record<string, unknown>>, trigger?: string): void {
   const raw = e as unknown as Record<string, unknown>;
   if (!has(OPS, raw.op)) { p(`${path}: unknown op "${String(raw.op)}"`); return; }
   const target = (field: string) => {
@@ -174,6 +218,11 @@ function validateEffect(e: Effect, path: string, p: (msg: string) => void, keywo
         if (e.count !== 0) p(`${path}(draw): perDestroyed supplies the count — author count: 0`);
       } else count('count');
       if (e.if !== undefined && !validCondition(e.if)) p(`${path}(draw): bad condition ${JSON.stringify(e.if)}`);
+      // An OP-level `if` is evaluated by the interpreter through conditionMet, so it is
+      // BOARD-STATE only regardless of the hosting trigger (Final Sweep, 2026-08-21).
+      else if (e.if !== undefined && !BOARD_STATE_CONDITIONS.includes(e.if.kind)) {
+        p(`${path}(draw): an op-level condition is evaluated by conditionMet — "${e.if.kind}" is not a board-state kind and would throw${trigger ? ` (trigger "${trigger}")` : ''}`);
+      }
       break;
     case 'discard':
       count('count');
@@ -317,13 +366,20 @@ const proseTokens = (s: string): string[] =>
 /** Remove every keyword NAME (registry-wide) plus the text-parsed item properties
  *  (Heavy / Two-Handed / One-Handed) from a sentence — what survives is candidate
  *  rules prose. Case-insensitive literal removal (no regex-escaping pitfalls). */
-function stripKeywordNames(sentence: string): string {
+function stripKeywordNames(sentence: string, printed: readonly string[] = []): string {
   // "X's Bane" first (2026-07-22): the parameterized Bane NAME must be stripped as a
   // phrase BEFORE the literal loop removes the "Bane" token and breaks the pattern
   // (latent ordering flaw — unreachable while no card printed a Bane keyword line;
   // the dev deck's Paladin's/Druid's Bane carriers exposed it).
   let t = ` ${sentence} `.replace(/\b\w+'s bane\b/gi, ' ');
-  for (const n of [...Object.keys(KEYWORD_DEFS), 'Heavy', 'Two-Handed', 'One-Handed']) {
+  // The card's OWN printed keyword strings come out FIRST, verbatim and longest-first
+  // (Final Sweep, 2026-08-21). This generalizes the Bane phrase-strip above to EVERY
+  // parameterized keyword: "Warded against Physical Actions" has to go as one phrase,
+  // because stripping the registry's bare "Warded" leaves "against Physical Actions"
+  // behind, which then reads as un-honoured rules prose. Longest-first so a keyword that
+  // is a prefix of another cannot eat it.
+  const own = [...printed].sort((x, y) => y.length - x.length);
+  for (const n of [...own, ...Object.keys(KEYWORD_DEFS), 'Heavy', 'Two-Handed', 'One-Handed']) {
     const low = n.toLowerCase();
     for (;;) {
       const i = t.toLowerCase().indexOf(low);
@@ -373,7 +429,7 @@ function proseCompletenessProblems(card: Card, p: (msg: string) => void): void {
   const offending = text.split(/(?<=[.!?])\s+/)
     .map(s => s.trim())
     .filter(sen => {
-      const toks = proseTokens(stripKeywordNames(sen));
+      const toks = proseTokens(stripKeywordNames(sen, card.keywords ?? []));
       if (toks.length === 0) return false; // keyword names / parameters only
       return !defs.some(def => toks.filter(w => def.has(w)).length / toks.length >= 0.75);
     });
@@ -400,7 +456,21 @@ function validateClause(clause: CardEffect, idx: number, p: (msg: string) => voi
   // (2026-07-08 owner ruling: 'sacrifice'/'discard' were removed from the Cost schema
   //  entirely — they now fail this shape check as unknown kinds.)
   if (clause.cost !== undefined && !validCost(clause.cost)) p(`${path}: bad cost ${JSON.stringify(clause.cost)}`);
-  (clause.effects ?? []).forEach((e, i) => validateEffect(e, `${path}.effects[${i}]`, p, keywords));
+  // The clause `if` must sit on a trigger whose resolution path reaches its evaluator
+  // (Final Sweep, 2026-08-21) — otherwise it would hit a runtime throw, and before this
+  // arc it would have passed SILENTLY as unconditional.
+  if (clause.if) {
+    if (!has(CONDITION_KINDS, clause.if.kind)) p(`${path}: unknown condition kind "${String(clause.if.kind)}"`);
+    else {
+      const problem = conditionHomeProblem(clause.if.kind, clause.trigger);
+      if (problem) p(`${path}: ${problem}`);
+      // The bearer binding only exists where an item HAS a bearer.
+      if (clause.if.kind === 'bearerIsSubtype' && cardType !== 'Item') {
+        p(`${path}: "bearerIsSubtype" is only meaningful on an Item card (it binds to the equipped character)`);
+      }
+    }
+  }
+  (clause.effects ?? []).forEach((e, i) => validateEffect(e, `${path}.effects[${i}]`, p, keywords, clause.trigger));
 }
 
 /**

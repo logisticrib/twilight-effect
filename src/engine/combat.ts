@@ -384,7 +384,33 @@ export function eventMatches(cond: Condition | undefined, ev: DamageEvent, attac
     case 'damagedIsEnemyCompanion': return ev.kind === 'companion' && ev.owner !== attackerOwner;
     case 'killedIsCompanion': return ev.kind === 'companion';
     case 'killedIsPhysicalConstruct': return ev.kind === 'construct' && ev.physical;
-    default: return true; // board-state conditions don't gate combat events
+
+    // ── The symmetric half of conditionMet's guard (Final Sweep, 2026-08-21) ──────
+    // This default USED to return true for "board-state conditions don't gate combat
+    // events" — the same silent pass, mirrored. A card reading "when this kills a
+    // companion, if you control a Construct, …" would have ignored the second half
+    // entirely. No card authors that combination today (swept, all four decks), and
+    // validateCards now refuses it, so this throw names the gap for whoever writes the
+    // first one instead of shipping them a half-working card.
+    //
+    // The honest fix when that card arrives is to thread `game` in and DELEGATE to
+    // conditionMet here — not to widen this switch.
+    case 'controlsType':
+    case 'controlsCount':
+    case 'willpowerAtLeast':
+    case 'untamed':
+    case 'controlsKeyword':
+      throw new Error(`eventMatches: "${cond.kind}" is a BOARD-STATE condition, which this gate cannot answer — it receives only the damage event. To combine a board-state gate with a combat-event trigger, thread GameState in and delegate to conditionMet.`);
+    case 'diedToDamage':
+      throw new Error('eventMatches: "diedToDamage" is answered in resolveRemovalTriggers, not here.');
+    case 'targetIsSubtype':
+      throw new Error('eventMatches: "targetIsSubtype" is answered in resolveReactiveEntry, not here.');
+    case 'bearerIsSubtype':
+      throw new Error('eventMatches: "bearerIsSubtype" is answered in selfItemStat, not here.');
+    default: {
+      const bad: never = cond;
+      throw new Error(`eventMatches: unknown condition kind ${JSON.stringify(bad)} — add an evaluator before authoring it.`);
+    }
   }
 }
 

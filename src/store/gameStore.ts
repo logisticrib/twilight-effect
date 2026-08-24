@@ -210,11 +210,26 @@ function heldRefusal(s: { toasts: { id: number; msg: string }[] }, hold: string)
  * declaration-window triggers take the legacy inline drive (identical behavior).
  * `bonusDmg` is the optional on-attack bonus the player opted into (else 0).
  */
-function commitAttack(s: StackRunCtx, game: GameState, charId: string, targetEntityId: string, bonusDmg: number):
-  { game: GameState; local: Partial<GameStoreState>; toastMsgs: string[] } {
+/**
+ * THE DECLARATION ASSEMBLY, shared by both ways an attack can happen (extracted
+ * 2026-08-21 for the forced-attacks-are-attacks ruling):
+ *   · commitAttack   — a chosen attack, declared by its controller
+ *   · runStack's 'forcedAttack' — a compelled attack (Press the Line)
+ * Taps the attacker, stamps the AttackCtx (R2: damage and keywords are snapshotted at
+ * DECLARATION), builds the Cleave hit queue, and gathers every declaration-window
+ * trigger. It does NOT drive the stack — the two callers differ only in that.
+ *
+ * A second copy of this would be how a forced attack drifts back into being a
+ * second-class attack, which is exactly what the ruling forbids.
+ * Returns null when the attacker or target is gone.
+ */
+function declareAttack(game: GameState, charId: string, targetEntityId: string, bonusDmg: number): {
+  game: GameState; ctx: AttackCtx; declReactive: ReactiveStackEntry[];
+  hasOwnAttack: boolean; attacker: BoardEntity; side: 'p1' | 'p2';
+} | null {
   const attLoc = findEntityAnywhere(game, charId);
   const tgtLoc = findEntityAnywhere(game, targetEntityId);
-  if (!attLoc || !tgtLoc) return { game, local: {}, toastMsgs: [] };
+  if (!attLoc || !tgtLoc) return null;   // attacker or target gone — caller decides how loudly
   const attacker = attLoc.ent;
   const oppPlayer: 'p1' | 'p2' = attLoc.player === 'p1' ? 'p2' : 'p1';
 
@@ -276,6 +291,20 @@ function commitAttack(s: StackRunCtx, game: GameState, charId: string, targetEnt
     ...gatherSelfAttacked(tgtLoc.ent, tgtLoc.player, { id: charId, name: attacker.name }),
   ];
   const hasOwnAttack = combatTriggerEffects(attacker, 'onAttack').length > 0;
+  return { game: newGame, ctx, declReactive, hasOwnAttack, attacker, side: attLoc.player };
+}
+
+/**
+ * Commit a CHOSEN attack: declare it (above), then drive. Unchanged behavior — the
+ * no-window fast path still takes the legacy inline drive byte-identically, which
+ * matters because every committed replay fixture's RNG cadence depends on it.
+ */
+function commitAttack(s: StackRunCtx, game: GameState, charId: string, targetEntityId: string, bonusDmg: number):
+  { game: GameState; local: Partial<GameStoreState>; toastMsgs: string[] } {
+  const d = declareAttack(game, charId, targetEntityId, bonusDmg);
+  if (!d) return { game, local: {}, toastMsgs: [] };
+  const { game: newGame, ctx, declReactive, hasOwnAttack, attacker } = d;
+  const attLoc = { player: d.side };
 
   if (!declReactive.length && !hasOwnAttack) {
     // No declaration-window triggers — legacy inline drive, byte-identical behavior.
@@ -954,6 +983,40 @@ function runStack(game: GameState, s: StackRunCtx):
       continue;
     }
 
+    if (top.kind === 'forcedAttack') {
+      g = setStack(g, stack.slice(0, -1));
+      // FORCED ATTACKS ARE ATTACKS (owner ruling 2026-08-21). Expanded HERE, through
+      // the same assembly a chosen attack uses (declareAttack), so the whole
+      // declaration-window family fires: Iron Spikes, The Final Word, Caltrop Pouch,
+      // Quillspine. No listener knows or cares that this attack was compelled.
+      //
+      // The declaration snapshot is taken NOW, not when Press the Line was played —
+      // which is the point of queueing rather than looping: an earlier forced attacker
+      // that killed a buff source correctly lowers this one's damage (R2).
+      //
+      // A vanished attacker or target is a silent skip, not an error: the whole
+      // resolution may have been invalidated by an earlier attack in the same volley
+      // (its own trap killed the target), and R1 already says queued entries survive
+      // and no-op rather than throwing.
+      const fa = declareAttack(g, top.attackerId, top.targetId, 0);
+      if (!fa) { toastMsgs.push(`${top.sourceName}: an attacker or its target is gone — that attack does not happen.`); continue; }
+      g = fa.game;
+      if (fa.declReactive.length || fa.hasOwnAttack) {
+        g = pushStack(g, [
+          { kind: 'attackDamage', ctx: fa.ctx },
+          ...(fa.hasOwnAttack ? [{ kind: 'ownAttack', attacker: fa.attacker, side: fa.side } satisfies StackEntry] : []),
+        ]);
+        const armedFa = armSegmentedWindow(g, segmentBatch(fa.declReactive, g.activePlayer));
+        g = armedFa.game;
+        if (armedFa.paused) break; // PAUSE — resolveTriggerOrder resumes
+        continue;
+      }
+      // No declaration-window triggers: the damage step alone, still ON the stack so a
+      // pause inside it (armor choice) resumes the rest of the volley beneath.
+      g = pushStack(g, [{ kind: 'attackDamage', ctx: fa.ctx }]);
+      continue;
+    }
+
     // top.kind === 'ownEnter': arms store-LOCAL prompts, so in multiplayer only the
     // controller's client may resolve it — everyone else leaves it on the stack
     // (reactiveHold covers them; the controller's client resumes via resumeStack).
@@ -1617,7 +1680,7 @@ export const useGameStore = create<GameStoreState>()(
     const preGc = preOnPlay.find(e => e.op === 'gainControl');
     if (preGc && preGc.op === 'gainControl') {
       const stealables = isInteractiveSpec(preGc.target)
-        ? filterEligibleByEffects(s.game, eligibleTargets(s.game, lp, preGc.target), preOnPlay) : [];
+        ? filterEligibleByEffects(s.game, eligibleTargets(s.game, lp, preGc.target), preOnPlay, card) : [];
       if (stealables.length === 0) {
         return { toasts: [...s.toasts, mkToast(`Can't play ${card.name}: no legal target within the HP limit.`)] };
       }
@@ -1714,9 +1777,9 @@ export const useGameStore = create<GameStoreState>()(
       const dOp = onPlay.find(e => e.op === 'destroy');
       const eligibleIds =
         (ts === 'destroyThenHeal' || ts === 'destroyUpTo') && dOp && dOp.op === 'destroy'
-          ? filterEligibleByEffects(g0, eligibleTargets(g0, lp, dOp.target), onPlay)
+          ? filterEligibleByEffects(g0, eligibleTargets(g0, lp, dOp.target), onPlay, card)
         : ts === 'gainControl' && gcOp && gcOp.op === 'gainControl' && isInteractiveSpec(gcOp.target)
-          ? filterEligibleByEffects(g0, eligibleTargets(g0, lp, gcOp.target), onPlay)
+          ? filterEligibleByEffects(g0, eligibleTargets(g0, lp, gcOp.target), onPlay, card)
         : charsOf(g0, lp);
       const newHand = g0[lp].hand.filter(c => c.id !== handCardId);
       if (eligibleIds.length === 0) {
@@ -1753,7 +1816,10 @@ export const useGameStore = create<GameStoreState>()(
 
     if (spec) {
       // Arc H: op-level narrowing (bounce hpAtMost) — identity for shipped cards.
-      const eligibleIds = filterEligibleByEffects(g0, eligibleTargets(g0, lp, spec), onPlay);
+      // WARDED (Final Sweep, 2026-08-21): the ACTION CARD is passed so its class can be
+      // matched against each candidate's ward. Only the Action-play sites pass a card —
+      // ability/modal picks are hosted on permanents, and canon wards against CARDS.
+      const eligibleIds = filterEligibleByEffects(g0, eligibleTargets(g0, lp, spec), onPlay, card);
       const newHand = g0[lp].hand.filter(c => c.id !== handCardId);
       if (eligibleIds.length === 0) {
         // No legal target — fizzle to the Dead Zone rather than soft-lock.
@@ -1924,10 +1990,26 @@ export const useGameStore = create<GameStoreState>()(
       : game;
     const id = ++toastId;
     setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 4000);
+    // FINAL SWEEP (2026-08-21): an Action's effects may now QUEUE stack entries rather
+    // than resolving inline — forced attacks are real attacks and each opens a full
+    // declaration window. Drive the stack here so the volley resolves within the same
+    // reducer, and surface whatever it says. A pause inside it (armor choice, ordering
+    // prompt, a Final Word demand) leaves the rest of the volley ON the stack, which is
+    // exactly the sequencing this shape exists for; resolveArmor / resolveTriggerOrder /
+    // resumeStack pick it up. Actions that queue nothing are byte-identical.
+    let outG = armPrompts(finalGame, deadSink, armorSink);
+    let outLocal: Partial<GameStoreState> = {};
+    const outMsgs: string[] = [];
+    if (outG.triggerStack?.length) {
+      const r = runStack(outG, s);
+      outG = r.game; outLocal = r.local; outMsgs.push(...r.toastMsgs);
+    }
     return {
-      game: armPrompts(finalGame, deadSink, armorSink),
+      ...outLocal,
+      game: outG,
       pendingActionTarget: null,
-      toasts: [...s.toasts, { id, msg: msgs.length ? `${pa.sourceName}: ${msgs.join(' | ')}` : pa.sourceName }],
+      toasts: [...s.toasts, { id, msg: msgs.length ? `${pa.sourceName}: ${msgs.join(' | ')}` : pa.sourceName },
+               ...mkToasts(outMsgs)],
     };
   }),
 
