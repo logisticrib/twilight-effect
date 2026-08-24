@@ -389,6 +389,17 @@ export function LoadoutPanel() {
         {ent.poison != null && ent.poison > 0 && (
           <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: TBL.good }}>☠ {ent.poison}</span>
         )}
+        {/* The entity's OWN armor counters (2026-08-24). Equipped pieces already show
+            their "A2(1 left)" on the item chip below; this is the companion-variant
+            Armor X and any effect-PLACED counters (Elder Shellback), which the
+            universal counter rule (2026-08-18) makes indistinguishable from printed
+            ones — and which had no readout anywhere before this. */}
+        {ent.armorCounters != null && ent.armorCounters > 0 && (
+          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#8cbeeb' }}
+                title={ent.armorStart != null ? `${ent.armorCounters} of a printed ${ent.armorStart}` : 'effect-placed armor counters'}>
+            ⛨ {ent.armorCounters}{ent.armorStart != null ? `/${ent.armorStart}` : ''}
+          </span>
+        )}
         {isYours && ent.id === game.currentActor && !sealed && (
           <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: TBL.good, border: `1px solid ${TBL.good}66`, borderRadius: 3, padding: '1px 5px' }}>● activating</span>
         )}

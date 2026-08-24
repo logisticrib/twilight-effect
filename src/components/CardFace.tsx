@@ -3,6 +3,7 @@ import type { BoardEntity, Card, TapState } from '../types/card';
 import { TBL, CLASSCLR, CLASSDARK, GLYPH } from '../tokens';
 import { useGameStore } from '../store/gameStore';
 import { effectiveAttack, effectiveMaxHp, actionTypeOf, hasAnchorCounters } from '../store/keywords';
+import { armorCandidatesOf } from '../engine/combat';
 import type { ActionCost } from '../store/keywords';
 
 // ─── Fixed card canvas ───────────────────────────────────────────────────────
@@ -170,6 +171,23 @@ const s = {
   // load-bearing: on a failed Willpower check the controller takes 1 damage PER counter.
   // Colour matches the LoadoutPanel's existing "☠ n" readout so the board and the panel
   // read as one thing.
+  // Armor badge (2026-08-24), sibling of poisonBadge below. Under the 2026-08-18
+  // INVERSION armor counts DOWN and the counters ARE the prevention ability, so the
+  // number is the whole state: a unit with 2 left and one with 0 are different units
+  // and used to look identical on the board. Counts EVERY source the engine would
+  // offer (armorCandidatesOf) — the companion's own counters AND each equipped piece —
+  // because one incoming hit spends one counter from one source, so the total is
+  // "how many hits can this shrug off". The title breaks it down by source, since
+  // WHICH piece breaks next is the part a total cannot say.
+  armorBadge: {
+    fontFamily: "'JetBrains Mono', monospace",
+    fontSize: 8, fontWeight: 700,
+    color: '#0b1420', background: 'rgba(140,190,235,0.95)',
+    flexShrink: 0,
+    padding: '1px 5px', borderRadius: 3,
+    letterSpacing: '0.06em',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.45)',
+  } as CSSProperties,
   poisonBadge: {
     fontFamily: "'JetBrains Mono', monospace",
     fontSize: 8, fontWeight: 700,
@@ -356,6 +374,10 @@ export function CardFace({
   const statuses  = ('statuses'  in data ? data.statuses  : []) ?? [];
   // Board entities carry `poison`; a hand/library Card never does.
   const poison    = 'poison' in data ? ((data as BoardEntity).poison ?? 0) : 0;
+  // Armor prevention available right now, across every source (own counters + each
+  // equipped piece). Board entities only — a hand card has no loadout and no counters.
+  const armorSrc  = 'statuses' in data ? armorCandidatesOf(data as BoardEntity) : [];
+  const armorLeft = armorSrc.reduce((n, a) => n + a.counters, 0);
   const level     = 'level' in data ? data.level : 0;
   const subtype   = ('subtype' in data ? data.subtype : '') ?? '';
   const text      = 'text' in data ? data.text : '';
@@ -389,8 +411,14 @@ export function CardFace({
           {/* Condition badges + the poison COUNTER. The counter leads the stack: the
               'Poisoned' status says THAT it is poisoned, this says BY HOW MUCH, and the
               number is what the ready-phase check actually spends. */}
-          {(statuses.length > 0 || poison > 0) && (
+          {(statuses.length > 0 || poison > 0 || armorLeft > 0) && (
             <div style={s.condStack}>
+              {armorLeft > 0 && (
+                <div style={s.armorBadge}
+                     title={armorSrc.map(a => `${a.name}: ${a.counters}/${a.armor}`).join('\n')}>
+                  ⛨ {armorLeft}
+                </div>
+              )}
               {poison > 0 && (
                 <div style={s.poisonBadge} title={`${poison} Poison counter${poison === 1 ? '' : 's'}`}>
                   ☠ {poison}
