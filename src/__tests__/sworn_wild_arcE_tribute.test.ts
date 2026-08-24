@@ -188,17 +188,40 @@ describe('the payable path: pay, THEN enter', () => {
     expect(faceUpCZ(), 'one card turned face-down').toBe(before - 1);
   });
 
-  it('payment IS a sacrifice — on-sacrifice listeners FIRE (the inverse of the destroy pin)', () => {
-    // Siegeworks: "when one of your Physical Constructs is sacrificed" is the shipped
-    // listener family; Arc A pinned that DESTROY leaves it silent. A Tribute payment is
-    // a sacrifice, so the same family must hear it. Here the Beast's own death triggers
-    // are the observable: it reaches the Dead Zone through the shared exit path.
+  it('payment routes through the real exit path — leave triggers FIRE, loudly', () => {
+    // Sporeback Toad ("Fungal Beast Toad") carries onLeave → draw. Paying it as Tribute
+    // must fire that, because payment is a real removal and not a quiet delete. The draw
+    // is the observable, so this cannot pass on Dead-Zone routing alone.
+    seed({ f1: ent('toad', 'Sporeback Toad') });
+    const before = g().p1.hand.length;
+    play('b1');
+    gs.getState().resolveTribute('toad');
+    // −1 Angel played, +1 the Toad's leave trigger, +2 the Angel's enter trigger.
+    expect(g().p1.hand.length, "the Toad's onLeave fired on the way out").toBe(before - 1 + 1 + 2);
+    expect(said(), 'the payment is announced, never silent').toMatch(/sacrificed to pay TRIBUTE/i);
+    expect(g().p1.dead.some(c => c.name === 'Sporeback Toad')).toBe(true);
+  });
+
+  it('the payment is threaded as a SACRIFICE, not a destroy', () => {
+    // HONEST LIMIT, recorded rather than papered over: the only SACRIFICE-SPECIFIC
+    // listener shipped today is `ownPhysicalConstructSacrificed` (Siegeworks), and a
+    // Physical Construct can never be a Beast — so for a Tribute payment no listener in
+    // the pool distinguishes 'sacrifice' from 'destroy'. Arc A pinned the inverse
+    // direction (destroy leaves Siegeworks silent) where it IS observable.
+    //
+    // What is pinned here is the cause at the CALL SITE, which is what a future
+    // companion-hosted on-sacrifice listener will read. destroyEntity's `cause` is a
+    // REQUIRED parameter (Arc C), so this cannot silently drift to a wrong value — but
+    // the moment such a listener lands, it must be pinned firing here.
     seed({ f1: ent('boar', 'Bristlemane Boar') });
     play('b1');
     gs.getState().resolveTribute('boar');
-    expect(said(), 'the payment is announced, never silent').toMatch(/sacrificed to pay TRIBUTE/i);
+    // The sworn-card return below is cause-agnostic; the Dead-Zone destination is the
+    // shared exit path. Both prove the removal is REAL, which is the half that is
+    // observable today.
     expect(g().p1.dead.some(c => c.name === 'Bristlemane Boar'),
       'routed through destroyEntity, not quietly deleted').toBe(true);
+    expect(onBoard('Bristlemane Boar')).toBeFalsy();
   });
 
   it('an OATHSWORN Beast returns its sworn card to hand while paying (the designed collision)', () => {
