@@ -216,7 +216,16 @@ export function CommandZone({ player, owner, flip, boardScale = DEFAULT_BOARD_SC
                 cancelPlay();
                 return;
               }
-              if (card && owner === localPlayer) selectEntity(card.id);
+              // Selecting an OPPONENT'S character is allowed, and is a plain
+              // inspect: LoadoutPanel already resolves `game.selected` across BOTH
+              // boards, labels it "· enemy", and gates every action button behind
+              // `isYours` (computeActions returns null for an enemy), so this exposes
+              // their gear, loadout, counters and keywords without exposing a single
+              // control. Deliberately LAST in this chain, so it can never steal a
+              // click from an attack/trigger/action target — those all return above.
+              // Playing a card while an enemy is selected still refuses loudly in
+              // playAction ("Select one of your characters to play X").
+              if (card) selectEntity(card.id);
             };
 
             // Pulse the glow on slots the player is being asked to click, so the
@@ -226,8 +235,9 @@ export function CommandZone({ player, owner, flip, boardScale = DEFAULT_BOARD_SC
 
             // Keyboard: a slot joins the tab order only while it actually responds
             // to a click (a target of some pending action, or an own card to select).
-            const slotInteractive = pulseTarget || state === 'play-target'
-              || (!!card && owner === localPlayer);
+            // Any occupied slot is now clickable — your own to act with, the
+            // opponent's to inspect — so both join the tab order.
+            const slotInteractive = pulseTarget || state === 'play-target' || !!card;
             const pulseCol = state === 'attack-target' ? 'rgba(224,106,106,0.65)'
               : state === 'pc-placement' ? 'rgba(138,122,214,0.65)'
               : 'rgba(240,192,116,0.65)';

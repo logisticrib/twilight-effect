@@ -164,6 +164,21 @@ const s = {
       boxShadow: filled ? '0 1px 3px rgba(0,0,0,0.4)' : 'none',
     };
   },
+  // Poison COUNTER badge (2026-08-24). The 'Poisoned' status already renders in the
+  // condStack below, but the status alone hides the number — and poison counters STACK
+  // (canon: "Poison counters stack; resolution removes all or none"), so the count is
+  // load-bearing: on a failed Willpower check the controller takes 1 damage PER counter.
+  // Colour matches the LoadoutPanel's existing "☠ n" readout so the board and the panel
+  // read as one thing.
+  poisonBadge: {
+    fontFamily: "'JetBrains Mono', monospace",
+    fontSize: 8, fontWeight: 700,
+    color: '#0d1a12', background: 'rgba(116,192,138,0.95)',
+    flexShrink: 0,
+    padding: '1px 5px', borderRadius: 3,
+    letterSpacing: '0.06em',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.45)',
+  } as CSSProperties,
   condStack: {
     position: 'absolute', top: 38, right: 11,
     display: 'flex', flexDirection: 'column', gap: 3,
@@ -339,6 +354,8 @@ export function CardFace({
   const anchorsMax   = anchorsStart ?? (data as Card).anchor ?? 0;
 
   const statuses  = ('statuses'  in data ? data.statuses  : []) ?? [];
+  // Board entities carry `poison`; a hand/library Card never does.
+  const poison    = 'poison' in data ? ((data as BoardEntity).poison ?? 0) : 0;
   const level     = 'level' in data ? data.level : 0;
   const subtype   = ('subtype' in data ? data.subtype : '') ?? '';
   const text      = 'text' in data ? data.text : '';
@@ -369,9 +386,16 @@ export function CardFace({
             <div style={s.artVignette} />
           </div>
 
-          {/* Condition badges */}
-          {statuses.length > 0 && (
+          {/* Condition badges + the poison COUNTER. The counter leads the stack: the
+              'Poisoned' status says THAT it is poisoned, this says BY HOW MUCH, and the
+              number is what the ready-phase check actually spends. */}
+          {(statuses.length > 0 || poison > 0) && (
             <div style={s.condStack}>
+              {poison > 0 && (
+                <div style={s.poisonBadge} title={`${poison} Poison counter${poison === 1 ? '' : 's'}`}>
+                  ☠ {poison}
+                </div>
+              )}
               {statuses.map(st => <div key={st} style={s.condBadge}>{st}</div>)}
             </div>
           )}
