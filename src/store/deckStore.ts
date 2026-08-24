@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { SORCERER_WARRIOR_DECK, WIZARD_BUILDER_DECK, DW_ROGUE_DEV_DECK } from '../data/catalog';
+import { SORCERER_WARRIOR_DECK, WIZARD_BUILDER_DECK, DW_ROGUE_DEV_DECK, SWORN_WILD_DEV_DECK } from '../data/catalog';
 
 export interface Deck {
   id: string;
@@ -30,6 +30,13 @@ const SEED: Deck[] = [
   makeDeck('wb', 'Wizard / Builder',   WIZARD_BUILDER_DECK),
   // DEV deck (2026-07-22): owner-authored, non-canon — clearly marked in the name.
   makeDeck('dwr-dev', 'DW / Rogue (DEV)', DW_ROGUE_DEV_DECK),
+  // The SECOND dev deck (Sworn Wild, Paladin/Druid). REGISTERED 2026-08-21, found
+  // missing during the Program 2 wire pass: the deck was authored, validated and fully
+  // implemented across nine arcs, but was never added here — so it had no Lobby entry
+  // and could not be put on a board at all, in solo OR multiplayer. An import-time
+  // oversight, not a decision; DW/Rogue above was registered the same way when it
+  // landed. The `merge` below injects it into already-persisted browsers.
+  makeDeck('pd-dev', 'Sworn Wild (DEV)', SWORN_WILD_DEV_DECK),
 ];
 
 export const useDeckStore = create<DeckState>()(
