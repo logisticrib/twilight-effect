@@ -89,6 +89,7 @@ function GameView() {
       <PreventOrderModal />
       <AttackChoiceModal />
       <ForcedSacrificeModal />
+      <TributeModal />
       <PoisonHost />
       <CoercionModal />
       <DiscardModal />
@@ -549,6 +550,45 @@ function ForcedSacrificeModal() {
             Sacrifice {e.name}
           </button>
         ))}
+      </div>
+    </ModalShell>
+  );
+}
+
+/** TRIBUTE payment (Arc E, 2026-08-23) — forcedSacrifice's VOLUNTARY twin.
+ *
+ *  The Angel is not yet played: all legality passed, nothing has been spent, and the
+ *  card is still in hand. So unlike the forced version this prompt HAS a decline, and
+ *  declining costs nothing (unpayable = unplayable is decided before we ever get here —
+ *  a caster with no payable permanent sees a refusal toast, not this modal).
+ *
+ *  Store-local pending: it exists only on the acting client (the `3a18396` wire
+ *  finding), so there is no `lp !== localPlayer` gate and no held-client banner —
+ *  the opponent never has this pending at all.
+ *
+ *  One option still prompts: a voluntary cost must be confirmable, and auto-paying a
+ *  singleton would spend a permanent with no way back. */
+function TributeModal() {
+  const pt = useGameStore(s => s.pendingTribute);
+  const resolve = useGameStore(s => s.resolveTribute);
+  const cancel = useGameStore(s => s.cancelTribute);
+  if (!pt) return null;
+  const takesSlot = pt.options.length === 1 && pt.options[0].slot === pt.slot;
+  return (
+    <ModalShell glyph="⚜" eyebrow={pt.sourceName}
+      title={`TRIBUTE — sacrifice a ${pt.sacrificeSubtype}`}
+      sub={takesSlot
+        ? `${pt.options[0].name} is offered and ${pt.sourceName} takes its place. Nothing is spent until you confirm.`
+        : `An additional cost to play ${pt.sourceName}. Nothing is spent until you confirm — decline and the card stays in hand.`}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {pt.options.map(o => (
+          <button key={o.id} onClick={() => resolve(o.id)} style={md.btn('primary')}>
+            Sacrifice {o.name}
+          </button>
+        ))}
+        <button onClick={() => cancel()} style={md.btn('ghost')}>
+          Decline — don't play {pt.sourceName}
+        </button>
       </div>
     </ModalShell>
   );

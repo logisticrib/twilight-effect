@@ -9,9 +9,16 @@ import swornRaw from './paladin_druid_dev_50.json';
  *  `subtypes` is dropped HERE, on purpose: the authored tokens move into the lookups
  *  below rather than onto an object that gets serialized into recordings (owner ruling
  *  2026-08-20 — nothing new serializes into GameState unless a recording needs it). */
+/** Fields that are AUTHORED in the deck JSON and must NOT ride onto the runtime Card:
+ *  Card objects serialize into recordings, so every key here would re-hash every
+ *  committed fixture (the Arc B finding). Each is read instead through a lookup below.
+ *  One list, so the next authored field has an obvious home and cannot be forgotten. */
+const AUTHORED_ONLY = ['subtypes', 'tribute'] as const;
+
 function normalize(raw: RawCard): Card {
-  const { subtypes: _authored, ...rest } = raw;
-  return { ...rest, cls: raw.class1 || 'Classless' };
+  const rest: Record<string, unknown> = { ...raw };
+  for (const k of AUTHORED_ONLY) delete rest[k];
+  return { ...(rest as Omit<RawCard, (typeof AUTHORED_ONLY)[number]>), cls: raw.class1 || 'Classless' };
 }
 
 // sorcerer_warrior deck is a raw array; wizard_builder is { cards: [...] }
@@ -58,6 +65,23 @@ export function authoredSubtypesOf(card: { id?: string; name?: string; subtypes?
   if (card.id && SUBTYPES_BY_ID.has(card.id)) return SUBTYPES_BY_ID.get(card.id)!;
   if (card.name && SUBTYPES_BY_NAME.has(card.name)) return SUBTYPES_BY_NAME.get(card.name)!;
   return [];
+}
+
+// --- Authored TRIBUTE costs (Arc E, 2026-08-23) -------------------------------
+/** name -> the play-time Tribute cost this card charges. Same discipline as the
+ *  subtype lookups above: AUTHORED in the deck JSON, dropped from the runtime Card by
+ *  normalize(), and read from here -- so the cost never rides into a recording and the
+ *  engine never parses "sacrifice a Beast" out of printed prose. Names are unique
+ *  catalog-wide (the identity rule), so the mapping is unambiguous. */
+export const TRIBUTE_BY_NAME: ReadonlyMap<string, Readonly<{ sacrificeSubtype: string }>> =
+  new Map(ALL_RAW.filter(r => r.tribute)
+    .map(r => [r.name, Object.freeze({ ...r.tribute! })]));
+
+/** The Tribute cost for a card, or undefined when it charges none. The KEYWORD and the
+ *  cost are separate facts: a card printing TRIBUTE with no authored cost is an
+ *  authoring error the validator refuses, never a free play. */
+export function tributeOf(cardName: string): Readonly<{ sacrificeSubtype: string }> | undefined {
+  return TRIBUTE_BY_NAME.get(cardName);
 }
 
 /** Look up a card by id. */

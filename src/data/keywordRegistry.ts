@@ -7,7 +7,10 @@
  * Each keyword resolves at one lifecycle event; `done` tracks engine support so the
  * gaps stay visible.
  */
-export type KwEvent = 'static' | 'enter' | 'attack' | 'damaged' | 'turnStart' | 'oppPlay';
+// 'play' (Arc E, 2026-08-23) is the CASTER's own play-time window — an additional cost
+// charged before the permanent reaches the stack. Distinct from 'enter' (the permanent
+// is already entering) and from 'oppPlay' (an OPPONENT's play, e.g. Paranoia).
+export type KwEvent = 'static' | 'enter' | 'play' | 'attack' | 'damaged' | 'turnStart' | 'oppPlay';
 
 export interface KeywordSpec {
   event: KwEvent;
@@ -65,7 +68,11 @@ export const KEYWORDS: Record<string, KeywordSpec> = {
   // Vocabulary added 2026-08-19 for the Sworn Wild dev deck. Both are DECLARED so their
   // carriers validate; NEITHER has engine behavior yet (the Untamed precedent — the
   // contract must not advertise implemented space, but it must name what cards print).
-  Tribute:        { event: 'enter',   done: false, note: 'additional cost to PLAY (Angel/Paladin exclusive). The Cost schema covers ACTIVATED abilities only — a play-time cost chokepoint does not exist. Unpayable = card stays in hand, nothing paid (universal pre-cost refusal)' },
+  // Arc E (2026-08-23). The play-time cost chokepoint now exists: placeCard gates on it
+  // AFTER every legality check and BEFORE the Class-Zone spend, so no cost is ever paid
+  // for a play that then fails. `event: 'play'` — it is not an enter trigger; the cost
+  // resolves entirely before the companion is pushed onto the stack.
+  Tribute:        { event: 'play',    done: true,  note: 'additional cost to PLAY (Angel exclusive). Cost AUTHORED as tribute.sacrificeSubtype, read via TRIBUTE_BY_NAME; paid by sacrificing one of YOUR matching permanents (tributePayable). Unpayable = UNPLAYABLE: refused at placeCard, card stays in hand, nothing paid. Slot-as-pick: a Back-Line slot held by a payable Beast is a legal target (owner 2026-08-23)' },
   // Printed parameterized as "Warded against [X]" — keywordBase strips the parameter the
   // way it does for "[NAME]'s Bane". NOT to be confused with `lineWard`, an unrelated
   // Fortification mechanic that shares the word.

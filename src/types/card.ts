@@ -17,6 +17,13 @@ export interface RawCard {
    *  and the engine never parses a type line. `subtype` remains the display string;
    *  validateCards enforces that the two stay in sync. */
   subtypes: string[];
+  /** The TRIBUTE cost this Angel charges to play (Arc E, 2026-08-23). AUTHORED here,
+   *  never parsed out of the printed text -- the equipOnto lesson (2026-08-18): printed
+   *  prose must not be load-bearing code input, or a rewording silently changes rules.
+   *  Dropped in normalize() exactly like `subtypes` and read through a catalog lookup,
+   *  because Card objects serialize into recordings and a new always-absent key would
+   *  re-hash every fixture (the Arc B trap). Absent on every non-Tribute card. */
+  tribute?: { sacrificeSubtype: string };
   rarity: string;
   class1: string;
   class2: string;

@@ -4,6 +4,8 @@ import { TBL } from '../../tokens';
 import { btnProps } from '../../lib/a11y';
 import { useGameStore, ADJ, type SlotId, type PlayerState } from '../../store/gameStore';
 import { moveRestrictedBy, canAttackFromPosition, legalAttackTargetIds } from '../../store/keywords';
+import { tributePayable } from '../../engine';
+import { tributeOf } from '../../data/catalog';
 import { handlePreviewWheel } from './previewScroll';
 import type { BoardEntity } from '../../types/card';
 
@@ -128,6 +130,16 @@ export function CommandZone({ player, owner, flip, boardScale = DEFAULT_BOARD_SC
     : null;
   const playIsCompanion = pendingCard?.type === 'Companion';
   const playGoesOnBoard = pendingCard?.type === 'Companion' || pendingCard?.type === 'Construct';
+  // TRIBUTE slot-as-pick (Arc E, owner ruling 2026-08-23 — "the offering makes room").
+  // A Back-Line slot HELD by a payable Beast is also a legal destination: clicking it
+  // sacrifices that Beast and the Angel takes its place. Without this the marquee Angel
+  // is unplayable on an ordinary full Back Line (the PC occupies one of the three
+  // slots), blocked by its own Tribute fodder. The reducer re-derives this set
+  // authoritatively — this only decides what lights up.
+  const tributeCost = playIsCompanion && pendingCard ? tributeOf(pendingCard.name) : undefined;
+  const tributeSlots: Set<string> = tributeCost
+    ? new Set(tributePayable(game, localPlayer, tributeCost.sacrificeSubtype).map(x => x.slot))
+    : new Set<string>();
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, justifyContent: 'center' }}>
@@ -160,8 +172,10 @@ export function CommandZone({ player, owner, flip, boardScale = DEFAULT_BOARD_SC
               // opposing aura bars is never highlighted as clickable.
               && !(game[localPlayer].board[attackerSlot]
                 && moveRestrictedBy(game, game[localPlayer].board[attackerSlot]!, localPlayer, attackerSlot, sid));
-            const isPlayTarget   = !awaitingPcPlacement && !!pendingPlay && playGoesOnBoard && owner === localPlayer && !card
-              && (!playIsCompanion || isBackLine);
+            const isPlayTarget   = !awaitingPcPlacement && !!pendingPlay && playGoesOnBoard && owner === localPlayer
+              && (!playIsCompanion || isBackLine)
+              // Empty as always, OR a slot whose occupant can pay this card's Tribute.
+              && (!card || (isBackLine && tributeSlots.has(sid)));
             const isAttackTarget = !awaitingPcPlacement && pending?.action === 'attack' && attackerCanAttack
               && owner === oppPlayer && !!isChar && legalTargets.has(card.id);
             const isTriggerTarget = !!pendingTrigger && !!card && pendingTrigger.eligibleIds.includes(card.id);

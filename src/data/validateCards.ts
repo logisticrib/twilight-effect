@@ -469,6 +469,31 @@ export function validateCards(
     for (const kw of card.keywords ?? []) {
       if (!(keywordBase(kw) in keywords)) p(`unknown keyword "${kw}"`);
     }
+    // ── TRIBUTE authoring guard (Arc E, 2026-08-23) ───────────────────────────
+    // Canon (Master_Keyword_List.md:65): "Angel (Paladin) Companion Exclusive".
+    // EXCLUSIVITY is checkable on any card — keywords and the type line are always
+    // present, on runtime Cards and mint candidates alike.
+    const printsTribute = (card.keywords ?? []).some(kw => keywordBase(kw) === 'Tribute');
+    if (printsTribute && (card.type !== 'Companion' || !subtypeTokens(card.subtype).includes('Angel'))) {
+      p('TRIBUTE is Angel-companion exclusive (Master_Keyword_List.md:65)');
+    }
+    // COST AGREEMENT is object-local, on the same tell as the `subtypes` check above:
+    // raw deck data and mint candidates carry the authored fields; runtime Cards
+    // deliberately carry neither (normalize drops both, so nothing rides into a
+    // recording), and validating CATALOG therefore skips this leg exactly as the
+    // subtype-sync check does. The raw files get a dedicated pin in the arc tests.
+    // Both directions matter: TRIBUTE with no authored cost is a FREE play (the engine
+    // would find nothing to charge), and an authored cost with no printed keyword
+    // charges something the card face never announces.
+    const authoredTribute = (card as { tribute?: { sacrificeSubtype?: unknown } }).tribute;
+    if ((card as { subtypes?: readonly string[] }).subtypes) {
+      if (printsTribute && (typeof authoredTribute?.sacrificeSubtype !== 'string' || !authoredTribute.sacrificeSubtype)) {
+        p('prints TRIBUTE but authors no `tribute.sacrificeSubtype` — the cost would be free');
+      }
+      if (!printsTribute && authoredTribute) {
+        p('authors a `tribute` cost but does not print the TRIBUTE keyword');
+      }
+    }
     proseCompletenessProblems(card, p);
     (card.effects ?? []).forEach((clause, i) => validateClause(clause, i, p, keywords, card.type));
   }

@@ -381,7 +381,10 @@ describe('serialization + contract discipline', () => {
     expect(offenders, 'extend the static `if` gate before shipping these').toEqual([]);
   });
 
-  it('the arc cleared exactly its six cards, and left the other seven flagged', () => {
+  // AMENDED 2026-08-23 (Arc E): dd000089 The Pale Ascendant left this list when Tribute
+  // landed. Arc C's own six are unchanged — the roster below is the LIVE debt, so it is
+  // expected to shrink as later arcs close; the Arc C assertions above it are not.
+  it('the arc cleared exactly its six cards, and the rest stay flagged', () => {
     const ARC_C = ['dd000051', 'dd000054', 'dd000061', 'dd000065', 'dd000066', 'dd000071'];
     for (const id of ARC_C) {
       const c = SWORN_WILD_DEV_CARDS.find(x => x.id === id)!;
@@ -391,6 +394,6 @@ describe('serialization + contract discipline', () => {
     const flagged = SWORN_WILD_DEV_CARDS.filter(c =>
       c.effectsFlag?.startsWith('DEV NOT-IMPLEMENTED'));
     expect(flagged.map(c => c.id), 'the remaining arc debt, by card').toEqual(
-      ['dd000058', 'dd000059', 'dd000073', 'dd000081', 'dd000089', 'dd000091', 'dd000098']);
+      ['dd000058', 'dd000059', 'dd000073', 'dd000081', 'dd000091', 'dd000098']);
   });
 });

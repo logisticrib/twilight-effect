@@ -8,7 +8,7 @@ import type { BoardEntity, Card } from '../types/card';
 import { CATALOG } from '../data/catalog';
 import { isFront, FRONT_SLOTS, BACK_SLOTS, type Board, type SlotId } from './geometry';
 import type { GameState, PendingItemTransfer, PendingDeadPick, ArmorChoiceData } from './state';
-import { isCharacter, canHoldItem, isPhysicalConstruct, gearItemsOf } from './stats';
+import { isCharacter, canHoldItem, isPhysicalConstruct, gearItemsOf, hasSubtype } from './stats';
 // Function-level cycle with combat.ts (destroyEntity fires removal triggers; the
 // trigger machinery damages/destroys entities) and interpreter.ts (on-sacrifice
 // listeners resolve card effects). Safe: hoisted functions, called only at
@@ -239,6 +239,38 @@ export function fireSacrificeTriggers(
  *  through HERE — no per-effect copies. */
 export function canBeSacrificed(ent: BoardEntity): boolean {
   return ent.kind !== 'pc';
+}
+
+/**
+ * TRIBUTE (Arc E, 2026-08-23) -- which permanents can pay `lp`'s Tribute cost, as
+ * {id, slot}. Canon (Master_Keyword_List.md:64): "As an additional cost to play this
+ * Angel companion, pay its Tribute cost"; the per-card cost names a subtype.
+ *
+ * CONTROLLER-SCOPED, and not by fiat: a cost is paid by the player paying it, and every
+ * sacrifice path in this engine enumerates the payer's OWN board before reaching
+ * canBeSacrificed (forcedSacrifice, Coercion, eachPlayerSacrificesOrDiscards). An
+ * opposing Beast is therefore never payment -- the scan simply never leaves `lp`'s board.
+ *
+ * Subtype matching is the Arc B shared matcher (SET MEMBERSHIP over authored tokens), so
+ * a "Spirit Beast Deer" pays a Beast tribute and the engine never parses a type line.
+ *
+ * The card being played is in HAND, not on the board, so it cannot appear here -- which
+ * is why an Angel can never pay its own Tribute even before Angel-is-not-a-Beast is
+ * considered. Both facts are pinned; neither is relied on alone.
+ *
+ * Slots come back with the ids because the play target may BE one of these slots: a
+ * Back-Line slot held by a payable Beast is a legal place-target (owner ruling
+ * 2026-08-23, "the offering makes room"), and clicking it forces that Beast as payment.
+ */
+export function tributePayable(game: GameState, lp: 'p1' | 'p2', sacrificeSubtype: string):
+  { id: string; slot: SlotId; name: string }[] {
+  const out: { id: string; slot: SlotId; name: string }[] = [];
+  for (const [slot, ent] of Object.entries(game[lp].board) as [SlotId, BoardEntity | undefined][]) {
+    if (!ent || !canBeSacrificed(ent)) continue;
+    if (!hasSubtype(ent, sacrificeSubtype)) continue;
+    out.push({ id: ent.id, slot, name: ent.name });
+  }
+  return out;
 }
 
 /** Remove a destroyed/sacrificed entity from the board AND move its card (plus its

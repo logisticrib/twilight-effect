@@ -3,7 +3,7 @@ import { persist, subscribeWithSelector } from 'zustand/middleware';
 import { recordActions } from './recordMiddleware';
 import type { BoardEntity, Card, TapState } from '../types/card';
 import type { Effect, TargetSpec } from '../types/effects';
-import { CATALOG, SORCERER_WARRIOR_CARDS, WIZARD_BUILDER_CARDS } from '../data/catalog';
+import { CATALOG, SORCERER_WARRIOR_CARDS, WIZARD_BUILDER_CARDS, tributeOf } from '../data/catalog';
 import { recomputeStatics, isImmuneToSplash, HIT_RUN_STATUS,
          isPhysicalConstruct, parseEnterTrigger, type EnterTriggerKind,
          isCharacter, firstItemOf, allItemsOf, canHoldItem, effectiveAttack, effectiveKeywords, effectiveMaxHp, wardedLines,
@@ -33,7 +33,7 @@ import { ADJ, FRONT_SLOTS, BACK_SLOTS, isFront, findSlot, type SlotId, type Boar
          attackDamageBonus, resolveActionEffects, armPrompts, armNextArmorChoice,
          removeArmorCounter, applyPreventionOrder, armNextPreventOrder,
          freshActs, uid, computeWillpower, makeNewGame, nextPeek, buildPeek,
-         equipOnto, kitDests, runReadyPhase } from '../engine';
+         equipOnto, kitDests, runReadyPhase, tributePayable } from '../engine';
 
 export type PlayPhase = 'lobby' | 'setup' | 'game';
 /** 'placing-pc' = waiting for the local player to choose a Back Line slot */
@@ -59,6 +59,31 @@ export interface PendingPlay {
   /** The character whose activation is playing this card (captured at arm time, so
    *  it survives selection being cleared). Used to charge the action economy. */
   actorId?: string | null;
+}
+
+/** TRIBUTE payment awaiting the caster's pick (Arc E, 2026-08-23).
+ *
+ *  STORE-LOCAL, deliberately — the same contract pendingPlay and pendingActionTarget
+ *  already have (verified 2026-08-21, `3a18396`): MP broadcasts GameState only and
+ *  useMultiplayer suppresses broadcasts while a local pending is outstanding, so this
+ *  exists solely on the acting client. No new wire shape, and NO held-client banner —
+ *  the opponent never has the pending. That is the opposite of the game-state pendings
+ *  (pendingArmor, pendingForcedSacrifice) which route to the OTHER player and must gate.
+ *
+ *  Everything needed to finish the play is captured here, because the play is suspended
+ *  mid-reducer: all legality already passed (see placeCard), so resuming must not
+ *  re-derive it. `pcId` is the acting Player Character captured BEFORE payment. */
+export interface PendingTribute {
+  cardId: string;
+  slot: SlotId;                 // the already-validated destination
+  lp: 'p1' | 'p2';
+  sourceName: string;           // the Angel being played (prompt label)
+  sacrificeSubtype: string;     // what the cost demands (prompt label)
+  actorId?: string | null;
+  pcId?: string | null;
+  /** The legal payments. One entry when the caster clicked a slot HELD by a payable
+   *  Beast — the offering makes room, and that click already chose the Beast. */
+  options: { id: string; slot: SlotId; name: string }[];
 }
 
 export interface OathContext {
@@ -123,7 +148,7 @@ export interface PendingKit {
  *  changes hands, or a save resumes — stale prompts from a previous game reference
  *  dead entity ids. Game-level synced prompts live in GameState (reset by makeNewGame). */
 const LOCAL_PROMPTS_CLEARED = {
-  pending: null, pendingPlay: null, pendingTrigger: null, pendingKit: null,
+  pending: null, pendingPlay: null, pendingTribute: null, pendingTrigger: null, pendingKit: null,
   pendingActionTarget: null, pendingEquipPick: null, pileView: null,
 };
 
@@ -950,6 +975,7 @@ interface GameStoreState {
   hovered: { data: BoardEntity | Card; owner: string } | null;
   pending: PendingAction | null;
   pendingPlay: PendingPlay | null;
+  pendingTribute: PendingTribute | null;
   /** On-enter keyword (Reinforce/Dismantle) awaiting a board target, or null. */
   pendingTrigger: PendingTrigger | null;
   /** Kit-Master two-step item move awaiting a board target, or null. */
@@ -1061,6 +1087,10 @@ interface GameStoreState {
   beginPlay: (cardId: string) => void;
   cancelPlay: () => void;
   placeCard: (slot: SlotId) => void;
+  /** Pay a Tribute cost with the chosen permanent; the suspended play then completes. */
+  resolveTribute: (entityId: string) => void;
+  /** Decline the cost. The play is abandoned: card stays in hand, NOTHING is paid. */
+  cancelTribute: () => void;
 
   // On-enter trigger targeting (Reinforce/Dismantle)
   resolveTrigger: (targetId: string) => void;
@@ -1164,6 +1194,122 @@ const EMPTY_CONN: ConnState = {
   opponentName: '', opponentAvatar: '', opponentStatus: 'waiting',
 };
 
+/**
+ * The PAYMENT + PLACEMENT half of playing a card from hand (extracted Arc E,
+ * 2026-08-23). Every legality question is settled BEFORE this runs; from here on the
+ * play cannot be refused. Two callers must run byte-identical tails:
+ *   · placeCard      — the ordinary play, no additional cost
+ *   · resolveTribute — an Angel whose Tribute has just been paid
+ * A second copy of this tail is how the two paths would drift (the Watchtower lesson).
+ *
+ * `czIdx` and `pcId` are passed IN rather than re-derived: they were computed from the
+ * pre-payment board, and re-deriving legality after a cost is paid is exactly the
+ * ordering bug the split exists to prevent.
+ */
+function commitPlay(
+  s: GameStoreState, game: GameState, lp: 'p1' | 'p2', card: Card, slot: SlotId,
+  czIdx: number, pcId: string | null | undefined,
+): Partial<GameStoreState> {
+    const newCZ = game[lp].classZone.map((c, i) =>
+      i === czIdx ? { ...c, faceDown: true } : c
+    );
+    const newWillpower = computeWillpower(newCZ);
+
+    // Build board entity from card
+    const isCompanion = card.type === 'Companion';
+    const isConstruct = card.type === 'Construct';
+
+    const newEnt: BoardEntity = {
+      id: uid(`placed-${card.id}`),
+      kind: isConstruct ? 'construct' : 'companion',
+      name: card.name,
+      cls: card.class1,
+      level: card.level,
+      atk: card.attack ?? undefined,
+      hp: card.hp ?? 0,
+      maxHp: card.hp ?? 0,
+      anchors: card.anchor ?? undefined,
+      anchorsStart: card.anchor ?? undefined,
+      // Companion-variant Armor X: "This companion enters the encounter with X armor
+      // counters" (canon 2026-08-18). Placed ONCE here — from then on the COUNTERS
+      // carry the behavior, not a keyword check (universal counter rule).
+      armorCounters: parseArmorKeyword(card.keywords) ?? undefined,
+      armorStart: parseArmorKeyword(card.keywords) ?? undefined,
+      keywords: card.keywords,
+      statuses: [],
+      subtype: card.subtype,
+      text: card.text,
+      tapped: 'none', exhausted: false,
+      // `fresh` = "entered the encounter this turn" for EVERY permanent (bugfix
+      // 2026-07-15): constructs carry it too, so a type-changing effect (Animate
+      // Magic) can preserve the permanent's true entry time instead of stamping the
+      // Manifest as newly entered. Constructs themselves are never gated by it
+      // (they don't attack; their abilities are economy-exempt); readyPlayer clears
+      // it for all kinds at the controller's next ready.
+      fresh: true,
+      acts: freshActs(),
+      loadout: isCompanion ? { weapon: null, gear: [] } : undefined,
+    };
+
+    // `card.id` rather than the pending's cardId: commitPlay is shared with the Tribute
+    // resume, where the pending that armed the play is already cleared. Same card.
+    const newHand = game[lp].hand.filter(c => c.id !== card.id);
+
+    // ── The trigger stack (R1, owner-ratified 2026-07-12) ───────────────────────
+    // Playing the card puts it ON THE STACK — it does not enter the encounter until
+    // the stack empties down to it. Play-window triggers (Paranoia — canon:
+    // "Whenever an opponent plays a Companion…", from-hand plays only) queue ABOVE
+    // it and resolve first: the controller's peek happens BEFORE the companion
+    // enters and before its on-enter effects (R3, re-ruled 2026-07-12 — "Peek first
+    // 100%", superseding the 2026-07-04 placer's-scry-first order). The on-enter
+    // machinery itself runs when the stack reaches the entered permanent's own
+    // trigger (runOnEnter); reactive enter-traps resolve before it.
+    const paidGame: GameState = {
+      ...game,
+      // The PC is the acting character for this Special Action (2026-07-15):
+      // registers currentActor and seals any companion that was mid-activation.
+      ...(pcId ? activationPatch(game, pcId) : {}),
+      [lp]: { ...game[lp], hand: newHand, classZone: newCZ, willpower: newWillpower },
+    };
+    const paranoia = isCompanion ? gatherParanoia(paidGame, lp) : [];
+    // On-play listeners (arc 4, owner 2026-07-15; extended Arc G 2026-08-04):
+    // "When you play a …" — own-side listeners, from-hand plays ONLY (this reducer
+    // IS the from-hand path; conversions/placements never emit a play event, R1).
+    // Gathered from the PRE-ENTER board (paidGame — the entity is still on the
+    // stack), so a companion entering from this very play never hears itself
+    // (per-event evaluation, 2026-07-21). A companion play queues Paranoia AND
+    // own 'ownPlaysCompanion' listeners (Echo-Keeper) — the first MIXED-owner
+    // window; a construct play queues own-play listeners only.
+    const onPlay = isConstruct && card.subtype === 'Incantation'
+      ? gatherOwnPlay(paidGame, 'ownPlaysMagicalConstruct', { id: newEnt.id, name: card.name, controller: lp })
+      : isCompanion
+        ? gatherOwnPlay(paidGame, 'ownPlaysCompanion', { id: newEnt.id, name: card.name, controller: lp })
+        : [];
+    const playWindow = [...paranoia, ...onPlay];
+    const g = pushStack(paidGame, [{ kind: 'enter', ent: newEnt, card, slot, controller: lp }]);
+    // Structural queue (Rules Note 2026-07-22, IMPLEMENTED Arc G 2026-08-04 —
+    // supersedes the batchOrderer fail-loudly guard for this window): segment the
+    // window by controller — the placer's (active player's) triggers queue onto the
+    // stack first, the opponent's above them, so theirs resolve first (LIFO:
+    // Paranoia's peek before Echo-Keeper's — consistent with R3 "peek first").
+    // Each owner orders their own segment when it holds >1 trigger; two prompts
+    // serialize via PendingTriggerOrder.next (never dual-hold, the Arc F
+    // discipline). Single-owner windows arm byte-identically to the pre-Arc-G path.
+    const armed = armSegmentedWindow(g, segmentBatch(playWindow, lp));
+    if (armed.paused) {
+      return { pendingPlay: null, pendingTrigger: null, pendingKit: null, game: armed.game };
+    }
+    const r = runStack(armed.game, s);
+    return {
+      pendingPlay: null,
+      pendingTrigger: null,
+      pendingKit: null,
+      ...r.local,
+      game: r.game,
+      toasts: [...s.toasts, ...mkToasts(r.toastMsgs)],
+    };
+}
+
 export const useGameStore = create<GameStoreState>()(
   subscribeWithSelector(
   persist(
@@ -1176,6 +1322,7 @@ export const useGameStore = create<GameStoreState>()(
   hovered: null,
   pending: null,
   pendingPlay: null,
+  pendingTribute: null,
   pendingTrigger: null,
   pendingKit: null,
   pendingActionTarget: null,
@@ -3169,103 +3316,88 @@ export const useGameStore = create<GameStoreState>()(
       return { pendingPlay: null, toasts: [...s.toasts, { id, msg: 'Companions must enter the Back Line!' }] };
     }
 
-    const newCZ = game[lp].classZone.map((c, i) =>
-      i === czIdx ? { ...c, faceDown: true } : c
-    );
-    const newWillpower = computeWillpower(newCZ);
-
-    // Build board entity from card
-    const isCompanion = card.type === 'Companion';
-    const isConstruct = card.type === 'Construct';
-
-    const newEnt: BoardEntity = {
-      id: uid(`placed-${card.id}`),
-      kind: isConstruct ? 'construct' : 'companion',
-      name: card.name,
-      cls: card.class1,
-      level: card.level,
-      atk: card.attack ?? undefined,
-      hp: card.hp ?? 0,
-      maxHp: card.hp ?? 0,
-      anchors: card.anchor ?? undefined,
-      anchorsStart: card.anchor ?? undefined,
-      // Companion-variant Armor X: "This companion enters the encounter with X armor
-      // counters" (canon 2026-08-18). Placed ONCE here — from then on the COUNTERS
-      // carry the behavior, not a keyword check (universal counter rule).
-      armorCounters: parseArmorKeyword(card.keywords) ?? undefined,
-      armorStart: parseArmorKeyword(card.keywords) ?? undefined,
-      keywords: card.keywords,
-      statuses: [],
-      subtype: card.subtype,
-      text: card.text,
-      tapped: 'none', exhausted: false,
-      // `fresh` = "entered the encounter this turn" for EVERY permanent (bugfix
-      // 2026-07-15): constructs carry it too, so a type-changing effect (Animate
-      // Magic) can preserve the permanent's true entry time instead of stamping the
-      // Manifest as newly entered. Constructs themselves are never gated by it
-      // (they don't attack; their abilities are economy-exempt); readyPlayer clears
-      // it for all kinds at the controller's next ready.
-      fresh: true,
-      acts: freshActs(),
-      loadout: isCompanion ? { weapon: null, gear: [] } : undefined,
-    };
-
-    const newHand = game[lp].hand.filter(c => c.id !== pendingPlay.cardId);
-
-    // ── The trigger stack (R1, owner-ratified 2026-07-12) ───────────────────────
-    // Playing the card puts it ON THE STACK — it does not enter the encounter until
-    // the stack empties down to it. Play-window triggers (Paranoia — canon:
-    // "Whenever an opponent plays a Companion…", from-hand plays only) queue ABOVE
-    // it and resolve first: the controller's peek happens BEFORE the companion
-    // enters and before its on-enter effects (R3, re-ruled 2026-07-12 — "Peek first
-    // 100%", superseding the 2026-07-04 placer's-scry-first order). The on-enter
-    // machinery itself runs when the stack reaches the entered permanent's own
-    // trigger (runOnEnter); reactive enter-traps resolve before it.
-    const paidGame: GameState = {
-      ...game,
-      // The PC is the acting character for this Special Action (2026-07-15):
-      // registers currentActor and seals any companion that was mid-activation.
-      ...(sp.pcId ? activationPatch(game, sp.pcId) : {}),
-      [lp]: { ...game[lp], hand: newHand, classZone: newCZ, willpower: newWillpower },
-    };
-    const paranoia = isCompanion ? gatherParanoia(paidGame, lp) : [];
-    // On-play listeners (arc 4, owner 2026-07-15; extended Arc G 2026-08-04):
-    // "When you play a …" — own-side listeners, from-hand plays ONLY (this reducer
-    // IS the from-hand path; conversions/placements never emit a play event, R1).
-    // Gathered from the PRE-ENTER board (paidGame — the entity is still on the
-    // stack), so a companion entering from this very play never hears itself
-    // (per-event evaluation, 2026-07-21). A companion play queues Paranoia AND
-    // own 'ownPlaysCompanion' listeners (Echo-Keeper) — the first MIXED-owner
-    // window; a construct play queues own-play listeners only.
-    const onPlay = isConstruct && card.subtype === 'Incantation'
-      ? gatherOwnPlay(paidGame, 'ownPlaysMagicalConstruct', { id: newEnt.id, name: card.name, controller: lp })
-      : isCompanion
-        ? gatherOwnPlay(paidGame, 'ownPlaysCompanion', { id: newEnt.id, name: card.name, controller: lp })
-        : [];
-    const playWindow = [...paranoia, ...onPlay];
-    const g = pushStack(paidGame, [{ kind: 'enter', ent: newEnt, card, slot, controller: lp }]);
-    // Structural queue (Rules Note 2026-07-22, IMPLEMENTED Arc G 2026-08-04 —
-    // supersedes the batchOrderer fail-loudly guard for this window): segment the
-    // window by controller — the placer's (active player's) triggers queue onto the
-    // stack first, the opponent's above them, so theirs resolve first (LIFO:
-    // Paranoia's peek before Echo-Keeper's — consistent with R3 "peek first").
-    // Each owner orders their own segment when it holds >1 trigger; two prompts
-    // serialize via PendingTriggerOrder.next (never dual-hold, the Arc F
-    // discipline). Single-owner windows arm byte-identically to the pre-Arc-G path.
-    const armed = armSegmentedWindow(g, segmentBatch(playWindow, lp));
-    if (armed.paused) {
-      return { pendingPlay: null, pendingTrigger: null, pendingKit: null, game: armed.game };
+    // ── TRIBUTE: the play-time additional cost (Arc E, 2026-08-23) ─────────────
+    // SITED HERE ON PURPOSE. Every legality check above has passed — hold, phase, the
+    // PC's atomic activation, Willpower ≥ level, a face-up Class Zone card, and
+    // Back-Line-only — and the destination slot is already chosen and validated. That
+    // is the whole of "all legality before any payment": nothing below can refuse the
+    // play for an unrelated reason after a Beast has died for it.
+    //
+    // UNPAYABLE = UNPLAYABLE (locked ruling). With no payable permanent the play is
+    // REFUSED: the card stays in hand, the Class Zone is unspent, nothing is
+    // sacrificed, no partial state. This is the pre-cost refusal precedent, which
+    // governs COSTS — deliberately NOT the targeted-Action fizzle (retired as a reading
+    // for Actions on 2026-08-21); the two precedents must not be crossed.
+    const tribute = card.type === 'Companion' ? tributeOf(card.name) : undefined;
+    if (tribute) {
+      const payable = tributePayable(game, lp, tribute.sacrificeSubtype);
+      // SLOT-AS-PICK (owner ruling 2026-08-23, "the offering makes room"): the caster
+      // may click a Back-Line slot HELD by a payable Beast. That click both proves the
+      // slot will be free and chooses the payment, so the principle above survives a
+      // full Back Line intact. Clicking an empty slot offers every payable Beast.
+      const occupant = game[lp].board[slot];
+      const inSlot = occupant ? payable.find(x => x.id === occupant.id) : undefined;
+      if (occupant && !inSlot) {
+        const id = ++toastId;
+        setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 3000);
+        return { pendingPlay: null, toasts: [...s.toasts, { id,
+          msg: `${slot.toUpperCase()} is occupied by ${occupant.name} — choose an empty slot, or one held by a ${tribute.sacrificeSubtype} you can offer.` }] };
+      }
+      const options = inSlot ? [inSlot] : payable;
+      if (!options.length) {
+        const id = ++toastId;
+        setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 4000);
+        return { pendingPlay: null, toasts: [...s.toasts, { id,
+          msg: `Can't play ${card.name}: TRIBUTE demands a ${tribute.sacrificeSubtype} to sacrifice and you control none — the cost is unpayable, so the play is refused.` }] };
+      }
+      // Suspend between legality and payment. ALWAYS prompt, even at one option: this
+      // is forcedSacrifice's VOLUNTARY twin, so the prompt carries the decline that the
+      // forced version has no room for. Nothing has been spent yet — cancelling costs
+      // the caster nothing.
+      return { pendingPlay: null, pendingTribute: {
+        cardId: card.id, slot, lp, sourceName: card.name,
+        sacrificeSubtype: tribute.sacrificeSubtype,
+        actorId: pendingPlay.actorId, pcId: sp.pcId, options } };
     }
-    const r = runStack(armed.game, s);
-    return {
-      pendingPlay: null,
-      pendingTrigger: null,
-      pendingKit: null,
-      ...r.local,
-      game: r.game,
-      toasts: [...s.toasts, ...mkToasts(r.toastMsgs)],
-    };
+
+    return commitPlay(s, game, lp, card, slot, czIdx, sp.pcId);
   }),
+
+  // ── TRIBUTE payment (Arc E, 2026-08-23) ────────────────────────────────────
+  // The chosen permanent is sacrificed, and ONLY THEN does the Angel enter — no
+  // interleaving (ordering pin): on-sacrifice listeners fire, removal triggers fire,
+  // the card lands in its OWNER's Dead Zone, and an Oathsworn Beast returns its sworn
+  // card to hand, all before the entering companion is even pushed onto the stack.
+  // destroyEntity resolves those inline, so the payment is complete when it returns.
+  resolveTribute: (entityId) => set(s => {
+    if (gameIsOver(s.game)) return s;
+    const pt = s.pendingTribute;
+    if (!pt) return s;
+    if (!pt.options.some(o => o.id === entityId)) return s; // invalid pick — prompt stays armed
+    const card = s.game[pt.lp].hand.find(c => c.id === pt.cardId);
+    if (!card) return { pendingTribute: null };             // card left hand somehow
+    const loc = findEntityAnywhere(s.game, entityId);
+    if (!loc) return s;
+
+    const deadSink: PendingDeadPick[] = [];
+    const armorSink: ArmorChoiceData[] = [];
+    const d = destroyEntity(s.game, entityId, deadSink, armorSink, 'sacrifice');
+    const paid = recomputeStatics(armPrompts(d.game, deadSink, armorSink));
+
+    // Re-read the Class Zone from the POST-payment state: a sacrifice cannot touch it,
+    // but reading it here keeps commitPlay's contract honest (it spends what it finds).
+    const czIdx = paid[pt.lp].classZone.findIndex(c => !c.faceDown);
+    if (czIdx === -1) return { pendingTribute: null }; // unreachable: checked pre-payment
+
+    const payMsg = `${pt.sourceName}: ${loc.ent.name} is sacrificed to pay TRIBUTE`;
+    const out = commitPlay({ ...s, pendingTribute: null }, paid, pt.lp, card, pt.slot, czIdx, pt.pcId);
+    return { ...out, pendingTribute: null,
+      toasts: [...(out.toasts ?? s.toasts), ...mkToasts([payMsg, ...d.msgs])] };
+  }),
+
+  // Declining a voluntary cost abandons the play. Nothing was spent — the card never
+  // left hand and the Class Zone was never touched — so this is a plain clear.
+  cancelTribute: () => set({ pendingTribute: null }),
 
   // ── Action bookkeeping ─────────────────────────────────────────────────────
   markAction: (entityId, type) => set(s => {
