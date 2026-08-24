@@ -21,7 +21,8 @@ import { ADJ, FRONT_SLOTS, BACK_SLOTS, isFront, findSlot, type SlotId, type Boar
          type PendingCoercion, type PendingDeadPick, type PendingDiscard,
          type AttackCtx, type ArmorChoiceData,
          type PendingItemTransfer, type StackEntry, type ReactiveStackEntry,
-         gatherParanoia, gatherReactive, gatherOwnPlay, gatherEquippedAttacked, pushStack, setStack, resolveReactiveEntry,
+         gatherParanoia, gatherReactive, gatherOwnSide, gatherEquippedAttacked, gatherSelfAttacked,
+         pushStack, setStack, resolveReactiveEntry,
          orderedForStack, batchOrderer, segmentBatch, resolveCombatTriggers, combatTriggerEffects,
          findEntityAnywhere, updateEntity, removeEntity, canBeSacrificed,
          itemProfileOf, itemTransferCandidates, armNextItemTransfer,
@@ -267,6 +268,12 @@ function commitAttack(s: StackRunCtx, game: GameState, charId: string, targetEnt
       ? gatherReactive(newGame, 'oppCompanionAttacks', { id: charId, name: attacker.name, controller: attLoc.player })
       : []),
     ...gatherEquippedAttacked(tgtLoc.ent, tgtLoc.player, { id: charId, name: attacker.name }),
+    // SELF-hosted (Arc D, 2026-08-23 — Quillspine Porcupine): the attacked character's
+    // OWN card. Same defender-side controller as every entry above, so the batch stays
+    // single-controller and batchOrderer's construction holds. Gathered from the
+    // PRE-DAMAGE board, so a Guardian-bound attack fires it exactly like any other —
+    // being attacked BECAUSE Guardian redirected the attack is still being attacked.
+    ...gatherSelfAttacked(tgtLoc.ent, tgtLoc.player, { id: charId, name: attacker.name }),
   ];
   const hasOwnAttack = combatTriggerEffects(attacker, 'onAttack').length > 0;
 
@@ -879,17 +886,38 @@ function runStack(game: GameState, s: StackRunCtx):
       // 2026-07-12): the enterer's own on-enter queues FIRST, reactive triggers
       // (Tripwire Snare) above it — so the traps resolve first, the enter ability after.
       const batch: StackEntry[] = [{ kind: 'ownEnter', entId: top.ent.id, card: top.card, slot, controller: top.controller }];
+      // THIS IS THE ENTRY SITE — the one moment a permanent actually arrives in the
+      // encounter. Both entry windows hang here, never at the play site (Arc D,
+      // 2026-08-23): playing from hand is today's main producer of entries, but it is
+      // not the only shape, and the two are canonically distinct events. Control-theft
+      // RELOCATION deliberately never reaches this branch (Arc I ruling 3: board-to-board,
+      // no enter), and a countered play never becomes an entry at all. A future
+      // effect-placement that enters without being played will pick these windows up for
+      // free precisely because they are gathered HERE.
+      const subject = { id: top.ent.id, name: top.ent.name, controller: top.controller };
       const reactive = top.ent.kind === 'companion'
-        ? gatherReactive(g, 'oppCompanionEnters', { id: top.ent.id, name: top.ent.name, controller: top.controller })
+        ? [
+            ...gatherReactive(g, 'oppCompanionEnters', subject),   // opposing traps
+            // Own-side entry listeners (Chorus of the Understory). The enterer is
+            // ALREADY on the board at this point, so a permanent whose own card carried
+            // this trigger would hear its own entry — which is the literal reading of
+            // "whenever a companion enters under your control" and is deliberately NOT
+            // suppressed. No shipped card exercises it (Chorus is a Construct, so it can
+            // never be the entering companion); recorded rather than built for.
+            ...gatherOwnSide(g, 'ownCompanionEnters', subject),
+          ]
         : [];
-      if (reactive.length > 1) {
-        // >1 simultaneous trigger — their CONTROLLER (the trap side, not the
-        // entering player) orders them (Rules Note 2026-07-22, supersedes the
-        // active-player tiebreaker).
-        g = { ...pushStack(g, batch), pendingTriggerOrder: { lp: batchOrderer(reactive), items: reactive, picked: [] } };
-        break; // PAUSE — resolveTriggerOrder resumes
-      }
-      g = pushStack(g, [...batch, ...reactive]);
+      g = pushStack(g, batch);
+      // MIXED-OWNER WINDOW (new this arc): opposing traps and own-side listeners can now
+      // fire on the same entry, so this site takes the Arc G structural queue exactly as
+      // the play window does — batchOrderer THROWS on a mixed batch by design, and
+      // segmentBatch/armSegmentedWindow is the sanctioned handling. Segmented by the
+      // ACTIVE player (the 2026-07-22 rule is about turn order, not about who placed):
+      // the active player's segment queues first, the opponent's above it, so theirs
+      // resolves first. A single-owner window arms byte-identically to the pre-Arc-D path.
+      const armedEnter = armSegmentedWindow(g, segmentBatch(reactive, g.activePlayer));
+      g = armedEnter.game;
+      if (armedEnter.paused) break; // PAUSE — resolveTriggerOrder resumes
       continue;
     }
 
@@ -1281,9 +1309,9 @@ function commitPlay(
     // own 'ownPlaysCompanion' listeners (Echo-Keeper) — the first MIXED-owner
     // window; a construct play queues own-play listeners only.
     const onPlay = isConstruct && card.subtype === 'Incantation'
-      ? gatherOwnPlay(paidGame, 'ownPlaysMagicalConstruct', { id: newEnt.id, name: card.name, controller: lp })
+      ? gatherOwnSide(paidGame, 'ownPlaysMagicalConstruct', { id: newEnt.id, name: card.name, controller: lp })
       : isCompanion
-        ? gatherOwnPlay(paidGame, 'ownPlaysCompanion', { id: newEnt.id, name: card.name, controller: lp })
+        ? gatherOwnSide(paidGame, 'ownPlaysCompanion', { id: newEnt.id, name: card.name, controller: lp })
         : [];
     const playWindow = [...paranoia, ...onPlay];
     const g = pushStack(paidGame, [{ kind: 'enter', ent: newEnt, card, slot, controller: lp }]);

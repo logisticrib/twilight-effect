@@ -1,5 +1,5 @@
 {
-  "_comment": "DEV DECK - Sworn Wild (Paladin / Druid), 50 hand-authored dev cards (owner-designed, 2026-08-19). NON-CANON: every card carries dev:true so shipped-pool queries can exclude them. Phase 1 = AUTHOR + FLAG: cards whose behavior has a live engine path carry structured effects; every behavior the engine cannot yet honor carries an effectsFlag starting 'DEV NOT-IMPLEMENTED' (visible machinery debt; the validator reports it and does not fail). That flag list IS the arc plan for the implementation sessions that follow. Type lines carry the Beast modifier per the 2026-08-18 ruling (Beast = non-magical non-sapient animal, printed never derived, ordered Modifier-Organism-Role); Angels are sapient and are NOT Beasts. Armor carriers print the FULL inverted companion clause (2026-08-18 inversion) with X substituted. Vocal subtypes corrected 2026-08-19 (owner ruling): Druid Vocal Constructs are RITE, Paladin's are BLESSING. 'Performance' was retired entirely and the borrowed Utterance (a Doom-Whisperer subtype) was wrong for the same reason. ARC A (2026-08-19): the destroy primitive landed — the seven destroy cards are LIVE. Destroy is a DIFFERENT EVENT from sacrifice (owner ruling): it never fires on-sacrifice listeners, while generic leave/death triggers fire for both, and the card lands in its OWNER's Dead Zone either way. ARC B (2026-08-20): Beast-subtype reach landed — subtype targeting, group scopes, the Dead Zone filter and the `ready` op. Subtype tokens are AUTHORED in this file and read through catalog lookups; they are deliberately NOT carried on the runtime Card, because Card objects serialize into recordings. ARC C (2026-08-23): UNTAMED landed — the five continuous carriers and Elder Shellback are LIVE. Untamed is DERIVED ON READ (isUntamedEncounter, engine/stats.ts): no Gear and no Physical Constructs in the encounter, counting BOTH players (encounter-wide, 2026-08-18) and never a Weapon (Gear only, 2026-08-18 — enforced structurally, weapons live in their own loadout slot). OWNER RULING 2026-08-23: Untamed is KEYWORD-INDEPENDENT — it is a property of the ENCOUNTER that any character can be asked about, and the UNTAMED keyword's only job is to attach a per-card bonus. That is why Elder Shellback asks \"if it is Untamed\" while printing Guardian and Oathsworn: its authored keyword array is CORRECT and no card face changed. The five static carriers gate a `static` clause on `if: {kind:'untamed'}` and re-read it every stat/keyword read (nothing stamped, so an opponent's Gear drops the bonus and Rust and Root destroying that Gear returns it); Elder Shellback gates an `onEnter` clause, read ONCE when the trigger resolves and never re-evaluated (the entry-snapshot exception). Its `placeArmor` op only PLACES counters — prevention needed zero new work, because the universal counter rule (2026-08-18) already made armor counters BE the ability however they arrived. ARC E (2026-08-23): TRIBUTE landed -- the play-time additional cost. The cost is AUTHORED as `tribute: {sacrificeSubtype}` on the card and read through the TRIBUTE_BY_NAME catalog lookup; it is dropped from the runtime Card by normalize() for the same reason `subtypes` is (Card objects serialize into recordings), and it is never parsed out of the printed text (the 2026-08-18 equipOnto lesson: printed prose must not be load-bearing code input). UNPAYABLE = UNPLAYABLE (locked): with no payable Beast the play is REFUSED at placeCard -- card stays in hand, Class Zone unspent, nothing sacrificed. This is the pre-cost refusal precedent, which governs COSTS; it does NOT extend to targeted Actions, which fizzle (the 2026-08-21 ruling retiring refuses-at-zero). Payment IS a sacrifice: on-sacrifice listeners fire, the Beast lands in its OWNER's Dead Zone, and an Oathsworn Beast returns its sworn card to hand mid-payment. SLOT-VACANCY RULED 2026-08-23 (owner): the offering makes room -- a Back-Line slot held by a PAYABLE Beast is itself a legal play target, so the slot is proven available BEFORE any payment and 'all legality before payment' holds intact; clicking it forces that Beast as the payment.",
+  "_comment": "DEV DECK - Sworn Wild (Paladin / Druid), 50 hand-authored dev cards (owner-designed, 2026-08-19). NON-CANON: every card carries dev:true so shipped-pool queries can exclude them. Phase 1 = AUTHOR + FLAG: cards whose behavior has a live engine path carry structured effects; every behavior the engine cannot yet honor carries an effectsFlag starting 'DEV NOT-IMPLEMENTED' (visible machinery debt; the validator reports it and does not fail). That flag list IS the arc plan for the implementation sessions that follow. Type lines carry the Beast modifier per the 2026-08-18 ruling (Beast = non-magical non-sapient animal, printed never derived, ordered Modifier-Organism-Role); Angels are sapient and are NOT Beasts. Armor carriers print the FULL inverted companion clause (2026-08-18 inversion) with X substituted. Vocal subtypes corrected 2026-08-19 (owner ruling): Druid Vocal Constructs are RITE, Paladin's are BLESSING. 'Performance' was retired entirely and the borrowed Utterance (a Doom-Whisperer subtype) was wrong for the same reason. ARC A (2026-08-19): the destroy primitive landed — the seven destroy cards are LIVE. Destroy is a DIFFERENT EVENT from sacrifice (owner ruling): it never fires on-sacrifice listeners, while generic leave/death triggers fire for both, and the card lands in its OWNER's Dead Zone either way. ARC B (2026-08-20): Beast-subtype reach landed — subtype targeting, group scopes, the Dead Zone filter and the `ready` op. Subtype tokens are AUTHORED in this file and read through catalog lookups; they are deliberately NOT carried on the runtime Card, because Card objects serialize into recordings. ARC C (2026-08-23): UNTAMED landed — the five continuous carriers and Elder Shellback are LIVE. Untamed is DERIVED ON READ (isUntamedEncounter, engine/stats.ts): no Gear and no Physical Constructs in the encounter, counting BOTH players (encounter-wide, 2026-08-18) and never a Weapon (Gear only, 2026-08-18 — enforced structurally, weapons live in their own loadout slot). OWNER RULING 2026-08-23: Untamed is KEYWORD-INDEPENDENT — it is a property of the ENCOUNTER that any character can be asked about, and the UNTAMED keyword's only job is to attach a per-card bonus. That is why Elder Shellback asks \"if it is Untamed\" while printing Guardian and Oathsworn: its authored keyword array is CORRECT and no card face changed. The five static carriers gate a `static` clause on `if: {kind:'untamed'}` and re-read it every stat/keyword read (nothing stamped, so an opponent's Gear drops the bonus and Rust and Root destroying that Gear returns it); Elder Shellback gates an `onEnter` clause, read ONCE when the trigger resolves and never re-evaluated (the entry-snapshot exception). Its `placeArmor` op only PLACES counters — prevention needed zero new work, because the universal counter rule (2026-08-18) already made armor counters BE the ability however they arrived. ARC E (2026-08-23): TRIBUTE landed -- the play-time additional cost. The cost is AUTHORED as `tribute: {sacrificeSubtype}` on the card and read through the TRIBUTE_BY_NAME catalog lookup; it is dropped from the runtime Card by normalize() for the same reason `subtypes` is (Card objects serialize into recordings), and it is never parsed out of the printed text (the 2026-08-18 equipOnto lesson: printed prose must not be load-bearing code input). UNPAYABLE = UNPLAYABLE (locked): with no payable Beast the play is REFUSED at placeCard -- card stays in hand, Class Zone unspent, nothing sacrificed. This is the pre-cost refusal precedent, which governs COSTS; it does NOT extend to targeted Actions, which fizzle (the 2026-08-21 ruling retiring refuses-at-zero). Payment IS a sacrifice: on-sacrifice listeners fire, the Beast lands in its OWNER's Dead Zone, and an Oathsworn Beast returns its sworn card to hand mid-payment. SLOT-VACANCY RULED 2026-08-23 (owner): the offering makes room -- a Back-Line slot held by a PAYABLE Beast is itself a legal play target, so the slot is proven available BEFORE any payment and 'all legality before payment' holds intact; clicking it forces that Beast as the payment. ARC D (2026-08-23): the two TRIGGER WINDOWS landed. dd000059 gets `onAttacked` - a SELF-hosted defender-side declaration window, the exact twin of the item-hosted onEquippedAttacked (Caltrop Pouch) one level in: that reads the target's loadout, this reads the target's own card. `eventSubject` already binds to the ATTACKER in this family, so the Phase-1 flag's claim that an 'attacker' target spec was ALSO missing was over-stated - retired, no new spec exists or was needed. dd000073 gets `ownCompanionEnters`, gathered at the ENTRY SITE (runStack's 'enter' handler) and deliberately NOT at the play site: playing from hand is today's main producer of entries but plays and entries are canonically distinct, control-theft RELOCATION is an entry-less arrival (Arc I ruling 3), and a future effect-placement will pick the window up for free because it hangs at the arrival. Its Beast filter is a clause `if` of kind targetIsSubtype, answered against the event subject in resolveReactiveEntry - that kind was previously DECLARED but had no evaluator anywhere (it fell through conditionMet's default-true); it is now implemented for the REACTIVE family only, and dd000081 still needs it against an equipped card's BEARER, which is a different binding.",
   "cards": [
     {
       "id": "dd000051",
@@ -307,11 +307,22 @@
       "flavor": "",
       "dev": true,
       "createdAt": "2026-08-19T00:00:00.000000Z",
-      "updatedAt": "2026-08-19T00:00:00.000000Z",
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): no SELF-hosted 'this character is attacked' trigger exists. The nearest are trap windows (oppCompanionAttacksCompanion, board-hosted) and onEquippedAttacked (ITEM-hosted). A companion-hosted attacked-window trigger plus an 'attacker' target spec are both missing.",
+      "updatedAt": "2026-08-23T00:00:00.000000Z",
       "subtypes": [
         "Beast",
         "Porcupine"
+      ],
+      "effects": [
+        {
+          "trigger": "onAttacked",
+          "effects": [
+            {
+              "op": "damage",
+              "amount": 1,
+              "target": "eventSubject"
+            }
+          ]
+        }
       ]
     },
     {
@@ -835,10 +846,27 @@
       "flavor": "",
       "dev": true,
       "createdAt": "2026-08-19T00:00:00.000000Z",
-      "updatedAt": "2026-08-20T00:00:00.000000Z",
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-19): family B is DONE — the Beast-subtype filter now exists. Blocked on family D alone: no 'your companion ENTERS' trigger window exists. ownPlaysCompanion is a PLAY-from-hand window, and canon holds plays and enters to be distinct events, so the window itself is the missing piece.",
+      "updatedAt": "2026-08-23T00:00:00.000000Z",
       "subtypes": [
         "Rite"
+      ],
+      "effects": [
+        {
+          "trigger": "ownCompanionEnters",
+          "if": {
+            "kind": "targetIsSubtype",
+            "subtype": "Beast"
+          },
+          "effects": [
+            {
+              "op": "buff",
+              "stat": "atk",
+              "amount": 1,
+              "scope": "eventSubject",
+              "duration": "endOfTurn"
+            }
+          ]
+        }
       ]
     },
     {

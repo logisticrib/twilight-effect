@@ -43,9 +43,33 @@ export type Trigger =
                                     // PC included (owner rewording 2026-08-11, The Final Word: "whenever an
                                     // opposing companion attacks" carries no target scope; the R4
                                     // companion-vs-companion reading stays with the trap window above)
+  // SELF-hosted defender-side window (Arc D, 2026-08-23 — Quillspine Porcupine):
+  // "Whenever THIS character is attacked". The character's own card carries it, where
+  // 'onEquippedAttacked' below is the ITEM-hosted twin and the trap windows above are
+  // BOARD-hosted. Fires in the declaration window (R2) for ANY attacker and any attack
+  // that names this character as its target — an attack is an attack, so a PC attacker
+  // and a Ranged attacker both trip it. `eventSubject` binds to the ATTACKER, exactly
+  // as it does for the item-hosted twin.
+  //
+  // KNOWN FAMILY-WIDE GAP (diagnosed 2026-08-23, deliberately not special-cased here):
+  // the interpreter's `forceAttack` op applies damage directly and never opens a
+  // declaration window, so NO member of this family fires on it — not Iron Spikes, not
+  // Caltrop Pouch, not The Final Word, and not this. Fixing that belongs at forceAttack,
+  // for the whole family at once, never card-by-card.
+  | 'onAttacked'
   | 'onEquippedAttacked'            // ITEM-hosted (Arc E 2026-07-23, Caltrop Pouch): the equipped character is
                                     // the target of a DECLARED attack — fires in the declaration window (R2),
                                     // any attacker, PC bearer included; gathered from the target's live loadout
+  // OWN-SIDE ENTRY window (Arc D, 2026-08-23 — Chorus of the Understory): "Whenever a
+  // companion enters the encounter under YOUR control". THE DISTINCTION IS THE POINT
+  // (canon, Program 1 Arc I): this keys on ENTERING THE ENCOUNTER, not on the play
+  // action. Playing from hand is today's main producer, but it is not the only shape —
+  // control-theft RELOCATION is explicitly NOT an entry (board-to-board, ruling 3), and
+  // future effect-placements will be entries without being plays. Gathered at the ENTRY
+  // site (runStack's 'enter' handler), never at the play site, so a non-play entry
+  // cannot silently miss the window. Contrast 'ownPlaysCompanion' above, which is the
+  // PLAY window and fires BEFORE the companion enters (R1/R3).
+  | 'ownCompanionEnters'
   | 'oppCompanionFlees'             // an opposing companion FLEES (Ready Phase Willpower exit). NARROW is
                                     // OWNER-RULED (2026-07-23): "flees" means flees — never other sacrifices
                                     // (flee-is-a-sacrifice governs what a flee IS, not what "flees" wording

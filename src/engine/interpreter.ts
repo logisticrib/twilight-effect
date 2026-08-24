@@ -342,6 +342,12 @@ export function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceNam
           for (const ent of Object.values(g[opp].board)) if (ent?.kind === 'companion') recipients.push(ent.id);
         } else if (isInteractiveSpec(e.scope) && targetId) {
           recipients.push(targetId);
+        } else if (e.scope === 'eventSubject' && ctx?.subjectId) {
+          // Arc D (2026-08-23, Chorus of the Understory): buff the entity the reactive
+          // event is ABOUT — here, the companion that just entered. The subject may have
+          // left since the trigger queued (R1); the recipient loop below no-ops on a
+          // missing id, so the trigger still fired and simply found nothing to buff.
+          recipients.push(ctx.subjectId);
         }
         let touched = 0;
         for (const id of recipients) {

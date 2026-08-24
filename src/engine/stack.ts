@@ -24,7 +24,8 @@ import type { Trigger } from '../types/effects';
 import type { BoardEntity } from '../types/card';
 import { FRONT_SLOTS, BACK_SLOTS } from './geometry';
 import type { GameState, StackEntry, ReactiveStackEntry, PendingDeadPick, ArmorChoiceData } from './state';
-import { effectiveKeywords } from './stats';
+import { effectiveKeywords, hasSubtype } from './stats';
+import { findEntityAnywhere } from './entities';
 import { effectsOfCard, resolveActionEffects, conditionMet } from './interpreter';
 
 /** Write the stack back, keeping the OPTIONAL-field invariant: `undefined` (not `[]`)
@@ -102,6 +103,34 @@ export function gatherEquippedAttacked(
 }
 
 /**
+ * SELF-hosted declaration-window triggers (Arc D, 2026-08-23 — Quillspine Porcupine):
+ * gather 'onAttacked' clauses from the ATTACKED character's OWN card. The exact twin of
+ * gatherEquippedAttacked above, one level in: that one reads the target's loadout, this
+ * one reads the target itself.
+ *
+ * Text-literal scope ("Whenever this character is attacked"): ANY attacker and ANY
+ * attacked character, PC included. An attack is an attack — Ranged, Guardian-bound, or
+ * a follow-up granted by extraAttack all count, because every one of them reaches
+ * commitAttack with a single named attacker. (Diagnosed 2026-08-23: no attack shape has
+ * an ambiguous attacker; commitAttack takes exactly one charId. The only attack-ish path
+ * that opens NO declaration window is the interpreter's `forceAttack`, which applies
+ * damage directly — and it is silent for this WHOLE family, not just for this card.)
+ *
+ * sourceId is the defender's own entity id, so a 'self' effect anchors correctly;
+ * subjectId is the ATTACKER, which is what `eventSubject` binds to. controller = the
+ * defender's side, matching every other defender-side entry in the declaration batch,
+ * so batchOrderer's single-controller construction still holds.
+ */
+export function gatherSelfAttacked(
+  target: BoardEntity, defenderSide: 'p1' | 'p2',
+  subject: { id: string; name: string },
+): ReactiveStackEntry[] {
+  if (!effectsOfCard(target.name).some(c => c.trigger === 'onAttacked')) return [];
+  return [{ kind: 'reactive', sourceId: target.id, sourceName: target.name, controller: defenderSide,
+    trigger: 'onAttacked', subjectId: subject.id, subjectName: subject.name }];
+}
+
+/**
  * Gather the Paranoia play-window triggers for a companion being PLAYED from hand
  * (canon: "Whenever an opponent plays a Companion, look at the top card of that
  * player's deck.") — one trigger per opposing Paranoia permanent (effectiveKeywords,
@@ -121,15 +150,26 @@ export function gatherParanoia(game: GameState, placer: 'p1' | 'p2'): ReactiveSt
 }
 
 /**
- * Gather OWN-SIDE on-play listeners for a card being PLAYED from hand (arc 4,
- * owner-ratified 2026-07-15): permanents on the PLACER'S OWN board whose card
- * carries a clause with this trigger ("When YOU play …" — 'ownPlaysMagicalConstruct',
- * Patient Conjurer). "Play" means from hand, universally (R1 2026-07-15): only the
- * from-hand play path calls this — conversions, placements, and every other
- * entry-into-play route never emit a play event. Queues ABOVE the played card
- * (the gatherParanoia discipline), so it resolves BEFORE the played card enters.
+ * Gather OWN-SIDE listeners for an event about `subject`: permanents on the SUBJECT'S
+ * OWN controller's board whose card carries a clause with this trigger. The mechanical
+ * scan is one line; WHICH WINDOW it is comes entirely from the call site, and the two
+ * live windows are deliberately different moments:
+ *
+ *  · 'ownPlaysMagicalConstruct' / 'ownPlaysCompanion' — the PLAY window (arc 4,
+ *    2026-07-15). "Play" means FROM HAND, universally (R1): conversions, placements and
+ *    every other entry route never emit a play event. Called from placeCard/commitPlay,
+ *    queued ABOVE the played card, so it resolves BEFORE the card enters.
+ *  · 'ownCompanionEnters' — the ENTRY window (Arc D, 2026-08-23). Called from runStack's
+ *    'enter' handler, once the permanent is actually on the board.
+ *
+ * KEEPING THEM APART IS THE POINT, not an accident of naming: control-theft relocation
+ * is an entry-less arrival (board-to-board, Arc I ruling 3 — no placeCard, no onEnter,
+ * no windows), and a play that is countered never becomes an entry at all. RENAMED from
+ * gatherOwnPlay 2026-08-23 because the old name asserted "play" for a helper that now
+ * serves both moments; the distinction belongs at the call sites, which name their
+ * trigger explicitly.
  */
-export function gatherOwnPlay(
+export function gatherOwnSide(
   game: GameState, trigger: Trigger,
   subject: { id: string; name: string; controller: 'p1' | 'p2' },
 ): ReactiveStackEntry[] {
@@ -163,7 +203,21 @@ export function resolveReactiveEntry(
   const msgs: string[] = [];
   for (const clause of effectsOfCard(entry.sourceName)) {
     if (clause.trigger !== entry.trigger) continue;
-    if (clause.if && !conditionMet(g, entry.controller, clause.if)) continue;
+    // 'targetIsSubtype' is the ONE condition kind that asks about the EVENT SUBJECT
+    // rather than the board, so conditionMet (which sees only game + side) cannot
+    // answer it and returns its default-true. Answered here instead, where the subject
+    // is in scope — Chorus of the Understory's "whenever a BEAST enters" (Arc D,
+    // 2026-08-23). Set membership over authored tokens (the Arc B matcher), so a
+    // "Fungal Beast Toad" matches. A subject that has already left fails the gate: the
+    // trigger still FIRED (R1/R4) and simply finds nothing to describe.
+    //
+    // SCOPE, stated so it is not over-read: this implements the kind for the REACTIVE
+    // family only. dd000081 needs the same kind against an equipped card's BEARER,
+    // which is a different binding and is still unimplemented.
+    if (clause.if?.kind === 'targetIsSubtype') {
+      const subj = entry.subjectId ? findEntityAnywhere(g, entry.subjectId)?.ent : undefined;
+      if (!subj || !hasSubtype(subj, clause.if.subtype)) continue;
+    } else if (clause.if && !conditionMet(g, entry.controller, clause.if)) continue;
     const r = resolveActionEffects(g, entry.controller, entry.sourceName, clause.effects,
       undefined, entry.sourceId, { subjectId: entry.subjectId }, deadSink, armorSink);
     g = r.game;
