@@ -18,7 +18,7 @@ import { CATALOG } from '../data/catalog';
 import { deadCardsOf, itemTransferOf, fireSacrificeTriggers } from './entities';
 import { hasRemovalTrigger, resolveRemovalTriggers } from './combat';
 import { freshActs, computeWillpower, controlsPreventAnchorDecay, vocalDecaySkippedFor, resolveStartOfTurn } from './lifecycle';
-import { permanentEffects, resolveActionEffects } from './interpreter';
+import { permanentEffects, resolveActionEffects, effectsOfCard } from './interpreter';
 
 /** Step 1 — ready all permanents + flip the Class Zone (no removals here). */
 export function readyAndFlip(ps: PlayerState): PlayerState {
@@ -110,6 +110,7 @@ export function applyReadyRemovals(game: GameState, side: 'p1' | 'p2', whose: st
   const fled: BoardEntity[] = [];
   const haunts: PendingHauntReturn[] = [];
   const reprisedToHand: Card[] = [];
+  const fleeDeathListeners: { name: string; effects: import('../types/effects').Effect[] }[] = [];
   // Fleeing checks read THE current Willpower (Dismayed-adjusted; base was
   // recomputed at the flip). Dismay pressure can cause fleeing — intended
   // (owner ruling 2026-07-04).
@@ -185,16 +186,31 @@ export function applyReadyRemovals(game: GameState, side: 'p1' | 'p2', whose: st
         if (card) haunts.push({ lp: cur.stolenFrom ?? side, cardId: card.id, cardName: card.name });
       }
       notices.push(`${whose} ${cur.name} flees — Level ${cur.level} exceeds Willpower ${effWP}.`);
+      // Arc F (2026-08-25): a flee is a companion DEATH — 'ownCompanionDies'
+      // listeners on the same board fire (Ossuary Altar; the destroyEntity
+      // chokepoint fires its own copy for the other causes). Gathered pre-removal;
+      // resolved after the loop (the board write below must not race the scan).
+      for (const src of Object.values(ps.board)) {
+        if (!src || src.id === cur.id) continue;
+        for (const ce of effectsOfCard(src.name))
+          if (ce.trigger === 'ownCompanionDies') fleeDeathListeners.push({ name: src.name, effects: ce.effects });
+      }
       continue;
     }
     newBoard[slot as SlotId] = cur;
   }
-  return { game: { ...game, [side]: { ...ps, board: newBoard,
+  let outGame: GameState = { ...game, [side]: { ...ps, board: newBoard,
     dead: buried.length ? [...ps.dead, ...buried] : ps.dead,
     hand: returnedSworn.length || reprisedToHand.length
       ? [...ps.hand, ...returnedSworn, ...reprisedToHand] : ps.hand },
-    ...(haunts.length ? { pendingHauntQueue: [...(game.pendingHauntQueue ?? []), ...haunts] } : {}) },
-    notices, transfers, sacrificed, fled };
+    ...(haunts.length ? { pendingHauntQueue: [...(game.pendingHauntQueue ?? []), ...haunts] } : {}) };
+  // Arc F: the flee-death listeners resolve against the post-removal board.
+  for (const l of fleeDeathListeners) {
+    const r = resolveActionEffects(outGame, side, l.name, l.effects);
+    outGame = r.game;
+    notices.push(`${l.name}: ${r.msgs.join(' | ')}`);
+  }
+  return { game: outGame, notices, transfers, sacrificed, fled };
 }
 
 export interface ReadyPhaseResult {

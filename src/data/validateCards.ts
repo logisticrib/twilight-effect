@@ -33,6 +33,8 @@ const TRIGGERS = [
   'ownPlaysMagicalConstruct', 'ownPlaysCompanion', 'ownPhysicalConstructSacrificed', 'onEquippedPlaysMagicAction', 'onEquippedAttacked',
   // Arc D (2026-08-23): the SELF-hosted attacked window and the OWN-SIDE entry window.
   'onAttacked', 'ownCompanionEnters',
+  // Requiem Arc F (2026-08-25): the finale's three windows.
+  'ownPlaysVocalConstruct', 'ownCompanionDies', 'onEquippedDies',
 ] as const satisfies readonly Trigger[];
 export type _ExhaustiveTriggers = AssertNever<Exclude<Trigger, (typeof TRIGGERS)[number]>>;
 
@@ -62,6 +64,8 @@ const OPS = [
   'placeArmor',
   // Requiem Arc E (2026-08-25): the Song machinery ops.
   'entryAnchorBonus', 'attackTwice',
+  // Requiem Arc F (2026-08-25): the finale ops.
+  'bottomFromHand', 'entryExhaust',
 ] as const satisfies readonly Effect['op'][];
 export type _ExhaustiveOps = AssertNever<Exclude<Effect['op'], (typeof OPS)[number]>>;
 
@@ -234,8 +238,10 @@ function validateEffect(e: Effect, path: string, p: (msg: string) => void, keywo
       count('count');
       // Engine-supported victim scopes only (Arc A 2026-07-22; the preventDamage
       // precedent — the contract must not advertise unimplemented coverage).
-      if (e.target !== 'targetPlayer' && e.target !== 'damagedController' && e.target !== 'eventSubject') {
-        p(`${path}(discard): target must be targetPlayer, damagedController, or eventSubject`);
+      // 'self' added Arc F (2026-08-25, Glimmerwood Teller): the controller's OWN
+      // choice — the victim-owned prompt with victim = the controller.
+      if (e.target !== 'targetPlayer' && e.target !== 'damagedController' && e.target !== 'eventSubject' && e.target !== 'self') {
+        p(`${path}(discard): target must be targetPlayer, damagedController, eventSubject, or self`);
       }
       if (e.random) p(`${path}(discard): random discards are not engine-supported (the chooser is the discarding player)`);
       break;
@@ -313,6 +319,16 @@ function validateEffect(e: Effect, path: string, p: (msg: string) => void, keywo
     case 'extraAttack': case 'sacrifice': case 'sacrificeItem': case 'equipFromHand':
     case 'exhaust':
       target('target'); break;
+    case 'bottomFromHand':
+      if (!isInt(e.count) || e.count < 1) p(`${path}(bottomFromHand): count must be an integer ≥ 1`);
+      break;
+    // Arc F (2026-08-25): destroy's two level caps — mutually exclusive. (destroy had
+    // no dedicated case before this; its target is checked by the generic sweep.)
+    case 'destroy':
+      target('target');
+      if (e.levelAtMost !== undefined && (!isInt(e.levelAtMost) || e.levelAtMost < 1)) p(`${path}(destroy): levelAtMost must be an integer ≥ 1`);
+      if (e.levelAtMost !== undefined && e.levelBelowOwnDeadCompanions) p(`${path}(destroy): levelAtMost and levelBelowOwnDeadCompanions are mutually exclusive caps`);
+      break;
     case 'forceAttack': target('attackers'); target('target'); break;
     case 'anchor':
       if (!isInt(e.delta) || e.delta === 0) p(`${path}(anchor): delta must be a non-zero integer`);

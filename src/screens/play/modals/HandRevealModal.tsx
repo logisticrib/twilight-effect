@@ -33,13 +33,20 @@ export function HandRevealModal() {
         </>
       }>
       <div style={md.cardRow}>
-        {revealed.hand.map(c => picking ? (
-          <button key={c.id} style={pickBtn} title={`Bottom ${c.name} — they draw a card`} onClick={() => resolveHandReveal(c.id)}>
-            <CardFace data={c} scale={0.62} />
-          </button>
-        ) : (
-          <CardFace key={c.id} data={c} scale={0.62} />
-        ))}
+        {revealed.hand.map(c => {
+          // Arc F (2026-08-25, Steal the Show): the pick filter — Companions are
+          // shown but not pickable (the store refuses them too).
+          const barred = picking && hr.pickFilter === 'nonCompanion' && c.type === 'Companion';
+          return picking && !barred ? (
+            <button key={c.id} style={pickBtn} title={`Bottom ${c.name} — they draw a card`} onClick={() => resolveHandReveal(c.id)}>
+              <CardFace data={c} scale={0.62} />
+            </button>
+          ) : (
+            <div key={c.id} style={barred ? { opacity: 0.45 } : undefined} title={barred ? `${c.name} — Companions cannot be chosen` : undefined}>
+              <CardFace data={c} scale={0.62} />
+            </div>
+          );
+        })}
       </div>
     </ModalShell>
   );

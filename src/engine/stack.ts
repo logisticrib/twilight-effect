@@ -176,6 +176,17 @@ export function gatherOwnSide(
       out.push({ kind: 'reactive', sourceId: ent.id, sourceName: ent.name, controller: subject.controller,
         trigger, subjectId: subject.id, subjectName: subject.name });
     }
+    // Arc F (2026-08-25, Chorus Bell): ITEM-hosted own-side listeners — the bearer's
+    // loadout cards are scanned too (sourceName = the ITEM, so resolution reads its
+    // clauses). No shipped item carries any gathered trigger → byte-identical.
+    const lo = ent.loadout;
+    if (lo) for (const it of [lo.weapon, ...lo.gear]) {
+      if (!it) continue;
+      if (effectsOfCard(it.name).some(c => c.trigger === trigger)) {
+        out.push({ kind: 'reactive', sourceId: ent.id, sourceName: it.name, controller: subject.controller,
+          trigger, subjectId: subject.id, subjectName: subject.name });
+      }
+    }
   }
   return out;
 }

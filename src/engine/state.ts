@@ -372,6 +372,10 @@ export interface PendingPeek {
 export interface PendingDiscard {
   source: string;       // the card that forced the discard
   victim: 'p1' | 'p2';  // who chooses and discards
+  /** Arc F (2026-08-25, Turn of Phrase): the picked card's destination — absent =
+   *  the Dead Zone (every prior discard); 'bottom' = the bottom of the victim's
+   *  own deck (bottomFromHand). */
+  dest?: 'bottom';
 }
 
 /** An opponent-hand reveal (Arc A, 2026-07-22): the LOOKER (`lp`) sees `handSide`'s
@@ -384,6 +388,8 @@ export interface PendingHandReveal {
   lp: 'p1' | 'p2';        // the looker (prompt owner)
   handSide: 'p1' | 'p2';  // whose hand is revealed
   pick?: 'toBottomDraw';
+  /** Arc F (2026-08-25, Steal the Show): Companion cards are barred from the pick. */
+  pickFilter?: 'nonCompanion';
 }
 
 /** A queued start-of-turn peek (deck not yet sliced — re-sliced when it becomes

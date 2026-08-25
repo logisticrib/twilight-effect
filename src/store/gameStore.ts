@@ -123,7 +123,7 @@ export interface PendingActionTarget {
   // Arc A (2026-08-19) adds the two destroy kinds. They differ from the others in
   // that STEP 1 mutates the board, so cancelling at step 2 commits (see
   // cancelActionTarget) instead of returning the card to hand.
-  twoStep?: 'reposition' | 'disarm' | 'moveAnchor' | 'gainControl' | 'destroyThenHeal' | 'destroyUpTo' | 'readyUpTo';
+  twoStep?: 'reposition' | 'disarm' | 'moveAnchor' | 'gainControl' | 'destroyThenHeal' | 'destroyUpTo' | 'readyUpTo' | 'forcePair';
   firstId?: string;            // the first chosen entity (set on step 2)
   eligibleSlots?: SlotId[];    // clickable empty slots when step 2 is a slot pick
 }
@@ -671,12 +671,16 @@ function runOnEnter(
     const spec = actionTargetSpec(onEnter);
     if (spec) {
       // Arc H: op-level narrowing (bounce hpAtMost) — identity for shipped cards.
-      const eligibleIds = filterEligibleByEffects(g, eligibleTargets(g, lp, spec).filter(eid => eid !== entId), onEnter);
+      // Arc F: lp threaded (the Dead-Zone census cap) + the forcePair two-step
+      // carried through (Discordant Air's enter arms step 1: pick the attacker).
+      const enterTs = twoStepKind(onEnter);
+      const eligibleIds = filterEligibleByEffects(g, eligibleTargets(g, lp, spec).filter(eid => eid !== entId), onEnter, undefined, lp);
       if (eligibleIds.length > 0) {
         return {
           game: g,
           local: { ...local, pendingTrigger: null, pendingKit: null,
-            pendingActionTarget: { source: 'enter', sourceName: card.name, lp, effects: onEnter, eligibleIds, sourceId: entId } },
+            pendingActionTarget: { source: 'enter', sourceName: card.name, lp, effects: onEnter, eligibleIds, sourceId: entId,
+              ...(enterTs === 'forcePair' ? { twoStep: 'forcePair' as const } : {}) } },
           msg: `${card.name} enters — choose a target.`,
         };
       }
@@ -1506,6 +1510,13 @@ function commitPlay(
       fresh: true,
       acts: freshActs(),
       loadout: isCompanion ? { weapon: null, gear: [] } : undefined,
+      // Arc F (2026-08-25, Field of the Unquiet): opposing entryExhaust statics —
+      // the companion arrives spent. Zealous does not help (the willpower check is
+      // waived but an exhausted companion still cannot attack — the pinned collision).
+      ...(isCompanion && Object.values(s.game[lp === 'p1' ? 'p2' : 'p1'].board).some(src => !!src
+        && (CATALOG.find(c => c.name === src.name)?.effects ?? []).some(ce =>
+          ce.trigger === 'static' && ce.effects.some(ef => ef.op === 'entryExhaust')))
+        ? { exhausted: true, tapped: 'major' as const } : {}),
     };
 
     // `card.id` rather than the pending's cardId: commitPlay is shared with the Tribute
@@ -1539,6 +1550,10 @@ function commitPlay(
     // window; a construct play queues own-play listeners only.
     const onPlay = isConstruct && card.subtype === 'Incantation'
       ? gatherOwnSide(paidGame, 'ownPlaysMagicalConstruct', { id: newEnt.id, name: card.name, controller: lp })
+      : isConstruct && VOCAL_ENTRY.has(card.subtype)
+        // Arc F (2026-08-25, Chorus Bell): the VOCAL play window — plays only
+        // (a Haunt return or reanimation is an ENTER and never reaches this site).
+        ? gatherOwnSide(paidGame, 'ownPlaysVocalConstruct', { id: newEnt.id, name: card.name, controller: lp })
       : isCompanion
         ? gatherOwnSide(paidGame, 'ownPlaysCompanion', { id: newEnt.id, name: card.name, controller: lp })
         : [];
@@ -1854,7 +1869,7 @@ export const useGameStore = create<GameStoreState>()(
     const preGc = preOnPlay.find(e => e.op === 'gainControl');
     if (preGc && preGc.op === 'gainControl') {
       const stealables = isInteractiveSpec(preGc.target)
-        ? filterEligibleByEffects(s.game, eligibleTargets(s.game, lp, preGc.target), preOnPlay, card) : [];
+        ? filterEligibleByEffects(s.game, eligibleTargets(s.game, lp, preGc.target), preOnPlay, card, lp) : [];
       if (stealables.length === 0) {
         return { toasts: [...s.toasts, mkToast(`Can't play ${card.name}: no legal target within the HP limit.`)] };
       }
@@ -1955,11 +1970,11 @@ export const useGameStore = create<GameStoreState>()(
       const rOp = onPlay.find(e => e.op === 'ready');
       const eligibleIds =
         (ts === 'destroyThenHeal' || ts === 'destroyUpTo') && dOp && dOp.op === 'destroy'
-          ? filterEligibleByEffects(g0, eligibleTargets(g0, lp, dOp.target), onPlay, card)
+          ? filterEligibleByEffects(g0, eligibleTargets(g0, lp, dOp.target), onPlay, card, lp)
         : ts === 'gainControl' && gcOp && gcOp.op === 'gainControl' && isInteractiveSpec(gcOp.target)
-          ? filterEligibleByEffects(g0, eligibleTargets(g0, lp, gcOp.target), onPlay, card)
+          ? filterEligibleByEffects(g0, eligibleTargets(g0, lp, gcOp.target), onPlay, card, lp)
         : ts === 'readyUpTo' && rOp && rOp.op === 'ready'
-          ? filterEligibleByEffects(g0, eligibleTargets(g0, lp, rOp.target), onPlay, card)
+          ? filterEligibleByEffects(g0, eligibleTargets(g0, lp, rOp.target), onPlay, card, lp)
         : charsOf(g0, lp);
       const newHand = g0[lp].hand.filter(c => c.id !== handCardId);
       if (eligibleIds.length === 0) {
@@ -1999,7 +2014,7 @@ export const useGameStore = create<GameStoreState>()(
       // WARDED (Final Sweep, 2026-08-21): the ACTION CARD is passed so its class can be
       // matched against each candidate's ward. Only the Action-play sites pass a card —
       // ability/modal picks are hosted on permanents, and canon wards against CARDS.
-      const eligibleIds = filterEligibleByEffects(g0, eligibleTargets(g0, lp, spec), onPlay, card);
+      const eligibleIds = filterEligibleByEffects(g0, eligibleTargets(g0, lp, spec), onPlay, card, lp);
       const newHand = g0[lp].hand.filter(c => c.id !== handCardId);
       if (eligibleIds.length === 0) {
         // No legal target — fizzle to the Dead Zone rather than soft-lock.
@@ -2095,7 +2110,7 @@ export const useGameStore = create<GameStoreState>()(
         const rOp = pa.effects.find(e => e.op === 'ready');
         const capOk = !(rOp && rOp.op === 'ready' && rOp.maxIf) || conditionMet(g, pa.lp, (rOp as { maxIf: Condition }).maxIf);
         const nextEligible = capOk && rOp && rOp.op === 'ready'
-          ? filterEligibleByEffects(g, eligibleTargets(g, pa.lp, rOp.target), pa.effects, pa.card).filter(id => id !== targetId)
+          ? filterEligibleByEffects(g, eligibleTargets(g, pa.lp, rOp.target), pa.effects, pa.card, pa.lp).filter(id => id !== targetId)
           : [];
         if (nextEligible.length) {
           const id0 = ++toastId;
@@ -2121,6 +2136,15 @@ export const useGameStore = create<GameStoreState>()(
       if (pa.twoStep === 'moveAnchor') {
         // Step 2 picks the destination — any other own Physical Construct.
         const dests = ownPhysicalConstructIds(s.game, pa.lp).filter(id => id !== targetId);
+        return { pendingActionTarget: { ...pa, firstId: targetId, eligibleIds: dests } };
+      }
+      if (pa.twoStep === 'forcePair') {
+        // Arc F (Discordant Air): step 2 picks a DIFFERENT enemy companion as the
+        // forced attack's target (the charm pair — attacker ≠ target by construction).
+        const fa = pa.effects.find(e => e.op === 'forceAttack');
+        const spec = fa && fa.op === 'forceAttack' ? fa.target : 'enemyCompanion';
+        const dests = eligibleTargets(s.game, pa.lp, spec as TargetSpec).filter(id => id !== targetId);
+        if (!dests.length) return { pendingActionTarget: null }; // singleton enemy — nothing to force it into
         return { pendingActionTarget: { ...pa, firstId: targetId, eligibleIds: dests } };
       }
       const opp: 'p1' | 'p2' = pa.lp === 'p1' ? 'p2' : 'p1';
@@ -2168,6 +2192,17 @@ export const useGameStore = create<GameStoreState>()(
       setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 4000);
       return { game: recomputeStatics(done), pendingActionTarget: null,
                toasts: [...s.toasts, { id, msg: `${pa.sourceName}: ${r.msgs.join(' | ')}` }] };
+    }
+    if (pa.twoStep === 'forcePair' && pa.firstId) {
+      // Arc F: the charm resolves as a REAL attack — the fa22d50 forced-attacks-are-
+      // attacks machinery (declaration snapshot, windows, damage) does the rest.
+      let g = pushStack(s.game, [{ kind: 'forcedAttack', attackerId: pa.firstId, targetId,
+        side: findEntityAnywhere(s.game, pa.firstId)?.player ?? pa.lp, sourceName: pa.sourceName }]);
+      const r = runStack(g, s);
+      const id = ++toastId;
+      setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 4000);
+      return { ...r.local, game: r.game, pendingActionTarget: null,
+        toasts: [...s.toasts, { id, msg: `${pa.sourceName}: the charm takes hold` }, ...mkToasts(r.toastMsgs)] };
     }
     if (pa.twoStep === 'disarm' && pa.firstId) {
       // Step 2: attacker (firstId) attacks the chosen enemy, then sacrifice an item on it.
@@ -3937,8 +3972,11 @@ export const useGameStore = create<GameStoreState>()(
     const ps = s.game[pd.victim];
     const card = ps.hand.find(c => c.id === cardId);
     if (!card) return s; // not a hand card — prompt stays armed (Coercion's idiom)
-    let g: GameState = { ...s.game,
-      [pd.victim]: { ...ps, hand: ps.hand.filter(c => c.id !== cardId), dead: [...ps.dead, card] } };
+    // Arc F (2026-08-25, Turn of Phrase): dest 'bottom' routes the pick to the deck
+    // BOTTOM — the Dead Zone is untouched. Absent dest = the discard everyone knows.
+    let g: GameState = pd.dest === 'bottom'
+      ? { ...s.game, [pd.victim]: { ...ps, hand: ps.hand.filter(c => c.id !== cardId), deck: [...ps.deck, card] } }
+      : { ...s.game, [pd.victim]: { ...ps, hand: ps.hand.filter(c => c.id !== cardId), dead: [...ps.dead, card] } };
     // Advance the queue, skipping entries whose victim ran out of cards meanwhile.
     const rest = [...(g.pendingDiscardQueue ?? [])];
     let next: PendingDiscard | undefined;
@@ -3974,6 +4012,8 @@ export const useGameStore = create<GameStoreState>()(
       const vs = g[hr.handSide];
       const card = vs.hand.find(c => c.id === cardId);
       if (!card) return s; // not a hand card — prompt stays armed
+      // Arc F (2026-08-25, Steal the Show): the pick filter — Companions are barred.
+      if (hr.pickFilter === 'nonCompanion' && card.type === 'Companion') return s;
       // Canon-literal (Mark the Pockets): the chosen card goes to the BOTTOM of its
       // owner's deck, then that player draws a card (with an empty deck they draw
       // the bottomed card right back — the text offers no exception).

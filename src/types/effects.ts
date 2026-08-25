@@ -103,7 +103,21 @@ export type Trigger =
   // EQUIPPED character plays a Magic Action — on the PLAY itself (a countered
   // action was still played). Printed per-turn limits stay on triggers (the
   // exhaust-cost guideline governs activated abilities only).
-  | 'onEquippedPlaysMagicAction';     // Embercast Wand
+  | 'onEquippedPlaysMagicAction'      // Embercast Wand
+  // Arc F (2026-08-25, the Requiem finale) — three new windows:
+  | 'ownPlaysVocalConstruct'          // YOU play a VOCAL Construct from hand (Chorus
+                                      // Bell — item-hosted; gatherOwnSide scans
+                                      // loadouts too as of this arc). Plays only —
+                                      // a Haunt return or reanimation never fires it.
+  | 'ownCompanionDies'                // a companion under YOUR control DIES (any
+                                      // cause: damage/sacrifice/destroy/flee —
+                                      // resolved inline at both death sites, for the
+                                      // dying companion's CONTROLLER's board;
+                                      // Ossuary Altar). Constructs decaying never fire it.
+  | 'onEquippedDies';                 // ITEM-hosted: the EQUIPPED companion dies —
+                                      // resolved PRE-removal from the dying bearer's
+                                      // own loadout (Gravecharm Locket); the item
+                                      // still rides to the Dead Zone afterwards.
 
 // ─── WHO/WHAT an effect targets ────────────────────────────────────────────────
 // Interactive specs require a board selection step (reuses the pendingTrigger layer).
@@ -258,7 +272,9 @@ export type Effect =
   // revealHand (Arc A, 2026-07-22): look at the opponent's hand. With pick
   // 'toBottomDraw' the looker may choose a card — bottom of its owner's deck, then
   // that player draws (Mark the Pockets).
-  | { op: 'revealHand'; pick?: 'toBottomDraw' }
+  // Arc F (2026-08-25, Steal the Show): `pickFilter` narrows the toBottomDraw
+  // choice — 'nonCompanion' bars Companion cards from the pick.
+  | { op: 'revealHand'; pick?: 'toBottomDraw'; pickFilter?: 'nonCompanion' }
   // eachPlayerSacrificesOrDiscards (Arc F, 2026-07-24 — Siege Rations): each player
   // sacrifices a permanent or discards a card, THEIR choice (the Coercion prompt,
   // chained). Order: the non-active player's resolution first (2026-07-22 structural
@@ -321,7 +337,11 @@ export type Effect =
   // INTERIM: the owner's recorded design intent is a cast-time legality gate making a
   // zero-target Action UNCASTABLE pool-wide — deferred to its own session. See
   // Game_Rules_Updated §Action Supertypes, "Targeted Actions with no legal target".
-  | { op: 'destroy'; target: TargetSpec; max?: number }
+  // Arc F (2026-08-25): `levelAtMost` (Lay to Rest — the bounce discipline) and
+  // `levelBelowOwnDeadCompanions` (Toll the Silence — eligibility is target.level
+  // STRICTLY BELOW the caster's Dead-Zone companion-card census, re-read at arming
+  // AND resolution). Mutually exclusive caps.
+  | { op: 'destroy'; target: TargetSpec; max?: number; levelAtMost?: number; levelBelowOwnDeadCompanions?: boolean }
   | { op: 'sacrificeItem'; target: TargetSpec }
   | { op: 'equipFromHand'; target: TargetSpec }
   | { op: 'animate'; atk: number; hp: number; target: TargetSpec; max?: number }  // Animate Magic X (max caps a group target, e.g. "up to two")
@@ -351,6 +371,14 @@ export type Effect =
   // The allowance is read AT THE SECOND ATTACK: losing the condition between attacks
   // kills it. Tracked via BoardEntity.attacksUsed (stamped only on carriers).
   | { op: 'attackTwice' }
+  // Arc F (2026-08-25, Turn of Phrase): the chooser puts `count` cards from their
+  // OWN hand on the BOTTOM of their deck — the pendingDiscard prompt with a
+  // 'bottom' destination (never the Dead Zone).
+  | { op: 'bottomFromHand'; count: number }
+  // Arc F (2026-08-25, Field of the Unquiet): a STATIC — opposing companions enter
+  // the encounter exhausted (checked at placeCard against the OPPONENT's board).
+  // Zealous does not help: the willpower check is waived but exhausted cannot attack.
+  | { op: 'entryExhaust' }
   | { op: 'lineWard' }                           // (static) opposing companions can't attack characters on the line opposite this construct
   | { op: 'exhaustSelf' }                        // exhaust the source permanent (e.g. Library of Memory's "if you do")
   // ready (Arc B, 2026-08-19 — Greywind Courser). The exact inverse of `exhaust`, and

@@ -153,6 +153,9 @@ export function effectTargetSpec(e: Effect): TargetSpec | null {
     case 'exhaust':
     case 'ready':
     case 'destroy':
+    // Arc F (2026-08-25, Feast for Worms): an interactive sacrifice is a targeted
+    // pick. Shipped sacrifice targets ('self') are not interactive → null, as before.
+    case 'sacrifice':
     case 'forceAttack': return isInteractiveSpec(e.target) ? e.target : null;
     case 'dieCheck': {
       // The branch effects choose the target up-front (declared before the roll).
@@ -173,7 +176,7 @@ export function effectTargetSpec(e: Effect): TargetSpec | null {
  * interactive pick, and re-checked at resolution (per-event state). No shipped card
  * carries a narrowing field, so every shipped arm site returns `ids` unchanged.
  */
-export function filterEligibleByEffects(game: GameState, ids: string[], effects: Effect[], sourceCard?: Card): string[] {
+export function filterEligibleByEffects(game: GameState, ids: string[], effects: Effect[], sourceCard?: Card, lp?: 'p1' | 'p2'): string[] {
   let out = ids;
   // WARDED AGAINST [X] (Final Sweep, 2026-08-21) — canon's TARGETING gate, applied at
   // the one chokepoint every interactive pick already passes through, so no arming site
@@ -214,6 +217,23 @@ export function filterEligibleByEffects(game: GameState, ids: string[], effects:
     out = out.filter(id => {
       const loc = findEntityAnywhere(game, id);
       return !!loc && loc.ent.level <= lvlCap.levelAtMost!;
+    });
+  }
+  // Arc F (2026-08-25): destroy's caps — Lay to Rest's flat levelAtMost, and Toll
+  // the Silence's Dead-Zone CENSUS (target.level STRICTLY BELOW the caster's dead
+  // companion-card count; needs `lp`, threaded by the arm sites).
+  const dCap = effects.find((e): e is Extract<Effect, { op: 'destroy' }> =>
+    e.op === 'destroy' && (e.levelAtMost != null || !!e.levelBelowOwnDeadCompanions));
+  if (dCap) {
+    const census = dCap.levelBelowOwnDeadCompanions && lp
+      ? game[lp].dead.filter(c => c.type === 'Companion').length : null;
+    out = out.filter(id => {
+      const loc = findEntityAnywhere(game, id);
+      if (!loc) return false;
+      if (dCap.levelAtMost != null && loc.ent.level > dCap.levelAtMost) return false;
+      if (census != null && !(loc.ent.level < census)) return false;
+      if (dCap.levelBelowOwnDeadCompanions && census == null) return false; // no lp threaded — refuse rather than ignore the gate
+      return true;
     });
   }
   // Arc B (2026-08-19): subtype narrowing for a targeted pick — "target Beast you
@@ -348,7 +368,7 @@ export function actionTargetSpec(effects: Effect[]): TargetSpec | null {
 }
 
 /** A two-step action (pick own char, then a slot or an enemy), or null. */
-export function twoStepKind(effects: Effect[]): 'reposition' | 'disarm' | 'moveAnchor' | 'gainControl' | 'destroyThenHeal' | 'destroyUpTo' | 'readyUpTo' | null {
+export function twoStepKind(effects: Effect[]): 'reposition' | 'disarm' | 'moveAnchor' | 'gainControl' | 'destroyThenHeal' | 'destroyUpTo' | 'readyUpTo' | 'forcePair' | null {
   // Arc A (2026-08-19). Checked FIRST: a destroy card can carry an interactive rider
   // (Sanctify's heal) or an "up to N" cap, and either makes it a two-step pick.
   const destroy = effects.find(e => e.op === 'destroy');
@@ -362,6 +382,11 @@ export function twoStepKind(effects: Effect[]): 'reposition' | 'disarm' | 'moveA
   // the second pick's runtime gate (conditionMet on maxIf) lives at the arm site.
   const ready = effects.find(e => e.op === 'ready');
   if (ready && ready.op === 'ready' && (ready.max ?? 1) > 1) return 'readyUpTo';
+  // Arc F (2026-08-25, Discordant Air): forceAttack with an INTERACTIVE attackers
+  // spec is a two-pick — the attacker first, then a DIFFERENT target. Press the
+  // Line (group attackers) stays single-step, byte-identical.
+  const fa = effects.find(e => e.op === 'forceAttack');
+  if (fa && fa.op === 'forceAttack' && isInteractiveSpec(fa.attackers)) return 'forcePair';
   for (const e of effects) {
     if (e.op === 'move' && e.to === 'anySlot' && e.target === 'ownCharacter') return 'reposition';
     if (e.op === 'attackDisarm') return 'disarm';
@@ -839,6 +864,10 @@ export function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceNam
           if (r.destroyed) { g = r.game; msgs.push(...r.msgs); destroyedThisResolution++; continue; }
           const loc = findEntityAnywhere(g, id);
           if (!loc) continue;                              // already gone this resolution
+          // Arc F: re-check the level caps at resolution (per-event state).
+          if (e.levelAtMost != null && loc.ent.level > e.levelAtMost) continue;
+          if (e.levelBelowOwnDeadCompanions
+            && !(loc.ent.level < g[lp].dead.filter(c => c.type === 'Companion').length)) continue;
           const d = destroyEntity(g, id, sink, armorSink, 'destroy');
           g = d.game;
           msgs.push(`${loc.ent.name} is destroyed`, ...d.msgs);
@@ -853,6 +882,17 @@ export function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceNam
         // it routes through destroyEntity, fires death triggers, and opens no
         // exceptions. Other targets remain documented safe no-ops until a card
         // needs them (see tier4_ops "declared-but-uninterpreted ops").
+        // Arc F (2026-08-25, Feast for Worms): an INTERACTIVE own pick — the clicked
+        // companion is sacrificed for real (listeners fire; canBeSacrificed guards —
+        // the PC is structurally ineligible anyway, 'ownCompanion' excludes it).
+        if (isInteractiveSpec(e.target) && targetId) {
+          const tLoc = findEntityAnywhere(g, targetId);
+          if (!tLoc || !canBeSacrificed(tLoc.ent)) break;
+          const ds = destroyEntity(g, targetId, sink, armorSink, 'sacrifice');
+          g = ds.game;
+          msgs.push(`${tLoc.ent.name} is sacrificed`, ...ds.msgs);
+          break;
+        }
         if (e.target !== 'self' || !sourceId) break;
         const loc = findEntityAnywhere(g, sourceId);
         if (!loc) break; // source already gone (e.g. destroyed while its trigger was queued)
@@ -868,7 +908,10 @@ export function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceNam
         // need no sink threading, and the shipped call sites stay byte-identical
         // (no shipped card carries the op). Victim resolution by target scope:
         let victim: 'p1' | 'p2' | null = null;
-        if (e.target === 'targetPlayer') victim = lp === 'p1' ? 'p2' : 'p1';
+        // Arc F (2026-08-25, Glimmerwood Teller): the controller's OWN choice —
+        // the victim-owned prompt already IS a choice by its owner.
+        if (e.target === 'self') victim = lp;
+        else if (e.target === 'targetPlayer') victim = lp === 'p1' ? 'p2' : 'p1';
         else if (e.target === 'damagedController') victim = ctx?.damagedOwner ?? null;
         else if (e.target === 'eventSubject' && ctx?.subjectId) victim = findEntityAnywhere(g, ctx.subjectId)?.player ?? null;
         if (!victim) break; // unmodeled scope / subject gone — validator bars the former
@@ -880,6 +923,24 @@ export function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceNam
             : { ...g, pendingDiscard: pd };
         }
         msgs.push(`${g[victim].name} must discard ${e.count === 1 ? 'a card' : `${e.count} cards`}`);
+        break;
+      }
+      case 'bottomFromHand': {
+        // Arc F (2026-08-25, Turn of Phrase): the controller picks `count` of their
+        // OWN hand cards for the deck BOTTOM — the pendingDiscard prompt with a
+        // 'bottom' destination (the discard machinery, different exit).
+        if (g[lp].hand.length === 0) { msgs.push('No cards in hand to put back'); break; }
+        for (let n = 0; n < e.count; n++) {
+          const pd = { source: sourceName, victim: lp, dest: 'bottom' as const };
+          g = g.pendingDiscard
+            ? { ...g, pendingDiscardQueue: [...(g.pendingDiscardQueue ?? []), pd] }
+            : { ...g, pendingDiscard: pd };
+        }
+        msgs.push(`Choose ${e.count === 1 ? 'a card' : `${e.count} cards`} to put on the bottom of your deck`);
+        break;
+      }
+      case 'entryExhaust': {
+        // Static — consulted at placeCard, never resolved as an action op.
         break;
       }
       case 'placeArmor': {
@@ -1006,7 +1067,7 @@ export function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceNam
         const other: 'p1' | 'p2' = lp === 'p1' ? 'p2' : 'p1';
         if (g[other].hand.length === 0) { msgs.push(`${g[other].name} has no cards in hand`); break; }
         if (g.pendingHandReveal) break; // single slot — no consumer arms two in one resolution
-        g = { ...g, pendingHandReveal: { source: sourceName, lp, handSide: other, ...(e.pick ? { pick: e.pick } : {}) } };
+        g = { ...g, pendingHandReveal: { source: sourceName, lp, handSide: other, ...(e.pick ? { pick: e.pick } : {}), ...(e.pickFilter ? { pickFilter: e.pickFilter } : {}) } };
         msgs.push(`Look at ${g[other].name}'s hand`);
         break;
       }

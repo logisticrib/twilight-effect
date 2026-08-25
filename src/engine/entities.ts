@@ -313,6 +313,30 @@ export function destroyEntity(game: GameState, entityId: string, sink: PendingDe
     && (loc.ent.memoryCounters ?? 0) === 0
     && effectiveKeywords(loc.ent, game).includes('Haunt');
   const hauntCard = haunts ? CATALOG.find(c => c.name === loc.ent.name) ?? null : null;
+  // Arc F (2026-08-25): the two death-adjacent listener families, resolved INLINE.
+  // 'onEquippedDies' (Gravecharm Locket) — the dying bearer's OWN loadout, read
+  // PRE-removal (the item is still equipped at this moment; it rides to the Dead
+  // Zone right after). Resolved for the OWNER (the zone-routing side).
+  const equippedDies: { name: string; effects: import('../types/effects').Effect[] }[] = [];
+  if (loc.ent.kind === 'companion' && loc.ent.loadout) {
+    for (const it of [loc.ent.loadout.weapon, ...loc.ent.loadout.gear]) {
+      if (!it) continue;
+      for (const ce of effectsOfCard(it.name))
+        if (ce.trigger === 'onEquippedDies') equippedDies.push({ name: it.name, effects: ce.effects });
+    }
+  }
+  // 'ownCompanionDies' (Ossuary Altar) — permanents on the dying COMPANION's
+  // controller's board, gathered pre-removal (the event board, R3). Companion
+  // deaths only; every cause (this chokepoint covers damage/sacrifice/destroy;
+  // the flee exit fires its own copy in applyReadyRemovals).
+  const companionDies: { name: string; effects: import('../types/effects').Effect[] }[] = [];
+  if (loc.ent.kind === 'companion') {
+    for (const src of Object.values(game[loc.player].board)) {
+      if (!src || src.id === entityId) continue;
+      for (const ce of effectsOfCard(src.name))
+        if (ce.trigger === 'ownCompanionDies') companionDies.push({ name: src.name, effects: ce.effects });
+    }
+  }
   // On-sacrifice listeners gather from the board AS OF the event (pre-removal) —
   // the dying permanent's own listener is included (R3, owner 2026-07-15). The
   // event stays on the CONTROLLER's board (where it died); only ZONES follow owner.
@@ -352,6 +376,15 @@ export function destroyEntity(game: GameState, entityId: string, sink: PendingDe
     const st = fireSacrificeTriggers(g, loc.ent, loc.player, eventBoard, sink, armorSink);
     g = st.game;
     msgs.push(...st.msgs);
+  }
+  // Arc F: resolve the gathered listeners now the death is on the books.
+  for (const l of equippedDies) {
+    const r = resolveActionEffects(g, owner, l.name, l.effects, undefined, undefined, undefined, sink, armorSink);
+    g = r.game; msgs.push(`${l.name}: ${r.msgs.join(' | ')}`);
+  }
+  for (const l of companionDies) {
+    const r = resolveActionEffects(g, loc.player, l.name, l.effects, undefined, undefined, undefined, sink, armorSink);
+    g = r.game; msgs.push(`${l.name}: ${r.msgs.join(' | ')}`);
   }
   return { game: g, msgs };
 }
