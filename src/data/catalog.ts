@@ -3,6 +3,7 @@ import swRaw from './sorcerer_warrior_50.json';
 import wbRaw from './wizard_builder_50.json';
 import devRaw from './dw_rogue_dev_50.json';
 import swornRaw from './paladin_druid_dev_50.json';
+import requiemRaw from './bard_necromancer_dev_50.json';
 
 /** Normalize a raw deck entry into a runtime Card.
  *
@@ -29,10 +30,13 @@ const devCards = ((devRaw as { cards: RawCard[] }).cards).map(normalize);
 // paladin_druid_dev ("Sworn Wild", 2026-08-19) is the SECOND dev deck — same
 // convention: NON-CANON, every card dev:true, excluded from SHIPPED_CATALOG.
 const swornCards = ((swornRaw as { cards: RawCard[] }).cards).map(normalize);
+// bard_necromancer_dev ("Requiem", 2026-08-25) is the THIRD dev deck — same
+// convention. With it, all ten classes hold cards.
+const requiemCards = ((requiemRaw as { cards: RawCard[] }).cards).map(normalize);
 
 /** Full card catalog — all unique cards across the seed decks, INCLUDING dev cards
  *  (they must resolve for play/validation). Shipped-pool queries use SHIPPED_CATALOG. */
-export const CATALOG: Card[] = [...swCards, ...wbCards, ...devCards, ...swornCards];
+export const CATALOG: Card[] = [...swCards, ...wbCards, ...devCards, ...swornCards, ...requiemCards];
 
 /** Shipped (canon) pool only — dev cards excluded. Coverage audits and any
  *  "shipped decks" query MUST use this, never CATALOG (dev-deck rule, 2026-07-22). */
@@ -45,6 +49,7 @@ const ALL_RAW: RawCard[] = [
   ...((wbRaw as { cards: RawCard[] }).cards),
   ...((devRaw as { cards: RawCard[] }).cards),
   ...((swornRaw as { cards: RawCard[] }).cards),
+  ...((requiemRaw as { cards: RawCard[] }).cards),
 ];
 
 /** id → the type line's AUTHORED tokens. The split happened once, in the card data;
@@ -93,7 +98,9 @@ export const SORCERER_WARRIOR_DECK  = swCards.map(c => c.id);
 export const WIZARD_BUILDER_DECK    = wbCards.map(c => c.id);
 export const DW_ROGUE_DEV_DECK      = devCards.map(c => c.id);
 export const SWORN_WILD_DEV_DECK    = swornCards.map(c => c.id);
+export const REQUIEM_DEV_DECK       = requiemCards.map(c => c.id);
 export const SORCERER_WARRIOR_CARDS = swCards;
 export const WIZARD_BUILDER_CARDS   = wbCards;
 export const DW_ROGUE_DEV_CARDS     = devCards;
 export const SWORN_WILD_DEV_CARDS   = swornCards;
+export const REQUIEM_DEV_CARDS      = requiemCards;

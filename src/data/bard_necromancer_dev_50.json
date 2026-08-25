@@ -1,0 +1,1431 @@
+{
+  "_comment": "DEV DECK - Requiem (Bard / Necromancer), 50 hand-authored dev cards (owner-designed, 2026-08-25). NON-CANON: every card carries dev:true so shipped-pool queries can exclude them. The THIRD dev deck - with it, all ten classes hold cards. Phase 1 = AUTHOR + FLAG (the Sworn Wild convention): cards whose behavior has a live engine path carry structured effects; every behavior the engine cannot yet honor carries an effectsFlag starting 'DEV NOT-IMPLEMENTED' (visible machinery debt; the validator reports it and does not fail). That flag list IS the arc plan for the implementation sessions that follow. FOUR NEW KEYWORDS ratified into Master_Keyword_List.md 2026-08-25, all done:false in the registry: CRESCENDO (Bard - the Untamed shape, CONTROLLER-scoped: while you control a Vocal Construct your characters are in Crescendo; keyword-independent like Untamed), REPRISE (Bard - replaces the sacrifice from LAST-Anchor-counter removal, decay AND effect removal alike per the unified 2026-07-15 sacrifice family, with a return to hand; the construct leaves but never dies), RESTLESS (Necromancer - the death fully happens FIRST, then a once-per-card owner-routed return to an empty slot, exhausted; a FLEE counts - a flee is a death, 2026-07-20; spent if no slot is open), ENTOMB N (Necromancer - self-mill N on entry; renamed from 'Exhume' before authoring - to entomb is to bury). BARD HAS INSPIRE ACCESS (owner-ruled 2026-08-25, access-list amendment only - definition unchanged). Initiative remains BANNED - Bard was designed without it, deliberately. NO FREESTANDING STAT-MODIFIER TEXT (owner ruling 2026-08-25): generic +X/+X auras and riders are not this game's design vocabulary; every printed bonus is keyword-tied (Untamed-style, e.g. Gilded Lute's Crescendo attack bonus) or a derived characteristic (Conductor's Dead-Zone census). Typing: reanimated animals print BOTH modifiers ('Undead Beast Bear', per the 2026-08-18 zombified-shrew canon, owner-confirmed 2026-08-25); incorporeal entities print Spirit; Liches print Undead (a lich is a corporeal reanimation of itself). Vocal subtypes: Chant and Song (Bard's canon pair; Rite/Blessing are Druid/Paladin's, Utterance/Dirge are DW's). Construct subtype field carries the single token (the Rite precedent); Vocal-ness derives from subtype membership {Chant, Song, Rite, Blessing, Utterance, Dirge} - cf. isPhysicalConstruct. WIN CONDITIONS by design: Conductor of the Unquiet (count-derived attack off the stocked Dead Zone) and Vielle (twice-per-turn attacks while any song holds). Keyword reminder text is copied VERBATIM from docs/Master_Keyword_List.md.",
+  "cards": [
+    {
+      "id": "dd000101",
+      "name": "Gravegnaw Rat",
+      "level": 1,
+      "type": "Companion",
+      "subtype": "Undead Beast Rat",
+      "rarity": "Common",
+      "class1": "Necromancer",
+      "class2": "",
+      "attack": 1,
+      "hp": 1,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [
+        "Entomb 1"
+      ],
+      "text": "ENTOMB 1. When this enters the encounter, put the top card of your deck into your Dead Zone.",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Undead",
+        "Beast",
+        "Rat"
+      ],
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): ENTOMB keyword — the mill op is declared but uninterpreted and no keyword parser feeds it (registry Entomb done:false)."
+    },
+    {
+      "id": "dd000102",
+      "name": "Palefen Cultist",
+      "level": 1,
+      "type": "Companion",
+      "subtype": "Human Cultist",
+      "rarity": "Common",
+      "class1": "Necromancer",
+      "class2": "",
+      "attack": 1,
+      "hp": 2,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Human",
+        "Cultist"
+      ]
+    },
+    {
+      "id": "dd000103",
+      "name": "Sodden Boar",
+      "level": 2,
+      "type": "Companion",
+      "subtype": "Undead Beast Boar",
+      "rarity": "Common",
+      "class1": "Necromancer",
+      "class2": "",
+      "attack": 2,
+      "hp": 3,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Undead",
+        "Beast",
+        "Boar"
+      ]
+    },
+    {
+      "id": "dd000104",
+      "name": "Palewing Crow",
+      "level": 2,
+      "type": "Companion",
+      "subtype": "Beast Crow",
+      "rarity": "Common",
+      "class1": "Necromancer",
+      "class2": "",
+      "attack": 3,
+      "hp": 2,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Beast",
+        "Crow"
+      ]
+    },
+    {
+      "id": "dd000105",
+      "name": "Barrowlight Ghoul",
+      "level": 2,
+      "type": "Companion",
+      "subtype": "Undead Ghoul",
+      "rarity": "Uncommon",
+      "class1": "Necromancer",
+      "class2": "",
+      "attack": 2,
+      "hp": 2,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [
+        "Restless"
+      ],
+      "text": "RESTLESS. The first time this companion dies, return it from your Dead Zone to an empty Command Zone slot you control, exhausted.",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Undead",
+        "Ghoul"
+      ],
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): RESTLESS keyword — needs a death listener firing AFTER the death fully resolves, a once-per-card marker, and an owner-routed empty-slot return (registry Restless done:false; flee counts, spent-if-no-slot, both owner-ruled 2026-08-25)."
+    },
+    {
+      "id": "dd000106",
+      "name": "Rattlebone Soldier",
+      "level": 2,
+      "type": "Companion",
+      "subtype": "Undead Skeleton Soldier",
+      "rarity": "Uncommon",
+      "class1": "Necromancer",
+      "class2": "",
+      "attack": 3,
+      "hp": 3,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Undead",
+        "Skeleton",
+        "Soldier"
+      ]
+    },
+    {
+      "id": "dd000107",
+      "name": "Palegrove Gravekeeper",
+      "level": 2,
+      "type": "Companion",
+      "subtype": "Human Gravekeeper",
+      "rarity": "Rare",
+      "class1": "Necromancer",
+      "class2": "",
+      "attack": 2,
+      "hp": 3,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [
+        "Scavenger",
+        "Entomb 2"
+      ],
+      "text": "SCAVENGER. When this companion enters the encounter, you may return an item from your Dead Zone and immediately attach it to this companion. ENTOMB 2. When this enters the encounter, put the top 2 cards of your deck into your Dead Zone.",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Human",
+        "Gravekeeper"
+      ],
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): ENTOMB keyword (Scavenger is live via the printed keyword). DELIBERATE COLLISION: Entomb and Scavenger share the enter window — Entomb can mill an item Scavenger could then reclaim, and the owner orders their own simultaneous triggers (2026-07-22), so the order is outcome-relevant."
+    },
+    {
+      "id": "dd000108",
+      "name": "Mirefen Bear",
+      "level": 3,
+      "type": "Companion",
+      "subtype": "Undead Beast Bear",
+      "rarity": "Common",
+      "class1": "Necromancer",
+      "class2": "",
+      "attack": 4,
+      "hp": 3,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Undead",
+        "Beast",
+        "Bear"
+      ]
+    },
+    {
+      "id": "dd000109",
+      "name": "Sallow Revenant",
+      "level": 3,
+      "type": "Companion",
+      "subtype": "Undead Revenant",
+      "rarity": "Uncommon",
+      "class1": "Necromancer",
+      "class2": "",
+      "attack": 3,
+      "hp": 3,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [
+        "Restless"
+      ],
+      "text": "RESTLESS. The first time this companion dies, return it from your Dead Zone to an empty Command Zone slot you control, exhausted.",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Undead",
+        "Revenant"
+      ],
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): RESTLESS keyword — see Barrowlight Ghoul."
+    },
+    {
+      "id": "dd000110",
+      "name": "Gravemarsh Hyena",
+      "level": 3,
+      "type": "Companion",
+      "subtype": "Beast Hyena",
+      "rarity": "Uncommon",
+      "class1": "Necromancer",
+      "class2": "",
+      "attack": 4,
+      "hp": 3,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [
+        "Scavenger"
+      ],
+      "text": "SCAVENGER. When this companion enters the encounter, you may return an item from your Dead Zone and immediately attach it to this companion.",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Beast",
+        "Hyena"
+      ]
+    },
+    {
+      "id": "dd000111",
+      "name": "Duskveil Wraith",
+      "level": 3,
+      "type": "Companion",
+      "subtype": "Spirit Wraith",
+      "rarity": "Rare",
+      "class1": "Necromancer",
+      "class2": "",
+      "attack": 3,
+      "hp": 4,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "When this companion dies, you may return another companion card from your Dead Zone to your hand.",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Spirit",
+        "Wraith"
+      ],
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): onDeath + returnFromDead(to hand) both exist, but the op cannot exclude the event subject — the Wraith itself is in the Dead Zone when the trigger resolves and 'another' must bar it from the pick."
+    },
+    {
+      "id": "dd000112",
+      "name": "Tomb Chanter",
+      "level": 3,
+      "type": "Companion",
+      "subtype": "Undead Human Chanter",
+      "rarity": "Rare",
+      "class1": "Necromancer",
+      "class2": "",
+      "attack": 3,
+      "hp": 4,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "At the start of your turn, put the top card of your deck into your Dead Zone.",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Undead",
+        "Human",
+        "Chanter"
+      ],
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): the mill op is declared but uninterpreted (no interpreter case). Ongoing SELF-mill engine — deliberately walks its controller toward the empty-deck loss (a forced draw from an empty deck loses the game)."
+    },
+    {
+      "id": "dd000113",
+      "name": "Greatmarsh Carcass",
+      "level": 4,
+      "type": "Companion",
+      "subtype": "Undead Beast Elephant",
+      "rarity": "Uncommon",
+      "class1": "Necromancer",
+      "class2": "",
+      "attack": 5,
+      "hp": 5,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Undead",
+        "Beast",
+        "Elephant"
+      ]
+    },
+    {
+      "id": "dd000114",
+      "name": "Gravemarsh Reanimator",
+      "level": 4,
+      "type": "Companion",
+      "subtype": "Human Reanimator",
+      "rarity": "Rare",
+      "class1": "Necromancer",
+      "class2": "",
+      "attack": 4,
+      "hp": 4,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "When this companion enters the encounter, you may return a companion card with level 3 or less from your Dead Zone to an empty Command Zone slot you control. It enters exhausted.",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Human",
+        "Reanimator"
+      ],
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): returnFromDead to:'encounter' is unimplemented (interpreter is hand-only), and the op has no level-cap filter and no enters-exhausted rider. NOTE for the arc: a Dead-Zone return to the encounter is an ENTER — enter triggers re-fire (a returned Coercion or Entomb carrier triggers again)."
+    },
+    {
+      "id": "dd000115",
+      "name": "Marrowlight Lich",
+      "level": 4,
+      "type": "Companion",
+      "subtype": "Undead Lich Deathpriest",
+      "rarity": "Rare",
+      "class1": "Necromancer",
+      "class2": "",
+      "attack": 4,
+      "hp": 4,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [
+        "Restless",
+        "Entomb 2"
+      ],
+      "text": "RESTLESS. The first time this companion dies, return it from your Dead Zone to an empty Command Zone slot you control, exhausted. ENTOMB 2. When this enters the encounter, put the top 2 cards of your deck into your Dead Zone.",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Undead",
+        "Lich",
+        "Deathpriest"
+      ],
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): RESTLESS and ENTOMB keywords — see Barrowlight Ghoul and Gravegnaw Rat. COLLISION: its own Restless return is an enter, which re-fires Entomb 2 — the return mills again."
+    },
+    {
+      "id": "dd000116",
+      "name": "Conductor of the Unquiet",
+      "level": 5,
+      "type": "Companion",
+      "subtype": "Undead Lich Necromancer",
+      "rarity": "Legendary",
+      "class1": "Necromancer",
+      "class2": "",
+      "attack": 2,
+      "hp": 6,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [
+        "Restless"
+      ],
+      "text": "RESTLESS. The first time this companion dies, return it from your Dead Zone to an empty Command Zone slot you control, exhausted. This companion gets +1 attack for each companion card in your Dead Zone.",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Undead",
+        "Lich",
+        "Necromancer"
+      ],
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): RESTLESS keyword, plus COUNT-DERIVED ATTACK: +1 per companion card in your Dead Zone, derived on read (the isUntamedEncounter pattern with a dynamic amount feeding effectiveAttack — never stamped, so the bonus tracks the Dead Zone live). This is the deck's Necromancer win condition."
+    },
+    {
+      "id": "dd000117",
+      "name": "Emberlight Busker",
+      "level": 1,
+      "type": "Companion",
+      "subtype": "Human Minstrel",
+      "rarity": "Common",
+      "class1": "Bard",
+      "class2": "",
+      "attack": 1,
+      "hp": 1,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [
+        "Crescendo"
+      ],
+      "text": "CRESCENDO — While in Crescendo, this companion has Ranged.",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Human",
+        "Minstrel"
+      ],
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): CRESCENDO keyword — no derived predicate exists (wants the isUntamedEncounter pattern, CONTROLLER-scoped: you control a Vocal Construct; registry Crescendo done:false). Bonus shape: a conditional keyword grant (the Untamed conditional-grant family)."
+    },
+    {
+      "id": "dd000118",
+      "name": "Yondrek Fledgling",
+      "level": 1,
+      "type": "Companion",
+      "subtype": "Yondrek Singer",
+      "rarity": "Common",
+      "class1": "Bard",
+      "class2": "",
+      "attack": 1,
+      "hp": 2,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Yondrek",
+        "Singer"
+      ]
+    },
+    {
+      "id": "dd000119",
+      "name": "Silverstring Harper",
+      "level": 2,
+      "type": "Companion",
+      "subtype": "Elf Harper",
+      "rarity": "Uncommon",
+      "class1": "Bard",
+      "class2": "",
+      "attack": 2,
+      "hp": 2,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [
+        "Inspire"
+      ],
+      "text": "INSPIRE. As long as one or more permanents with Inspire are in the encounter under your control, you are Inspired.",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Elf",
+        "Harper"
+      ]
+    },
+    {
+      "id": "dd000120",
+      "name": "Satyr of the Reel",
+      "level": 2,
+      "type": "Companion",
+      "subtype": "Satyr Dancer",
+      "rarity": "Uncommon",
+      "class1": "Bard",
+      "class2": "",
+      "attack": 2,
+      "hp": 2,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "When this companion attacks while in Crescendo, add an Anchor counter to target Vocal Construct you control.",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Satyr",
+        "Dancer"
+      ],
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): Crescendo condition (no predicate), and the anchor op has no Vocal-Construct TargetSpec (only physicalConstruct/magicalConstruct exist; Vocal-ness = subtype in {Chant, Song, Rite, Blessing, Utterance, Dirge}, cf. isPhysicalConstruct)."
+    },
+    {
+      "id": "dd000121",
+      "name": "Glimmerwood Teller",
+      "level": 3,
+      "type": "Companion",
+      "subtype": "Fae Storyteller",
+      "rarity": "Uncommon",
+      "class1": "Bard",
+      "class2": "",
+      "attack": 3,
+      "hp": 3,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "When this companion enters the encounter, draw a card, then discard a card.",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Fae",
+        "Storyteller"
+      ],
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): the discard op models only opponent-victim scopes (targetPlayer/damagedController/eventSubject) — an OWN-choice discard by the controller has no scope and no prompt path."
+    },
+    {
+      "id": "dd000122",
+      "name": "Skald of the Long Dusk",
+      "level": 3,
+      "type": "Companion",
+      "subtype": "Human Skald",
+      "rarity": "Rare",
+      "class1": "Bard",
+      "class2": "",
+      "attack": 3,
+      "hp": 3,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "At the start of your turn, if you are in Crescendo, draw an additional card.",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Human",
+        "Skald"
+      ],
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): Crescendo condition on a startOfTurn draw — needs the predicate plus an ADDITIVE extra-draw at the draw-phase site ('an additional card' is additive, not a replacement)."
+    },
+    {
+      "id": "dd000123",
+      "name": "Duskmere Siren",
+      "level": 4,
+      "type": "Companion",
+      "subtype": "Siren",
+      "rarity": "Rare",
+      "class1": "Bard",
+      "class2": "",
+      "attack": 4,
+      "hp": 4,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [
+        "Inspire"
+      ],
+      "text": "INSPIRE. As long as one or more permanents with Inspire are in the encounter under your control, you are Inspired. When this companion enters the encounter, if you are in Crescendo, return target opposing companion with level 3 or less to its owner's hand.",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Siren"
+      ],
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): ENTRY-SNAPSHOT Crescendo (the Elder Shellback shape: read once when the enter trigger resolves, never re-evaluated), plus bounce has no level-cap filter (only hpAtMost exists)."
+    },
+    {
+      "id": "dd000124",
+      "name": "Vielle, Voice of the Requiem",
+      "level": 5,
+      "type": "Companion",
+      "subtype": "Human Troubadour",
+      "rarity": "Legendary",
+      "class1": "Bard",
+      "class2": "",
+      "attack": 5,
+      "hp": 5,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [
+        "Inspire"
+      ],
+      "text": "INSPIRE. As long as one or more permanents with Inspire are in the encounter under your control, you are Inspired. While in Crescendo, this companion may attack twice each turn.",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Human",
+        "Troubadour"
+      ],
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): Crescendo condition plus a standing TWICE-PER-TURN attack allowance (extraAttack is a one-shot op; a continuous 'may attack twice while <state>' eligibility does not exist). This is the deck's Bard win condition."
+    },
+    {
+      "id": "dd000125",
+      "name": "Song of Hearthlight",
+      "level": 1,
+      "type": "Construct",
+      "subtype": "Song",
+      "rarity": "Common",
+      "class1": "Bard",
+      "class2": "",
+      "attack": null,
+      "hp": null,
+      "anchor": 3,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "Other Vocal Constructs you control enter the encounter with an additional Anchor counter.",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Song"
+      ],
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): entry-state modification — nothing today alters the Anchor count a construct enters with (parseAnchor reads the printed value only)."
+    },
+    {
+      "id": "dd000126",
+      "name": "Chant of Returning",
+      "level": 2,
+      "type": "Construct",
+      "subtype": "Chant",
+      "rarity": "Uncommon",
+      "class1": "Bard",
+      "class2": "",
+      "attack": null,
+      "hp": null,
+      "anchor": 2,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [
+        "Reprise"
+      ],
+      "text": "REPRISE. When this Vocal Construct would be sacrificed because its last Anchor counter was removed, return it to your hand instead. When this construct enters the encounter, look at the top two cards of your deck. Put any number of them on the bottom of your deck and the rest back on top.",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Chant"
+      ],
+      "effects": [
+        {
+          "trigger": "onEnter",
+          "effects": [
+            {
+              "op": "deckPeek",
+              "look": 2,
+              "dests": [
+                "top",
+                "bottom"
+              ]
+            }
+          ]
+        }
+      ],
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): REPRISE keyword — no replacement hook exists at either last-Anchor-counter site (readyPhase decay / anchor-removal ops; registry Reprise done:false). The onEnter peek IS live — with Reprise it becomes a recurring engine."
+    },
+    {
+      "id": "dd000127",
+      "name": "Lullaby of the Deep Meadow",
+      "level": 2,
+      "type": "Construct",
+      "subtype": "Song",
+      "rarity": "Uncommon",
+      "class1": "Bard",
+      "class2": "",
+      "attack": null,
+      "hp": null,
+      "anchor": 2,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [
+        "Reprise"
+      ],
+      "text": "REPRISE. When this Vocal Construct would be sacrificed because its last Anchor counter was removed, return it to your hand instead. When this construct enters the encounter, exhaust target opposing companion.",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Song"
+      ],
+      "effects": [
+        {
+          "trigger": "onEnter",
+          "effects": [
+            {
+              "op": "exhaust",
+              "target": "enemyCompanion"
+            }
+          ]
+        }
+      ],
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): REPRISE keyword — see Chant of Returning. The onEnter exhaust IS live. DELIBERATE: Reprise makes the exhaust repeatable at a replay cost each loop — the closest card in the deck to Bard's no-long-term-lockdown line, owner-accepted 2026-08-25."
+    },
+    {
+      "id": "dd000128",
+      "name": "Anthem of the Unbroken",
+      "level": 3,
+      "type": "Construct",
+      "subtype": "Song",
+      "rarity": "Uncommon",
+      "class1": "Bard",
+      "class2": "",
+      "attack": null,
+      "hp": null,
+      "anchor": 3,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "Other Vocal Constructs you control do not lose an Anchor counter at the start of your turn.",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Song"
+      ],
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): Vocal variant of preventAnchorDecay (the live op is own-Physical-Constructs only and has no 'other' exclusion — the Anthem itself must still decay)."
+    },
+    {
+      "id": "dd000129",
+      "name": "Discordant Air",
+      "level": 3,
+      "type": "Construct",
+      "subtype": "Song",
+      "rarity": "Rare",
+      "class1": "Bard",
+      "class2": "",
+      "attack": null,
+      "hp": null,
+      "anchor": 2,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "When this construct enters the encounter, target opposing companion attacks another target opposing companion.",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Song"
+      ],
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): forceAttack exists but supports only a NON-interactive attackers spec with one interactive target (Press the Line) — this needs an interactive attacker pick AND attacker-distinct-from-target. Charm routed through a Vocal Construct per canon; probes forced-attacks-are-attacks + Guardian binding from a charm source."
+    },
+    {
+      "id": "dd000130",
+      "name": "Chorale of the Twilight Host",
+      "level": 4,
+      "type": "Construct",
+      "subtype": "Song",
+      "rarity": "Rare",
+      "class1": "Bard",
+      "class2": "",
+      "attack": null,
+      "hp": null,
+      "anchor": 4,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "Companions you control have Ranged.",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Song"
+      ],
+      "effects": [
+        {
+          "trigger": "static",
+          "effects": [
+            {
+              "op": "grantKeywords",
+              "keywords": [
+                "Ranged"
+              ],
+              "scope": "ownCompanions"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dd000131",
+      "name": "Ossuary Altar",
+      "level": 2,
+      "type": "Construct",
+      "subtype": "Incantation",
+      "rarity": "Uncommon",
+      "class1": "Necromancer",
+      "class2": "",
+      "attack": null,
+      "hp": null,
+      "anchor": 3,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "When a companion you control dies, put the top card of your deck into your Dead Zone.",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Incantation"
+      ],
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): needs an own-companion-death listener (no trigger hears an OWN companion dying; ownPhysicalConstructSacrificed is the nearest relative) plus the uninterpreted mill op. COLLISION: fires alongside a Restless return off the same death — same-owner ordering."
+    },
+    {
+      "id": "dd000132",
+      "name": "Soulmarsh Prison",
+      "level": 3,
+      "type": "Construct",
+      "subtype": "Incantation",
+      "rarity": "Rare",
+      "class1": "Necromancer",
+      "class2": "",
+      "attack": null,
+      "hp": null,
+      "anchor": 3,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "Remove an Anchor counter from this construct: Return target companion card from your Dead Zone to your hand.",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Incantation"
+      ],
+      "effects": [
+        {
+          "trigger": "activated",
+          "cost": {
+            "kind": "removeAnchor",
+            "count": 1
+          },
+          "effects": [
+            {
+              "op": "returnFromDead",
+              "cardType": "Companion",
+              "to": "hand"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dd000133",
+      "name": "Field of the Unquiet",
+      "level": 4,
+      "type": "Construct",
+      "subtype": "Incantation",
+      "rarity": "Rare",
+      "class1": "Necromancer",
+      "class2": "",
+      "attack": null,
+      "hp": null,
+      "anchor": 3,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "",
+      "keywords": [],
+      "text": "Opposing companions enter the encounter exhausted.",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Incantation"
+      ],
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): entry-state modification for OPPOSING entries — nothing today alters the state a companion enters with. Collides with Zealous (the willpower check is waived but an exhausted companion still cannot attack) and blanks ready-dependent states (an exhausted Guardian does not taunt)."
+    },
+    {
+      "id": "dd000134",
+      "name": "Grave Whispers",
+      "level": 2,
+      "type": "Action",
+      "subtype": "Magic",
+      "rarity": "Common",
+      "class1": "Necromancer",
+      "class2": "",
+      "attack": null,
+      "hp": null,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "Major",
+      "itemKind": "",
+      "keywords": [],
+      "text": "Put the top two cards of your deck into your Dead Zone. Draw a card.",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Magic"
+      ],
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): the mill op is declared but uninterpreted — the draw half is trivially live but authoring half a card would misreport coverage; the whole card waits on mill."
+    },
+    {
+      "id": "dd000135",
+      "name": "Raise the Marrow",
+      "level": 2,
+      "type": "Action",
+      "subtype": "Magic",
+      "rarity": "Common",
+      "class1": "Necromancer",
+      "class2": "",
+      "attack": null,
+      "hp": null,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "Major",
+      "itemKind": "",
+      "keywords": [],
+      "text": "Return target companion card with level 1 or less from your Dead Zone to an empty Command Zone slot you control. It enters exhausted.",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Magic"
+      ],
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): returnFromDead to:'encounter' unimplemented + no level-cap filter + no enters-exhausted rider (the reanimation family — see Gravemarsh Reanimator)."
+    },
+    {
+      "id": "dd000136",
+      "name": "Gravedigger's Due",
+      "level": 2,
+      "type": "Action",
+      "subtype": "Magic",
+      "rarity": "Common",
+      "class1": "Necromancer",
+      "class2": "",
+      "attack": null,
+      "hp": null,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "Major",
+      "itemKind": "",
+      "keywords": [],
+      "text": "Return target item card from your Dead Zone to your hand.",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Magic"
+      ],
+      "effects": [
+        {
+          "trigger": "onPlay",
+          "effects": [
+            {
+              "op": "returnFromDead",
+              "cardType": "Item",
+              "to": "hand"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dd000137",
+      "name": "Feast for Worms",
+      "level": 3,
+      "type": "Action",
+      "subtype": "Magic",
+      "rarity": "Common",
+      "class1": "Necromancer",
+      "class2": "",
+      "attack": null,
+      "hp": null,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "Major",
+      "itemKind": "",
+      "keywords": [],
+      "text": "Sacrifice a companion. If you do, draw two cards.",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Magic"
+      ],
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): the sacrifice op is implemented for target:'self' only — an OWN-companion sacrifice pick (chooser = controller, PC never offered) has no path, and the draw is conditional on the sacrifice actually happening."
+    },
+    {
+      "id": "dd000138",
+      "name": "Lay to Rest",
+      "level": 3,
+      "type": "Action",
+      "subtype": "Magic",
+      "rarity": "Uncommon",
+      "class1": "Necromancer",
+      "class2": "",
+      "attack": null,
+      "hp": null,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "Major",
+      "itemKind": "",
+      "keywords": [],
+      "text": "Destroy target companion with level 2 or less.",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Magic"
+      ],
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): destroy is live but has no level-cap target filter (bounce.hpAtMost is the only stat-capped filter in the vocabulary)."
+    },
+    {
+      "id": "dd000139",
+      "name": "Echoes of the Departed",
+      "level": 4,
+      "type": "Action",
+      "subtype": "Magic",
+      "rarity": "Uncommon",
+      "class1": "Necromancer",
+      "class2": "",
+      "attack": null,
+      "hp": null,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "Major",
+      "itemKind": "",
+      "keywords": [],
+      "text": "Return target companion card from your Dead Zone to an empty Command Zone slot you control. It enters exhausted.",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Magic"
+      ],
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): returnFromDead to:'encounter' unimplemented + no enters-exhausted rider (the reanimation family)."
+    },
+    {
+      "id": "dd000140",
+      "name": "Toll the Silence",
+      "level": 4,
+      "type": "Action",
+      "subtype": "Magic",
+      "rarity": "Uncommon",
+      "class1": "Necromancer",
+      "class2": "",
+      "attack": null,
+      "hp": null,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "Major",
+      "itemKind": "",
+      "keywords": [],
+      "text": "Destroy target companion whose level is less than the number of companion cards in your Dead Zone.",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Magic"
+      ],
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): destroy is live but the target-legality condition is a DEAD-ZONE CENSUS (count companion cards in your Dead Zone) — no count-derived target filter exists. Mill-payoff removal."
+    },
+    {
+      "id": "dd000141",
+      "name": "The Great Unrest",
+      "level": 5,
+      "type": "Action",
+      "subtype": "Magic",
+      "rarity": "Rare",
+      "class1": "Necromancer",
+      "class2": "",
+      "attack": null,
+      "hp": null,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "Major",
+      "itemKind": "",
+      "keywords": [],
+      "text": "Return up to three companion cards with level 2 or less from your Dead Zone to empty Command Zone slots you control. They enter exhausted.",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Magic"
+      ],
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): the reanimation family at multi-scale: to:'encounter' + level cap + exhausted rider + 'up to three' multi-pick (castable at one eligible target per the pre-cost refusal precedent, dd000096 ruling). A multi-return opens a multi-pending enter window (Arc G machinery) from the Dead Zone side."
+    },
+    {
+      "id": "dd000142",
+      "name": "Requiem of the Hollow Bell",
+      "level": 5,
+      "type": "Action",
+      "subtype": "Magic",
+      "rarity": "Legendary",
+      "class1": "Necromancer",
+      "class2": "",
+      "attack": null,
+      "hp": null,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "Major",
+      "itemKind": "",
+      "keywords": [],
+      "text": "Destroy target companion. You may return a companion card with level equal to or less than that companion's level from your Dead Zone to an empty Command Zone slot you control. It enters exhausted.",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Magic"
+      ],
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): destroy is live but the return is LEVEL-COUPLED to the destroyed target (a value read off the first effect's target feeding the second's filter) on top of the whole reanimation family."
+    },
+    {
+      "id": "dd000143",
+      "name": "Turn of Phrase",
+      "level": 1,
+      "type": "Action",
+      "subtype": "Magic",
+      "rarity": "Common",
+      "class1": "Bard",
+      "class2": "",
+      "attack": null,
+      "hp": null,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "Major",
+      "itemKind": "",
+      "keywords": [],
+      "text": "Draw a card. Then put a card from your hand on the bottom of your deck.",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Magic"
+      ],
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): no op moves a chosen card from HAND to the bottom of the deck (deckPeek moves deck cards; discard moves hand cards to the Dead Zone)."
+    },
+    {
+      "id": "dd000144",
+      "name": "Encore of the Dawn",
+      "level": 3,
+      "type": "Action",
+      "subtype": "Magic",
+      "rarity": "Common",
+      "class1": "Bard",
+      "class2": "",
+      "attack": null,
+      "hp": null,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "Major",
+      "itemKind": "",
+      "keywords": [],
+      "text": "Draw a card. If you are in Crescendo, draw two cards instead.",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Magic"
+      ],
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): Crescendo condition (no predicate) plus a literal 'instead' REPLACEMENT draw — the interpreter honors additive authoring only (the dd000081/dd000098 precedent authored additively; a true replacement needs a negated-condition pair or a replacement hook)."
+    },
+    {
+      "id": "dd000145",
+      "name": "Standing Ovation",
+      "level": 3,
+      "type": "Action",
+      "subtype": "Physical",
+      "rarity": "Uncommon",
+      "class1": "Bard",
+      "class2": "",
+      "attack": null,
+      "hp": null,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "Major",
+      "itemKind": "",
+      "keywords": [],
+      "text": "Ready target companion you control. If you are in Crescendo, ready up to two target companions you control instead.",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Physical"
+      ],
+      "effects": [
+        {
+          "trigger": "onPlay",
+          "effects": [
+            {
+              "op": "ready",
+              "target": "ownCompanion"
+            }
+          ]
+        }
+      ],
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): the base single ready IS live (authored); the Crescendo scaling ('up to two ... instead') needs the predicate plus a conditional second pick."
+    },
+    {
+      "id": "dd000146",
+      "name": "Steal the Show",
+      "level": 4,
+      "type": "Action",
+      "subtype": "Magic",
+      "rarity": "Rare",
+      "class1": "Bard",
+      "class2": "",
+      "attack": null,
+      "hp": null,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "Major",
+      "itemKind": "",
+      "keywords": [],
+      "text": "Target opponent reveals their hand. Choose a non-Companion card from it; that player puts it on the bottom of their deck, then draws a card.",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Magic"
+      ],
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): revealHand pick:'toBottomDraw' is live (Mark the Pockets) but has NO card-type filter — 'non-Companion' needs a filter param on the pick. Authoring the unfiltered op would contradict the printed text, so the card waits."
+    },
+    {
+      "id": "dd000147",
+      "name": "Chorus Bell",
+      "level": 2,
+      "type": "Item",
+      "subtype": "Trinket",
+      "rarity": "Common",
+      "class1": "Bard",
+      "class2": "",
+      "attack": null,
+      "hp": null,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "Trinket",
+      "keywords": [],
+      "text": "When you play a Vocal Construct, draw a card.",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Trinket"
+      ],
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): needs an own-play window for CONSTRUCTS (ownPlaysCompanion and ownPlaysMagicalConstruct exist; a Vocal-Construct play window does not — plays and enters are canonically distinct, so the enter window is not a substitute)."
+    },
+    {
+      "id": "dd000148",
+      "name": "Gilded Lute",
+      "level": 2,
+      "type": "Item",
+      "subtype": "Trinket",
+      "rarity": "Uncommon",
+      "class1": "Bard",
+      "class2": "",
+      "attack": null,
+      "hp": null,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "Trinket",
+      "keywords": [],
+      "text": "Equipped companion gets +1 attack while you are in Crescendo.",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Trinket"
+      ],
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): the equipped buff shape is live (Fang of the First Hunt) but the clause condition needs a Crescendo `if` kind (only kind:'untamed' exists as a state condition; controller-scoped, read per the bearer's controller)."
+    },
+    {
+      "id": "dd000149",
+      "name": "Gravecharm Locket",
+      "level": 4,
+      "type": "Item",
+      "subtype": "Trinket",
+      "rarity": "Common",
+      "class1": "Necromancer",
+      "class2": "",
+      "attack": null,
+      "hp": null,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "Trinket",
+      "keywords": [],
+      "text": "When the equipped companion dies, draw two cards.",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Trinket"
+      ],
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): needs an item-hosted EQUIPPED-DIES window (onEquippedAttacked's family extended to the bearer's death) — and the Locket itself is bound for the Dead Zone off the same death unless transferred, so the trigger must outlive its source (2026-07-12 stack rule)."
+    },
+    {
+      "id": "dd000150",
+      "name": "Crown of the Unquiet King",
+      "level": 5,
+      "type": "Item",
+      "subtype": "Trinket",
+      "rarity": "Rare",
+      "class1": "Necromancer",
+      "class2": "",
+      "attack": null,
+      "hp": null,
+      "anchor": null,
+      "actionSub": "",
+      "actionPM": "",
+      "itemKind": "Trinket",
+      "keywords": [],
+      "text": "Equipped companion has Restless.",
+      "flavor": "",
+      "dev": true,
+      "createdAt": "2026-08-25T00:00:00.000000Z",
+      "updatedAt": "2026-08-25T00:00:00.000000Z",
+      "subtypes": [
+        "Trinket"
+      ],
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): RESTLESS keyword (not implemented) delivered as an ITEM GRANT (ITEM_GRANTED_KEYWORDS whitelist addition). Grant interplay owner-ruled via MKL wording: 'first time this companion dies' is tracked per card for the whole game — a grant neither resets nor doubles the once-only return."
+    }
+  ]
+}

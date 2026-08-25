@@ -143,6 +143,42 @@ This document consolidates all keywords from Game Rules, Keyword Glossary, and C
 - Applied to players, not characters
 - **Rules Note (ruled 2026-08-18):** A player who is both Dismayed and Inspired nets to zero — their current Willpower is the plain Class-Zone card count. Stated explicitly here so it is never re-derived.
 - **Rules Note (ruled 2026-08-18):** Inspire reads YOUR OWN board; Dismay reads your opponent's. The two are mirror-inverted in both direction and sign — "under your control, YOU are Inspired" against Dismay's "under your control, your OPPONENT is Dismayed."
+- **Rules Note (owner-ruled 2026-08-25) — Bard ACCESS to Inspire.** Inspire remains a Paladin evergreen keyword, and Bards now have access to it (rallying through performance rather than conviction). Access only — the definition, the Inspired state, and all rulings above are unchanged; the keyword works identically on a Bard permanent. Recorded in the Keyword Summary by Class below and Card_Design_Parameters §28. (Taken during the Requiem dev-deck design, where Bard's retired Initiative left the class without a signature evergreen presence.)
+
+### Bard Keywords
+*(Section added 2026-08-25, owner-ratified during the Requiem dev-deck design. Bard previously held no class keywords — its listed evergreen "Initiative" was stripped from the game and remains banned.)*
+
+**CRESCENDO** - While you control a Vocal Construct in the encounter, your characters are in Crescendo. Per-card text defines the bonus granted while in Crescendo.
+- **Rules Notes (owner-ruled 2026-08-25):**
+  - Deliberate parallel to UNTAMED (the same keyword shape, ruled 2026-08-23): Crescendo is a property of the BOARD STATE, not a property conferred by the keyword. Whenever you control a Vocal Construct, ALL your characters are in Crescendo; a card may ask whether a character is in Crescendo without printing CRESCENDO. The keyword's only job is to attach a per-card bonus to the state.
+  - Unlike Untamed's encounter-wide scope, Crescendo is CONTROLLER-scoped by design — it is powered by your own performance. Your opponent's Vocal Constructs do not put your characters in Crescendo.
+  - Any Vocal Construct you control satisfies the condition, including one that itself carries a Crescendo bonus (it is a Vocal Construct you control; the plain reading holds).
+
+**REPRISE** - When this Vocal Construct would be sacrificed because its last Anchor counter was removed, return it to your hand instead.
+- **Rules Notes (owner-ruled 2026-08-25):**
+  - Scope: ANY last-counter removal — start-of-turn Anchor decay and effect removals (Dismantle and the like) alike. This falls directly out of the 2026-07-15 unified sacrifice family ("anchor decay reaching zero IS a sacrifice — as is any anchor-removal effect reducing a construct to zero"): the two events are canonically the same sacrifice, so Reprise replaces both, with no timing carve-out.
+  - The construct LEAVES the encounter but does NOT die: the sacrifice is replaced, so no sacrifice/death event occurs, the card never touches the Dead Zone, and "when … is sacrificed / dies" listeners stay silent. Leave-triggers (generic "when this leaves the encounter") do fire.
+  - No Manifest collision is possible: Animate Magic applies to Magic Constructs only and Reprise is a Vocal Construct keyword, so the two replacement effects can never sit on the same permanent.
+  - Reprise reads sacrifice-by-anchor-removal ONLY. A Reprise construct sacrificed by any other means (a sacrifice cost, Coercion, an effect saying "sacrifice a permanent") dies normally.
+
+### Necromancer Keywords
+*(Section added 2026-08-25, owner-ratified during the Requiem dev-deck design. Necromancer previously held no class keywords beyond occasional Scavenger access.)*
+
+**RESTLESS** - The first time this companion dies, return it from your Dead Zone to an empty Command Zone slot you control, exhausted.
+- **Rules Notes (owner-ruled 2026-08-25):**
+  - The death fully happens FIRST: death/sacrifice listeners fire, attached items open their transfer windows per the normal exit rules, and the card genuinely touches its owner's Dead Zone — THEN the return resolves. (Consistent with "everything in the Dead Zone died to get there.")
+  - A FLEE triggers Restless: fleeing is a sacrifice and a sacrifice is a death (2026-07-20). The returned companion re-enters exhausted; if its Level still exceeds its controller's Willpower it will simply flee again at the next check — the rule is self-balancing and carries no carve-out.
+  - The return is an ENTER: enter-triggers fire, and the willpower gate applies as normal to a companion that just entered (it additionally enters exhausted).
+  - If no empty Command Zone slot is available at the moment of return, the companion stays dead and the Restless return is SPENT — no lingering "still restless" state is tracked on a card in the Dead Zone (physical-play tracking rationale, same family as the Poison no-provenance ruling 2026-07-22).
+  - "First time" is tracked per card over the whole game: a Restless companion that has already returned once (or whose return was spent against a full board) never returns again, however it later re-enters or dies.
+  - Owner-routing: the card returns from its OWNER's Dead Zone to a slot its owner controls — consistent with the 2026-08-17 rule that burial and rescue belong to the owner even when control was stolen at the time of death.
+
+**ENTOMB N** - When this enters the encounter, put the top N cards of your deck into your Dead Zone.
+- **Rules Notes (owner-ruled 2026-08-25):**
+  - Your OWN deck — Entomb is self-mill as fuel for Dead Zone recursion, not opponent disruption.
+  - Fewer than N cards remaining: put all remaining cards (standard partial-mill behaviour).
+  - The milled cards are ordinary Dead Zone residents — face-up, public, and recoverable by recursion effects; nothing distinguishes an Entombed card from one that died.
+  - *(Naming note, 2026-08-25: briefly drafted as "Exhume N" during this session and renamed before any card was authored — to inter/entomb is to bury, which is what the keyword does; "exhume" (to dig out) is reserved as design space for a future dig-OUT mechanic.)*
 
 ---
 
@@ -247,7 +283,7 @@ This document consolidates all keywords from Game Rules, Keyword Glossary, and C
 - **Access:** Ranged
 
 ### Necromancer
-- **Primary:** Scavenger (occasional)
+- **Primary:** Restless, Entomb N *(both added 2026-08-25)*, Scavenger (occasional)
 - **Access:** None exclusive beyond design patterns
 
 ### Paladin
@@ -262,8 +298,8 @@ This document consolidates all keywords from Game Rules, Keyword Glossary, and C
 - **Access:** Cleave, Hit & Run (rare), Ranged
 
 ### Bard
-- **Primary:** None exclusive
-- **Access:** Vocal Constructs (Chant, Song)
+- **Primary:** Crescendo, Reprise *(both added 2026-08-25)*
+- **Access:** Inspire *(owner-ruled 2026-08-25 — see the Paladin Inspire entry)*, Vocal Constructs (Chant, Song)
 
 ### Rogue
 - **Primary:** Poison, Acrobatics, Evasive, Hit & Run, Scavenger

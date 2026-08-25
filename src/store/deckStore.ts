@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { SORCERER_WARRIOR_DECK, WIZARD_BUILDER_DECK, DW_ROGUE_DEV_DECK, SWORN_WILD_DEV_DECK } from '../data/catalog';
+import { SORCERER_WARRIOR_DECK, WIZARD_BUILDER_DECK, DW_ROGUE_DEV_DECK, SWORN_WILD_DEV_DECK, REQUIEM_DEV_DECK } from '../data/catalog';
 
 export interface Deck {
   id: string;
@@ -37,6 +37,11 @@ const SEED: Deck[] = [
   // oversight, not a decision; DW/Rogue above was registered the same way when it
   // landed. The `merge` below injects it into already-persisted browsers.
   makeDeck('pd-dev', 'Sworn Wild (DEV)', SWORN_WILD_DEV_DECK),
+  // The THIRD dev deck (Requiem, Bard/Necromancer), 2026-08-25 — registered in the
+  // SAME session that authored it, so the Sworn Wild gap (authored but never seeded,
+  // found 2026-08-21) cannot recur. The `merge` below injects it into already-
+  // persisted browsers.
+  makeDeck('bn-dev', 'Requiem (DEV)', REQUIEM_DEV_DECK),
 ];
 
 export const useDeckStore = create<DeckState>()(

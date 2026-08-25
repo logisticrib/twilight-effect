@@ -10,7 +10,11 @@
 // 'play' (Arc E, 2026-08-23) is the CASTER's own play-time window — an additional cost
 // charged before the permanent reaches the stack. Distinct from 'enter' (the permanent
 // is already entering) and from 'oppPlay' (an OPPONENT's play, e.g. Paranoia).
-export type KwEvent = 'static' | 'enter' | 'play' | 'attack' | 'damaged' | 'turnStart' | 'oppPlay';
+// 'death' (2026-08-25, for Restless) is the moment a permanent's death has fully
+// resolved — listeners fired, items transferred, card in its owner's Dead Zone. No
+// prior keyword resolved there ('damaged' is the pre-death prevention window; a death
+// by sacrifice or flee never passes through it at all).
+export type KwEvent = 'static' | 'enter' | 'play' | 'attack' | 'damaged' | 'turnStart' | 'oppPlay' | 'death';
 
 export interface KeywordSpec {
   event: KwEvent;
@@ -77,4 +81,25 @@ export const KEYWORDS: Record<string, KeywordSpec> = {
   // way it does for "[NAME]'s Bane". NOT to be confused with `lineWard`, an unrelated
   // Fortification mechanic that shares the word.
   Warded:         { event: 'damaged', done: false, note: 'canon: warded characters cannot be targeted, attacked, or damaged by cards of type or subtype [X]. No targeting/damage gate consults it' },
+
+  // Vocabulary added 2026-08-25 for the Requiem dev deck (Bard / Necromancer) — all
+  // four owner-ratified into Master_Keyword_List.md the same day. DECLARED so their
+  // carriers validate; NONE has engine behavior yet (the Untamed/Tribute precedent:
+  // the contract names what cards print without advertising unimplemented space).
+  // Crescendo is the Untamed SHAPE (a derived board state the keyword hangs a per-card
+  // bonus on) but CONTROLLER-scoped: "you control a Vocal Construct" — never
+  // encounter-wide. Keyword-independent like Untamed: cards may ask "if you are in
+  // Crescendo" without printing it.
+  Crescendo:      { event: 'static',  done: false, note: 'canon: while you control a Vocal Construct in the encounter, your characters are in Crescendo; per-card text defines the bonus. No derived predicate exists yet (wants the isUntamedEncounter pattern, controller-scoped)' },
+  // Replaces the sacrifice fired by LAST-Anchor-counter removal (decay AND effect
+  // removal — canon unifies them, 2026-07-15 family) with a return to hand. The
+  // construct leaves but never dies: no sacrifice event, no Dead Zone.
+  Reprise:        { event: 'static',  done: false, note: 'canon: when this Vocal Construct would be sacrificed because its last Anchor counter was removed, return it to your hand instead. No replacement hook exists at either last-counter site (readyPhase decay / anchor-removal ops)' },
+  // The death fully happens first (listeners fire, items transfer, card touches the
+  // Dead Zone), THEN the once-per-card return. A flee IS a death and triggers it.
+  // Spent if no empty owner slot exists at return time.
+  Restless:       { event: 'death',   done: false, note: 'canon: the first time this companion dies, return it from your Dead Zone to an empty Command Zone slot you control, exhausted. Needs a death listener + once-per-card marker + owner-routed slot pick; flee counts (a flee is a death, 2026-07-20)' },
+  // Printed parameterized as "Entomb N" — keywordBase strips the number as it does for
+  // Armor/Reinforce. Self-mill: YOUR deck, YOUR Dead Zone.
+  Entomb:         { event: 'enter',   done: false, note: 'canon: when this enters the encounter, put the top N cards of your deck into your Dead Zone (all remaining if fewer). The mill op exists; no keyword parser feeds it yet' },
 };

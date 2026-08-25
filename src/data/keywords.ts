@@ -40,4 +40,10 @@ export const KEYWORD_DEFS: Record<string, string> = {
   'Animate Magic': 'When this enters, target Magical Construct you control becomes a Companion with the type Manifest and Attack and HP equal to X. It is no longer a Construct but retains its text and Anchor counters. If it would leave the encounter, sacrifice it instead.',
   'Bane':          "This deals double damage to Companions whose subtype or class is [NAME]. Appears on cards as [NAME]'S BANE.",
   'Paranoia':      "Whenever an opponent plays a Companion, look at the top card of that player's deck. You may put that card on the top or bottom of their deck.",
+  // Requiem dev deck vocabulary (owner-ratified 2026-08-25), quoted verbatim from
+  // docs/Master_Keyword_List.md §Bard Keywords / §Necromancer Keywords.
+  'Crescendo':     'While you control a Vocal Construct in the encounter, your characters are in Crescendo. Per-card text defines the bonus granted while in Crescendo.',
+  'Reprise':       'When this Vocal Construct would be sacrificed because its last Anchor counter was removed, return it to your hand instead.',
+  'Restless':      'The first time this companion dies, return it from your Dead Zone to an empty Command Zone slot you control, exhausted.',
+  'Entomb':        'When this enters the encounter, put the top N cards of your deck into your Dead Zone.',
 };
