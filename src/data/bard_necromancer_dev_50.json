@@ -1,5 +1,5 @@
 {
-  "_comment": "DEV DECK - Requiem (Bard / Necromancer), 50 hand-authored dev cards (owner-designed, 2026-08-25). NON-CANON: every card carries dev:true so shipped-pool queries can exclude them. The THIRD dev deck - with it, all ten classes hold cards. Phase 1 = AUTHOR + FLAG (the Sworn Wild convention): cards whose behavior has a live engine path carry structured effects; every behavior the engine cannot yet honor carries an effectsFlag starting 'DEV NOT-IMPLEMENTED' (visible machinery debt; the validator reports it and does not fail). That flag list IS the arc plan for the implementation sessions that follow. FOUR NEW KEYWORDS ratified into Master_Keyword_List.md 2026-08-25, all done:false in the registry: CRESCENDO (Bard - the Untamed shape, CONTROLLER-scoped: while you control a Vocal Construct your characters are in Crescendo; keyword-independent like Untamed), REPRISE (Bard - replaces the sacrifice from LAST-Anchor-counter removal, decay AND effect removal alike per the unified 2026-07-15 sacrifice family, with a return to hand; the construct leaves but never dies), RESTLESS (Necromancer - the death fully happens FIRST, then a once-per-card owner-routed return to an empty slot, exhausted; a FLEE counts - a flee is a death, 2026-07-20; spent if no slot is open), ENTOMB N (Necromancer - self-mill N on entry; renamed from 'Exhume' before authoring - to entomb is to bury). BARD HAS INSPIRE ACCESS (owner-ruled 2026-08-25, access-list amendment only - definition unchanged). Initiative remains BANNED - Bard was designed without it, deliberately. NO FREESTANDING STAT-MODIFIER TEXT (owner ruling 2026-08-25): generic +X/+X auras and riders are not this game's design vocabulary; every printed bonus is keyword-tied (Untamed-style, e.g. Gilded Lute's Crescendo attack bonus) or a derived characteristic (Conductor's Dead-Zone census). Typing: reanimated animals print BOTH modifiers ('Undead Beast Bear', per the 2026-08-18 zombified-shrew canon, owner-confirmed 2026-08-25); incorporeal entities print Spirit; Liches print Undead (a lich is a corporeal reanimation of itself). Vocal subtypes: Chant and Song (Bard's canon pair; Rite/Blessing are Druid/Paladin's, Utterance/Dirge are DW's). Construct subtype field carries the single token (the Rite precedent); Vocal-ness derives from subtype membership {Chant, Song, Rite, Blessing, Utterance, Dirge} - cf. isPhysicalConstruct. WIN CONDITIONS by design: Conductor of the Unquiet (count-derived attack off the stocked Dead Zone) and Vielle (twice-per-turn attacks while any song holds). Keyword reminder text is copied VERBATIM from docs/Master_Keyword_List.md.",
+  "_comment": "DEV DECK - Requiem (Bard / Necromancer), 50 hand-authored dev cards (owner-designed, 2026-08-25). NON-CANON: every card carries dev:true so shipped-pool queries can exclude them. The THIRD dev deck - with it, all ten classes hold cards. Phase 1 = AUTHOR + FLAG (the Sworn Wild convention): cards whose behavior has a live engine path carry structured effects; every behavior the engine cannot yet honor carries an effectsFlag starting 'DEV NOT-IMPLEMENTED' (visible machinery debt; the validator reports it and does not fail). That flag list IS the arc plan for the implementation sessions that follow. FOUR NEW KEYWORDS ratified into Master_Keyword_List.md 2026-08-25, all done:false in the registry: CRESCENDO (Bard - the Untamed shape, CONTROLLER-scoped: while you control a Vocal Construct your characters are in Crescendo; keyword-independent like Untamed), REPRISE (Bard - replaces the sacrifice from LAST-Anchor-counter removal, decay AND effect removal alike per the unified 2026-07-15 sacrifice family, with a return to hand; the construct leaves but never dies), HAUNT (Necromancer - reworked same day from 'Restless' after the first owner playtest: the death fully happens FIRST, then an owner-routed return to an empty slot, exhausted, WITH A MEMORY COUNTER - the counter IS the tracker, and a companion that dies carrying one stays dead; per-stint - counters cease on zone change so outside reanimation resets it; no slot = no return and no counter, Haunt retained; a FLEE counts - a flee is a death, 2026-07-20), ENTOMB N (Necromancer - self-mill N on entry; renamed from 'Exhume' before authoring - to entomb is to bury). BARD HAS INSPIRE ACCESS (owner-ruled 2026-08-25, access-list amendment only - definition unchanged). Initiative remains BANNED - Bard was designed without it, deliberately. NO FREESTANDING STAT-MODIFIER TEXT (owner ruling 2026-08-25): generic +X/+X auras and riders are not this game's design vocabulary; every printed bonus is keyword-tied (Untamed-style, e.g. Gilded Lute's Crescendo attack bonus) or a derived characteristic (Conductor's Dead-Zone census). Typing: reanimated animals print BOTH modifiers ('Undead Beast Bear', per the 2026-08-18 zombified-shrew canon, owner-confirmed 2026-08-25); incorporeal entities print Spirit; Liches print Undead (a lich is a corporeal reanimation of itself). Vocal subtypes: Chant and Song (Bard's canon pair; Rite/Blessing are Druid/Paladin's, Utterance/Dirge are DW's). Construct subtype field carries the single token (the Rite precedent); Vocal-ness derives from subtype membership {Chant, Song, Rite, Blessing, Utterance, Dirge} - cf. isPhysicalConstruct. WIN CONDITIONS by design: Conductor of the Unquiet (count-derived attack off the stocked Dead Zone) and Vielle (twice-per-turn attacks while any song holds). Keyword reminder text is copied VERBATIM from docs/Master_Keyword_List.md.",
   "cards": [
     {
       "id": "dd000101",
@@ -126,9 +126,9 @@
       "actionPM": "",
       "itemKind": "",
       "keywords": [
-        "Restless"
+        "Haunt"
       ],
-      "text": "RESTLESS. The first time this companion dies, return it from your Dead Zone to an empty Command Zone slot you control, exhausted.",
+      "text": "HAUNT. When this companion dies, if it had no Memory counters on it, return it from your Dead Zone to an empty Command Zone slot you control, exhausted, with a Memory counter on it.",
       "flavor": "",
       "dev": true,
       "createdAt": "2026-08-25T00:00:00.000000Z",
@@ -137,7 +137,7 @@
         "Undead",
         "Ghoul"
       ],
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): RESTLESS keyword — needs a death listener firing AFTER the death fully resolves, a once-per-card marker, and an owner-routed empty-slot return (registry Restless done:false; flee counts, spent-if-no-slot, both owner-ruled 2026-08-25)."
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): HAUNT keyword (reworked same day from 'Restless', owner playtest feedback: the once-state needed a physical tracker; the MEMORY COUNTER is it) - needs a death listener firing AFTER the death fully resolves, the had-it-a-Memory-counter check at death, and an owner-routed empty-slot return that PLACES the counter (registry Haunt done:false). Per-stint: counters cease on zone change, so an outside reanimation resets Haunt; no slot = no return AND no counter (Haunt retained); a flee counts (a flee is a death, 2026-07-20)."
     },
     {
       "id": "dd000106",
@@ -239,9 +239,9 @@
       "actionPM": "",
       "itemKind": "",
       "keywords": [
-        "Restless"
+        "Haunt"
       ],
-      "text": "RESTLESS. The first time this companion dies, return it from your Dead Zone to an empty Command Zone slot you control, exhausted.",
+      "text": "HAUNT. When this companion dies, if it had no Memory counters on it, return it from your Dead Zone to an empty Command Zone slot you control, exhausted, with a Memory counter on it.",
       "flavor": "",
       "dev": true,
       "createdAt": "2026-08-25T00:00:00.000000Z",
@@ -250,7 +250,7 @@
         "Undead",
         "Revenant"
       ],
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): RESTLESS keyword — see Barrowlight Ghoul."
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): HAUNT keyword - see Barrowlight Ghoul."
     },
     {
       "id": "dd000110",
@@ -405,10 +405,10 @@
       "actionPM": "",
       "itemKind": "",
       "keywords": [
-        "Restless",
+        "Haunt",
         "Entomb 2"
       ],
-      "text": "RESTLESS. The first time this companion dies, return it from your Dead Zone to an empty Command Zone slot you control, exhausted. ENTOMB 2. When this enters the encounter, put the top 2 cards of your deck into your Dead Zone.",
+      "text": "HAUNT. When this companion dies, if it had no Memory counters on it, return it from your Dead Zone to an empty Command Zone slot you control, exhausted, with a Memory counter on it. ENTOMB 2. When this enters the encounter, put the top 2 cards of your deck into your Dead Zone.",
       "flavor": "",
       "dev": true,
       "createdAt": "2026-08-25T00:00:00.000000Z",
@@ -418,7 +418,7 @@
         "Lich",
         "Deathpriest"
       ],
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): RESTLESS and ENTOMB keywords — see Barrowlight Ghoul and Gravegnaw Rat. COLLISION: its own Restless return is an enter, which re-fires Entomb 2 — the return mills again."
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): HAUNT and ENTOMB keywords - see Barrowlight Ghoul and Gravegnaw Rat. COLLISION: its own Haunt return is an enter, which re-fires Entomb 2 - the return mills again."
     },
     {
       "id": "dd000116",
@@ -436,9 +436,9 @@
       "actionPM": "",
       "itemKind": "",
       "keywords": [
-        "Restless"
+        "Haunt"
       ],
-      "text": "RESTLESS. The first time this companion dies, return it from your Dead Zone to an empty Command Zone slot you control, exhausted. This companion gets +1 attack for each companion card in your Dead Zone.",
+      "text": "HAUNT. When this companion dies, if it had no Memory counters on it, return it from your Dead Zone to an empty Command Zone slot you control, exhausted, with a Memory counter on it. This companion gets +1 attack for each companion card in your Dead Zone.",
       "flavor": "",
       "dev": true,
       "createdAt": "2026-08-25T00:00:00.000000Z",
@@ -448,7 +448,7 @@
         "Lich",
         "Necromancer"
       ],
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): RESTLESS keyword, plus COUNT-DERIVED ATTACK: +1 per companion card in your Dead Zone, derived on read (the isUntamedEncounter pattern with a dynamic amount feeding effectiveAttack — never stamped, so the bonus tracks the Dead Zone live). This is the deck's Necromancer win condition."
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): HAUNT keyword (see Barrowlight Ghoul), plus COUNT-DERIVED ATTACK: +1 per companion card in your Dead Zone, derived on read (the isUntamedEncounter pattern with a dynamic amount feeding effectiveAttack - never stamped, so the bonus tracks the Dead Zone live). This is the deck's Necromancer win condition."
     },
     {
       "id": "dd000117",
@@ -894,7 +894,7 @@
       "subtypes": [
         "Incantation"
       ],
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): needs an own-companion-death listener (no trigger hears an OWN companion dying; ownPhysicalConstructSacrificed is the nearest relative) plus the uninterpreted mill op. COLLISION: fires alongside a Restless return off the same death — same-owner ordering."
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): needs an own-companion-death listener (no trigger hears an OWN companion dying; ownPhysicalConstructSacrificed is the nearest relative) plus the uninterpreted mill op. COLLISION: fires alongside a Haunt return off the same death — same-owner ordering."
     },
     {
       "id": "dd000132",
@@ -1417,7 +1417,7 @@
       "actionPM": "",
       "itemKind": "Trinket",
       "keywords": [],
-      "text": "Equipped companion has Restless.",
+      "text": "Equipped companion has Haunt.",
       "flavor": "",
       "dev": true,
       "createdAt": "2026-08-25T00:00:00.000000Z",
@@ -1425,7 +1425,7 @@
       "subtypes": [
         "Trinket"
       ],
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): RESTLESS keyword (not implemented) delivered as an ITEM GRANT (ITEM_GRANTED_KEYWORDS whitelist addition). Grant interplay owner-ruled via MKL wording: 'first time this companion dies' is tracked per card for the whole game — a grant neither resets nor doubles the once-only return."
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): HAUNT keyword (not implemented) delivered as an ITEM GRANT (ITEM_GRANTED_KEYWORDS whitelist addition). Grant interplay is COUNTER-CLEAN under the 2026-08-25 rework: the Memory counter does all the tracking - however the companion has Haunt (printed or granted), a body that dies carrying a Memory counter stays down, and one that dies clean returns marked."
     }
   ]
 }

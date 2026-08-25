@@ -716,7 +716,7 @@ Three distinct trigger conditions:
 **UNTAMED** (Druid-Specific) - While there are no Gear or Physical Constructs in the encounter, this character is Untamed. Per-card text defines the bonus granted while Untamed.
 *(Corrected 2026-08-18: "Items" → "Gear" — drift from Master_Keyword_List.md, the defining document for keywords (see its dated Rules Note under UNTAMED). Gear is a strict subset of Items: a Weapon does NOT suppress Untamed, and the scope is the whole encounter, both players. The duplicate definition later in this document is now a POINTER to this one — consolidated 2026-08-18, owner-ruled, so the pair cannot drift apart again.)*
 
-**CRESCENDO** (Bard-Specific, added 2026-08-25) · **REPRISE** (Bard-Specific, added 2026-08-25) · **RESTLESS** (Necromancer-Specific, added 2026-08-25) · **ENTOMB N** (Necromancer-Specific, added 2026-08-25) — the defining wording and all rulings live in Master_Keyword_List.md (Rules_Taxonomy names it the defining document for keywords); this document deliberately carries POINTERS only, per the 2026-08-18 consolidation precedent (a pointer cannot drift). One-line orientation only: Crescendo is the Untamed shape keyed to "you control a Vocal Construct" (controller-scoped by design); Reprise returns a Vocal Construct to hand instead of its sacrifice-by-last-Anchor-counter-removal; Restless returns a companion from the Dead Zone exhausted after its FIRST death (the death fully happens first; a flee counts; spent if no slot is open); Entomb N self-mills the top N on entry. All four ratified during the Requiem dev-deck design.
+**CRESCENDO** (Bard-Specific, added 2026-08-25) · **REPRISE** (Bard-Specific, added 2026-08-25) · **HAUNT** (Necromancer-Specific, added 2026-08-25 — reworked from "Restless" the same day, after the first playtest) · **ENTOMB N** (Necromancer-Specific, added 2026-08-25) — the defining wording and all rulings live in Master_Keyword_List.md (Rules_Taxonomy names it the defining document for keywords); this document deliberately carries POINTERS only, per the 2026-08-18 consolidation precedent (a pointer cannot drift). One-line orientation only: Crescendo is the Untamed shape keyed to "you control a Vocal Construct" (controller-scoped by design); Reprise returns a Vocal Construct to hand instead of its sacrifice-by-last-Anchor-counter-removal; Haunt returns a dying companion from the Dead Zone exhausted WITH A MEMORY COUNTER, and a companion that dies carrying a Memory counter stays dead (the death fully happens first; a flee counts; no slot = no return and no counter); Entomb N self-mills the top N on entry. All four ratified during the Requiem dev-deck design.
 
 ### Subtypes with Special Rules
 
@@ -1291,7 +1291,7 @@ All companions start with base stats equal to their level (Level 2 = 2/2, Level 
 - Scavenger (reclaim from Dead Zone)
 - Sacrifice and exchange effects
 - Persistent threats (units that return after death)
-- **Class keywords (added 2026-08-25):** Restless, Entomb N — definitions in Master_Keyword_List (pointers only here, per the 2026-08-18 consolidation precedent)
+- **Class keywords (added 2026-08-25):** Haunt (reworked from "Restless" the same day), Entomb N — definitions in Master_Keyword_List (pointers only here, per the 2026-08-18 consolidation precedent)
 - Magic Actions (mill, revive, sacrifice-based)
 - Magic Constructs (bone altars, soul prisons)
 - Dark utility and control

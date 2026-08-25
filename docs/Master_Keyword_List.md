@@ -164,14 +164,17 @@ This document consolidates all keywords from Game Rules, Keyword Glossary, and C
 ### Necromancer Keywords
 *(Section added 2026-08-25, owner-ratified during the Requiem dev-deck design. Necromancer previously held no class keywords beyond occasional Scavenger access.)*
 
-**RESTLESS** - The first time this companion dies, return it from your Dead Zone to an empty Command Zone slot you control, exhausted.
-- **Rules Notes (owner-ruled 2026-08-25):**
-  - The death fully happens FIRST: death/sacrifice listeners fire, attached items open their transfer windows per the normal exit rules, and the card genuinely touches its owner's Dead Zone — THEN the return resolves. (Consistent with "everything in the Dead Zone died to get there.")
-  - A FLEE triggers Restless: fleeing is a sacrifice and a sacrifice is a death (2026-07-20). The returned companion re-enters exhausted; if its Level still exceeds its controller's Willpower it will simply flee again at the next check — the rule is self-balancing and carries no carve-out.
-  - The return is an ENTER: enter-triggers fire, and the willpower gate applies as normal to a companion that just entered (it additionally enters exhausted).
-  - If no empty Command Zone slot is available at the moment of return, the companion stays dead and the Restless return is SPENT — no lingering "still restless" state is tracked on a card in the Dead Zone (physical-play tracking rationale, same family as the Poison no-provenance ruling 2026-07-22).
-  - "First time" is tracked per card over the whole game: a Restless companion that has already returned once (or whose return was spent against a full board) never returns again, however it later re-enters or dies.
-  - Owner-routing: the card returns from its OWNER's Dead Zone to a slot its owner controls — consistent with the 2026-08-17 rule that burial and rescue belong to the owner even when control was stolen at the time of death.
+**HAUNT** - When this companion dies, if it had no Memory counters on it, return it from your Dead Zone to an empty Command Zone slot you control, exhausted, with a Memory counter on it.
+- **Rules Notes (owner-ruled 2026-08-25; REWORKED same day after the first playtest):**
+  - **Renamed and reworked from the same-day "RESTLESS" draft before any implementation.** The rework (owner): the once-per-card state needed a physical tracker, and the MEMORY COUNTER is it — emblematic of the return itself. The returned body comes back MARKED, and a companion that is put into the Dead Zone with a Memory counter on it stays there: Haunt does not return it again.
+  - Theme: on this world the dead linger as remembered things — what Haunt returns is the MEMORY of the companion. When the memory dies, it is forgotten for good.
+  - The death fully happens FIRST (unchanged): death/sacrifice listeners fire, attached items open their transfer windows per the normal exit rules, and the card genuinely touches its owner's Dead Zone — THEN the return resolves. (Consistent with "everything in the Dead Zone died to get there.")
+  - A FLEE triggers Haunt (unchanged): fleeing is a sacrifice and a sacrifice is a death (2026-07-20). The returned companion re-enters exhausted; if its Level still exceeds its controller's Willpower it will simply flee again at the next check — self-balancing, no carve-out.
+  - The return is an ENTER (unchanged): enter-triggers fire, and the willpower gate applies as normal to a companion that just entered (it additionally enters exhausted).
+  - **PER-STINT tracking** *(supersedes the earlier once-per-game reading — owner-ruled this date)*: Memory counters follow standard counter physics and cease when the card changes zones, so the whole check lives at the moment of death — "did it have a Memory counter on it when it died?" A card later returned by an OUTSIDE effect (reanimation) arrives clean and can Haunt-return again.
+  - **NO SLOT OPEN** *(supersedes the earlier "spent" ruling — owner-ruled this date)*: if no empty Command Zone slot exists at the moment of return, the return simply does not happen and NO Memory counter is placed — Haunt remains available at the companion's next death. (The counter formulation removes the tracking burden that motivated "spent".)
+  - Owner-routing (unchanged): the card returns from its OWNER's Dead Zone to a slot its owner controls — consistent with the 2026-08-17 rule that burial and rescue belong to the owner even when control was stolen at the time of death.
+  - **Universal counter principle applies** (the Armor/Poison family, 2026-08-18): a Memory counter is a Memory counter however it arrives. An effect that places a Memory counter on a living companion pre-marks it — it will not return via Haunt. Design space deliberately opened ("fix them as a mere memory").
 
 **ENTOMB N** - When this enters the encounter, put the top N cards of your deck into your Dead Zone.
 - **Rules Notes (owner-ruled 2026-08-25):**
@@ -283,7 +286,7 @@ This document consolidates all keywords from Game Rules, Keyword Glossary, and C
 - **Access:** Ranged
 
 ### Necromancer
-- **Primary:** Restless, Entomb N *(both added 2026-08-25)*, Scavenger (occasional)
+- **Primary:** Haunt, Entomb N *(both added 2026-08-25; Haunt reworked from "Restless" the same day)*, Scavenger (occasional)
 - **Access:** None exclusive beyond design patterns
 
 ### Paladin

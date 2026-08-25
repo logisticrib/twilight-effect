@@ -44,6 +44,6 @@ export const KEYWORD_DEFS: Record<string, string> = {
   // docs/Master_Keyword_List.md §Bard Keywords / §Necromancer Keywords.
   'Crescendo':     'While you control a Vocal Construct in the encounter, your characters are in Crescendo. Per-card text defines the bonus granted while in Crescendo.',
   'Reprise':       'When this Vocal Construct would be sacrificed because its last Anchor counter was removed, return it to your hand instead.',
-  'Restless':      'The first time this companion dies, return it from your Dead Zone to an empty Command Zone slot you control, exhausted.',
+  'Haunt':         'When this companion dies, if it had no Memory counters on it, return it from your Dead Zone to an empty Command Zone slot you control, exhausted, with a Memory counter on it.',
   'Entomb':        'When this enters the encounter, put the top N cards of your deck into your Dead Zone.',
 };

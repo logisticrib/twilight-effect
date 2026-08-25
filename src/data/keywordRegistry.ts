@@ -10,7 +10,7 @@
 // 'play' (Arc E, 2026-08-23) is the CASTER's own play-time window — an additional cost
 // charged before the permanent reaches the stack. Distinct from 'enter' (the permanent
 // is already entering) and from 'oppPlay' (an OPPONENT's play, e.g. Paranoia).
-// 'death' (2026-08-25, for Restless) is the moment a permanent's death has fully
+// 'death' (2026-08-25, for Haunt) is the moment a permanent's death has fully
 // resolved — listeners fired, items transferred, card in its owner's Dead Zone. No
 // prior keyword resolved there ('damaged' is the pre-death prevention window; a death
 // by sacrifice or flee never passes through it at all).
@@ -96,9 +96,12 @@ export const KEYWORDS: Record<string, KeywordSpec> = {
   // construct leaves but never dies: no sacrifice event, no Dead Zone.
   Reprise:        { event: 'static',  done: false, note: 'canon: when this Vocal Construct would be sacrificed because its last Anchor counter was removed, return it to your hand instead. No replacement hook exists at either last-counter site (readyPhase decay / anchor-removal ops)' },
   // The death fully happens first (listeners fire, items transfer, card touches the
-  // Dead Zone), THEN the once-per-card return. A flee IS a death and triggers it.
-  // Spent if no empty owner slot exists at return time.
-  Restless:       { event: 'death',   done: false, note: 'canon: the first time this companion dies, return it from your Dead Zone to an empty Command Zone slot you control, exhausted. Needs a death listener + once-per-card marker + owner-routed slot pick; flee counts (a flee is a death, 2026-07-20)' },
+  // Dead Zone), THEN the return — WITH a Memory counter, which IS the whole tracker:
+  // a companion that dies carrying a Memory counter stays dead. Reworked from
+  // "Restless" the same day (owner playtest feedback: the once-state needed a physical
+  // tracker). Per-stint: counters cease on zone change, so outside reanimation resets
+  // it. No slot = no return AND no counter (Haunt retained). A flee IS a death.
+  Haunt:          { event: 'death',   done: false, note: 'canon: when this companion dies, if it had no Memory counters on it, return it from your Dead Zone to an empty Command Zone slot you control, exhausted, with a Memory counter on it. Needs a death listener + Memory-counter check at death + owner-routed slot pick that places the counter; flee counts (a flee is a death, 2026-07-20)' },
   // Printed parameterized as "Entomb N" — keywordBase strips the number as it does for
   // Armor/Reinforce. Self-mill: YOUR deck, YOUR Dead Zone.
   Entomb:         { event: 'enter',   done: false, note: 'canon: when this enters the encounter, put the top N cards of your deck into your Dead Zone (all remaining if fewer). The mill op exists; no keyword parser feeds it yet' },
