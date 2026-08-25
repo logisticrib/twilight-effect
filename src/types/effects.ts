@@ -113,6 +113,9 @@ export type TargetSpec =
   | 'anyCharacter' | 'enemyCharacter' | 'ownCharacter' | 'otherCharacter'
   | 'anyCompanion' | 'enemyCompanion' | 'ownCompanion'
   | 'anyConstruct' | 'physicalConstruct' | 'magicalConstruct'
+  // 'vocalConstruct' (Requiem Arc B, 2026-08-25 — Satyr of the Reel): the Vocal
+  // family {Chant, Song, Rite, Blessing, Utterance, Dirge}, cf. isVocalConstruct.
+  | 'vocalConstruct'
   | 'anyItem' | 'targetPlayer'
   // auto-scoped groups (no selection)
   | 'self' | 'allEnemies' | 'allEnemyCompanions' | 'ownCompanions' | 'ownPhysicalConstructs' | 'ownMagicalConstructs'
@@ -150,6 +153,15 @@ export type Condition =
   //     Deliberately never re-evaluated — an encounter that clears later places nothing
   //     retroactively (the dd000066 exception shape, owner-ratified).
   | { kind: 'untamed' }
+  // CRESCENDO (Requiem Arc B, 2026-08-25) — "while you control a Vocal Construct in
+  // the encounter, your characters are in Crescendo" (Master_Keyword_List, ratified
+  // 2026-08-25). The Untamed SHAPE with the OPPOSITE scope: CONTROLLER-scoped by
+  // design (your own performance powers it — conditionMet answers it with the `lp`
+  // every call site already threads). KEYWORD-INDEPENDENT like Untamed: a card may
+  // ask "if you are in Crescendo" without printing CRESCENDO. The same two clause
+  // homes apply: `static` = continuous derive-on-read, `onEnter` = entry snapshot
+  // (Duskmere Siren, the Elder Shellback exception shape).
+  | { kind: 'crescendo' }
   // FINAL SWEEP (2026-08-21). Two new bindings, each answered where its subject is in
   // scope — deliberately NOT folded into targetIsSubtype, whose binding is the reactive
   // EVENT SUBJECT. Overloading one kind across three different bindings is how a
@@ -278,7 +290,9 @@ export type Effect =
   // hpAtMost (Arc H 2026-08-04, Shade Puppeteer): eligibility gate on CURRENT hp —
   // applied when the pick arms (filterEligibleByEffects) AND re-checked at
   // resolution (per-event state).
-  | { op: 'bounce'; target: TargetSpec; hpAtMost?: number } // return permanent to hand
+  // `levelAtMost` (Requiem Arc B, 2026-08-25 — Duskmere Siren "with level 3 or less"):
+  // the hpAtMost discipline exactly, read off the entity's printed level.
+  | { op: 'bounce'; target: TargetSpec; hpAtMost?: number; levelAtMost?: number } // return permanent to hand
   | { op: 'extraAttack'; target: TargetSpec }               // attack an additional time
   | { op: 'forceAttack'; attackers: TargetSpec; target: TargetSpec }
   | { op: 'anchor'; delta: number; target: TargetSpec }     // Reinforce/Dismantle/Shore Up/Demolish
@@ -320,7 +334,11 @@ export type Effect =
   // (stats.ts canTakeMajor / the summoning-sickness gate), so readying a companion that
   // entered this turn still cannot take a Major Action unless it has Zealous. `subtype`
   // narrows the eligible picks (see filterEligibleByEffects).
-  | { op: 'ready'; target: TargetSpec; subtype?: string }
+  // `max`/`maxIf` (Requiem Arc B, 2026-08-25 — Standing Ovation "ready up to two ...
+  // instead"): max caps an "up to N" pick sequence (the destroy.max discipline); when
+  // `maxIf` is present the cap applies ONLY while the condition holds — otherwise the
+  // effective max is 1. Second-and-later picks are OPTIONAL ("up to").
+  | { op: 'ready'; target: TargetSpec; subtype?: string; max?: number; maxIf?: Condition }
   | { op: 'exhaust'; target: TargetSpec }        // exhaust the target (Pit Trap: 'eventSubject'). Mandatory triggers
                                                  // still fire when this is a no-op (already-exhausted target — R4)
   // future (declared so authored cards validate; interpreter support added later)

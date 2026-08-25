@@ -14,7 +14,7 @@ import { charsOf, companionIds, constructIds, findEntityAnywhere, updateEntity,
          removeEntity, destroyEntity, setPcHp, pcIdOf, itemCardsOf, itemTransferOf, canBeSacrificed,
          gearItemsOf, destroyItemById, millCards, drawCards } from './entities';
 import { hasSubtype, cardHasSubtype } from './stats';
-import { isPhysicalConstruct, conditionMet, effectiveMaxHp, isImmuneToSplash, isCharacter, poisonHitPatch,
+import { isPhysicalConstruct, isVocalConstruct, conditionMet, effectiveMaxHp, isImmuneToSplash, isCharacter, poisonHitPatch,
          effectiveKeywords, isWardedAgainst } from './stats';
 // Function-level cycle with combat.ts (resolveActionEffects deals damage; combat
 // triggers resolve effects). Safe: hoisted functions, called only at runtime.
@@ -81,7 +81,7 @@ export function effectsWouldAffectSomething(game: GameState, lp: 'p1' | 'p2', ef
 const INTERACTIVE_SPECS: TargetSpec[] = [
   'anyCharacter', 'enemyCharacter', 'ownCharacter', 'otherCharacter',
   'anyCompanion', 'enemyCompanion', 'ownCompanion',
-  'anyConstruct', 'physicalConstruct', 'magicalConstruct',
+  'anyConstruct', 'physicalConstruct', 'magicalConstruct', 'vocalConstruct',
   // Arc A (2026-08-19): Gear picks resolve to ITEM ids, not board-entity ids — the
   // pick surface is the bearer's loadout panel. 'allGear' is auto-scoped and is
   // deliberately NOT here.
@@ -101,6 +101,11 @@ export function eligibleTargets(game: GameState, lp: 'p1' | 'p2', spec: TargetSp
     case 'ownCompanion':   return companionIds(game, lp);
     case 'physicalConstruct': return constructIds(game, isPhysicalConstruct);
     case 'magicalConstruct':  return constructIds(game, e => e.subtype === 'Incantation');
+    // Requiem Arc B (2026-08-25, Satyr of the Reel): the Vocal family, one classifier
+    // (isVocalConstruct — the isPhysicalConstruct discipline). Un-sided like its two
+    // siblings; call sites that mean "you control" filter by owner (the combat
+    // own-side filter, exactly as physicalConstruct's Reinforce arm site does).
+    case 'vocalConstruct':    return constructIds(game, isVocalConstruct);
     case 'anyConstruct':      return constructIds(game, () => true);
     // Arc A (2026-08-19). "Target Gear" carries no controller qualifier in canon, so
     // BOTH sides' Gear is legal. The union spec mixes item ids and construct entity
@@ -188,6 +193,17 @@ export function filterEligibleByEffects(game: GameState, ids: string[], effects:
       return !!loc && loc.ent.hp <= cap.hpAtMost!;
     });
   }
+  // Requiem Arc B (2026-08-25, Duskmere Siren "with level 3 or less"): the hpAtMost
+  // discipline for the printed LEVEL — applied at arming here, re-checked at the
+  // bounce resolution (per-event state).
+  const lvlCap = effects.find((e): e is Extract<Effect, { op: 'bounce' }> =>
+    e.op === 'bounce' && e.levelAtMost != null);
+  if (lvlCap) {
+    out = out.filter(id => {
+      const loc = findEntityAnywhere(game, id);
+      return !!loc && loc.ent.level <= lvlCap.levelAtMost!;
+    });
+  }
   // Arc B (2026-08-19): subtype narrowing for a targeted pick — "target Beast you
   // control". The controller half is already carried by the TargetSpec (ownCompanion);
   // this adds the subtype half, so the two compose instead of needing a spec per
@@ -240,8 +256,15 @@ export function magicCtx(game: GameState, lp: 'p1' | 'p2', card?: Card): EffectC
   return b > 0 ? { damageBonus: b } : undefined;
 }
 
-/** A permanent's structured effects for a given trigger (looked up from CATALOG by name). */
-export function permanentEffects(ent: BoardEntity, trigger: Trigger): Effect[] {
+/** A permanent's structured effects for a given trigger (looked up from CATALOG by name).
+ *
+ *  Requiem Arc B (2026-08-25): when `game`+`lp` are supplied, clause-level `if` is
+ *  HONORED via conditionMet (Skald of the Long Dusk's "at the start of your turn, IF
+ *  you are in Crescendo"). Without them the flatten keeps its historical
+ *  drop-the-`if` behavior — safe ONLY because the validator's kind↔trigger table plus
+ *  the deck sweep guarantee no card authors an `if` on the triggers those callers
+ *  read; any new conditional carrier must reach here through a game-passing caller. */
+export function permanentEffects(ent: BoardEntity, trigger: Trigger, game?: GameState, lp?: 'p1' | 'p2'): Effect[] {
   // The entity's own card AND its equipped items' clauses (2026-07-16 — Lens of
   // Foretelling's start-of-turn peek lived on an EQUIPPED item and was silently
   // dead: this helper only read the body card). Matches combatTriggerEffects'
@@ -256,7 +279,10 @@ export function permanentEffects(ent: BoardEntity, trigger: Trigger): Effect[] {
       lists.push(CATALOG.find(c => c.name === it.name)?.effects);
     }
   }
-  return lists.flatMap(effs => (effs ?? []).filter(c => c.trigger === trigger).flatMap(c => c.effects));
+  return lists.flatMap(effs => (effs ?? [])
+    .filter(c => c.trigger === trigger)
+    .filter(c => !c.if || !game || !lp || conditionMet(game, lp, c.if))
+    .flatMap(c => c.effects));
 }
 
 export interface ActivatedAbility {
@@ -310,7 +336,7 @@ export function actionTargetSpec(effects: Effect[]): TargetSpec | null {
 }
 
 /** A two-step action (pick own char, then a slot or an enemy), or null. */
-export function twoStepKind(effects: Effect[]): 'reposition' | 'disarm' | 'moveAnchor' | 'gainControl' | 'destroyThenHeal' | 'destroyUpTo' | null {
+export function twoStepKind(effects: Effect[]): 'reposition' | 'disarm' | 'moveAnchor' | 'gainControl' | 'destroyThenHeal' | 'destroyUpTo' | 'readyUpTo' | null {
   // Arc A (2026-08-19). Checked FIRST: a destroy card can carry an interactive rider
   // (Sanctify's heal) or an "up to N" cap, and either makes it a two-step pick.
   const destroy = effects.find(e => e.op === 'destroy');
@@ -319,6 +345,11 @@ export function twoStepKind(effects: Effect[]): 'reposition' | 'disarm' | 'moveA
     const rider = effects.find(e => e !== destroy && isInteractiveSpec(effectTargetSpec(e) ?? 'self'));
     if (rider) return 'destroyThenHeal';
   }
+  // Requiem Arc B (2026-08-25, Standing Ovation): ready "up to N" rides the
+  // destroyUpTo pick shape. STATIC shape query, so `maxIf` cannot be consulted here —
+  // the second pick's runtime gate (conditionMet on maxIf) lives at the arm site.
+  const ready = effects.find(e => e.op === 'ready');
+  if (ready && ready.op === 'ready' && (ready.max ?? 1) > 1) return 'readyUpTo';
   for (const e of effects) {
     if (e.op === 'move' && e.to === 'anySlot' && e.target === 'ownCharacter') return 'reposition';
     if (e.op === 'attackDisarm') return 'disarm';

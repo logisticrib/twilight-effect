@@ -89,6 +89,7 @@ function GameView() {
       <PreventOrderModal />
       <AttackChoiceModal />
       <ForcedSacrificeModal />
+      <CombatPickModal />
       <TributeModal />
       <PoisonHost />
       <CoercionModal />
@@ -384,7 +385,8 @@ function StackResumeDriver() {
     const s = useGameStore.getState();
     if ((s.conn.mode === 'solo' || head.controller === s.localPlayer)
       && !s.game.pendingPeek && !s.game.pendingTriggerOrder && !s.game.pendingArmor && !s.game.pendingPreventOrder
-      && !s.game.pendingDiscard && !s.game.pendingHandReveal && !s.game.pendingForcedSacrifice) {
+      && !s.game.pendingDiscard && !s.game.pendingHandReveal && !s.game.pendingForcedSacrifice
+      && !s.game.pendingCombatPick) {
       s.resumeStack();
     }
   }, [head]);
@@ -523,6 +525,35 @@ function AttackChoiceModal() {
       }>
       <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: TBL.ink }}>
         Pay {pac.payHP} HP from your Player Character to deal {pac.bonus} additional damage?
+      </div>
+    </ModalShell>
+  );
+}
+
+/** Combat-trigger target pick (Requiem Arc B, owner-ruled 2026-08-25 — Satyr of the
+ *  Reel): the attack is declared and its trigger demands a target — the ATTACKER's
+ *  controller picks from the offered own-side entities. MANDATORY (the forced-
+ *  sacrifice discipline): no decline; the only escape was not attacking. The paused
+ *  declaration window (and the damage step beneath it) resumes on pick. */
+function CombatPickModal() {
+  const pcp = useGameStore(s => s.game.pendingCombatPick);
+  const game = useGameStore(s => s.game);
+  const localPlayer = useGameStore(s => s.localPlayer);
+  const isSolo = useGameStore(s => s.conn.mode === 'solo');
+  const resolve = useGameStore(s => s.resolveCombatPick);
+  if (!pcp || (!isSolo && pcp.lp !== localPlayer)) return null;
+  const options = pcp.eligibleIds
+    .map(id => Object.values(game.p1.board).concat(Object.values(game.p2.board)).find(e => e?.id === id))
+    .filter((e): e is NonNullable<typeof e> => !!e);
+  return (
+    <ModalShell glyph="♫" eyebrow={pcp.source} title="Choose a target"
+      sub="The attack is declared — its trigger resolves on the target you choose, then the attack continues.">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {options.map(e => (
+          <button key={e.id} onClick={() => resolve(e.id)} style={md.btn('primary')}>
+            {e.name}{e.anchors != null ? ` (${e.anchors} anchor${e.anchors !== 1 ? 's' : ''})` : ''}
+          </button>
+        ))}
       </div>
     </ModalShell>
   );

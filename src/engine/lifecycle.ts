@@ -103,7 +103,9 @@ export function resolveStartOfTurn(game: GameState, side: 'p1' | 'p2'): { game: 
   for (const id of ids) {
     const loc = findEntityAnywhere(g, id);
     if (!loc) continue; // removed by an earlier effect this step
-    const allEffs = permanentEffects(loc.ent, 'startOfTurn');
+    // Requiem Arc B (2026-08-25): game+side threaded so clause-level `if` is honored
+    // (Skald's crescendo-gated extra draw). Identity for every unconditional clause.
+    const allEffs = permanentEffects(loc.ent, 'startOfTurn', g, side);
     if (allEffs.length === 0) continue;
     // Defer MODAL clauses (Pyre of the Unbound) as an interactive choice prompt — the
     // clause is read un-flattened because its optionality and sacrificeSelf cost are

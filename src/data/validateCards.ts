@@ -39,7 +39,7 @@ export type _ExhaustiveTriggers = AssertNever<Exclude<Trigger, (typeof TRIGGERS)
 const TARGET_SPECS = [
   'anyCharacter', 'enemyCharacter', 'ownCharacter', 'otherCharacter',
   'anyCompanion', 'enemyCompanion', 'ownCompanion',
-  'anyConstruct', 'physicalConstruct', 'magicalConstruct',
+  'anyConstruct', 'physicalConstruct', 'magicalConstruct', 'vocalConstruct',
   'anyItem', 'targetPlayer',
   // Gear targeting + mass Gear (Arc A, 2026-08-19)
   'anyGear', 'gearOrPhysicalConstruct', 'allGear',
@@ -76,6 +76,10 @@ const CONDITION_KINDS = [
   'damagedIsEnemyCompanion', 'killedIsCompanion', 'killedIsPhysicalConstruct', 'diedToDamage',
   'untamed',
   'bearerIsSubtype', 'controlsKeyword',
+  // Requiem Arc B (2026-08-25): CONTROLLER-scoped board state (inCrescendo) — a
+  // board-state kind, legal on any trigger; selfItemStat additionally answers it for
+  // item-hosted clauses (the bearer's controller).
+  'crescendo',
 ] as const satisfies readonly Condition['kind'][];
 export type _ExhaustiveConditions = AssertNever<Exclude<Condition['kind'], (typeof CONDITION_KINDS)[number]>>;
 
@@ -90,7 +94,7 @@ export type _ExhaustiveConditions = AssertNever<Exclude<Condition['kind'], (type
 // Board-state kinds are answered by conditionMet, which is reachable from every clause
 // path, so they are legal on ANY trigger and in an op-level `if`. The other three
 // families are legal only where their evaluator actually runs.
-const BOARD_STATE_CONDITIONS = ['controlsType', 'controlsCount', 'willpowerAtLeast', 'untamed', 'controlsKeyword'];
+const BOARD_STATE_CONDITIONS = ['controlsType', 'controlsCount', 'willpowerAtLeast', 'untamed', 'controlsKeyword', 'crescendo'];
 /** kind → the ONLY triggers whose resolution path reaches its evaluator. */
 const CONDITION_TRIGGER_HOME: Readonly<Record<string, readonly string[]>> = {
   // eventMatches, handed the DamageEvent
@@ -284,6 +288,17 @@ function validateEffect(e: Effect, path: string, p: (msg: string) => void, keywo
       target('target');
       // Arc H (2026-08-04, Shade Puppeteer): current-HP eligibility gate.
       if (e.hpAtMost !== undefined && (!isInt(e.hpAtMost) || e.hpAtMost < 1)) p(`${path}(bounce): hpAtMost must be an integer ≥ 1`);
+      // Requiem Arc B (2026-08-25, Duskmere Siren): printed-level eligibility gate.
+      if (e.levelAtMost !== undefined && (!isInt(e.levelAtMost) || e.levelAtMost < 1)) p(`${path}(bounce): levelAtMost must be an integer ≥ 1`);
+      break;
+    case 'ready':
+      target('target');
+      // Requiem Arc B (2026-08-25, Standing Ovation): "up to N" cap + its runtime gate.
+      if (e.max !== undefined && (!isInt(e.max) || e.max < 2)) p(`${path}(ready): max must be an integer ≥ 2 (omit it for a single ready)`);
+      if (e.maxIf !== undefined) {
+        if (e.max === undefined) p(`${path}(ready): maxIf without max gates nothing`);
+        if (!BOARD_STATE_CONDITIONS.includes(e.maxIf.kind)) p(`${path}(ready): maxIf must be a board-state condition (got "${e.maxIf.kind}") — it is evaluated by conditionMet at the second-pick arm site`);
+      }
       break;
     case 'extraAttack': case 'sacrifice': case 'sacrificeItem': case 'equipFromHand':
     case 'exhaust':

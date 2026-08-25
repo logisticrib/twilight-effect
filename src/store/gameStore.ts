@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist, subscribeWithSelector } from 'zustand/middleware';
 import { recordActions } from './recordMiddleware';
 import type { BoardEntity, Card, TapState } from '../types/card';
-import type { Effect, TargetSpec } from '../types/effects';
+import type { Effect, TargetSpec, Condition } from '../types/effects';
 import { CATALOG, SORCERER_WARRIOR_CARDS, WIZARD_BUILDER_CARDS, tributeOf } from '../data/catalog';
 import { recomputeStatics, isImmuneToSplash, HIT_RUN_STATUS,
          isPhysicalConstruct, parseEnterTrigger, type EnterTriggerKind,
@@ -26,7 +26,7 @@ import { ADJ, FRONT_SLOTS, BACK_SLOTS, isFront, findSlot, type SlotId, type Boar
          orderedForStack, batchOrderer, segmentBatch, resolveCombatTriggers, combatTriggerEffects,
          findEntityAnywhere, updateEntity, removeEntity, canBeSacrificed,
          itemProfileOf, itemTransferCandidates, armNextItemTransfer,
-         setPcHp, payPcHp, pcIdOf, charsOf, millCards, drawCards,
+         setPcHp, payPcHp, pcIdOf, charsOf, millCards, drawCards, type CombatPickRequest,
          ownPhysicalConstructIds,
          eligibleTargets, filterEligibleByEffects, effectsWouldAffectSomething, actionTargetSpec, twoStepKind, isInteractiveSpec,
          permanentEffects, gatherActivated, abilityUsedTag, magicCtx,
@@ -118,7 +118,7 @@ export interface PendingActionTarget {
   // Arc A (2026-08-19) adds the two destroy kinds. They differ from the others in
   // that STEP 1 mutates the board, so cancelling at step 2 commits (see
   // cancelActionTarget) instead of returning the card to hand.
-  twoStep?: 'reposition' | 'disarm' | 'moveAnchor' | 'gainControl' | 'destroyThenHeal' | 'destroyUpTo';
+  twoStep?: 'reposition' | 'disarm' | 'moveAnchor' | 'gainControl' | 'destroyThenHeal' | 'destroyUpTo' | 'readyUpTo';
   firstId?: string;            // the first chosen entity (set on step 2)
   eligibleSlots?: SlotId[];    // clickable empty slots when step 2 is a slot pick
 }
@@ -374,7 +374,8 @@ function resumeEnterUnits(g: GameState, s: StackRunCtx):
   if (top?.kind !== 'enterUnit') return { game: g, local: {}, msgs: [] };
   if (g.pendingDeadPick || g.pendingCoercion || g.pendingHandReveal || g.pendingPeek
     || g.pendingDiscard || g.pendingTriggerOrder || g.pendingArmor || g.pendingPreventOrder
-    || g.pendingItemTransfer || g.pendingPoison || g.pendingForcedSacrifice) return { game: g, local: {}, msgs: [] };
+    || g.pendingItemTransfer || g.pendingPoison || g.pendingForcedSacrifice
+    || g.pendingCombatPick) return { game: g, local: {}, msgs: [] };
   const r = runStack(g, s);
   return { game: r.game, local: r.local, msgs: r.toastMsgs };
 }
@@ -410,6 +411,10 @@ export function reactiveHold(game: GameState, localPlayer: 'p1' | 'p2'): string 
   // the PAYER (the attacking companion's controller) chooses; everyone else waits.
   const pfs = game.pendingForcedSacrifice;
   if (pfs && pfs.lp !== localPlayer) return `${pfs.sourceName} (forced sacrifice)`;
+  // The opponent's combat-trigger target pick (Requiem Arc B — Satyr of the Reel):
+  // the attacker's controller chooses; everyone else waits.
+  const pcp = game.pendingCombatPick;
+  if (pcp && pcp.lp !== localPlayer) return `${pcp.source} (combat target)`;
   // The opponent's reversion slot pick (Arc I control theft) — the OWNER chooses
   // where their companion returns; the caster's turn cannot end until they do.
   const pr = game.pendingReversion;
@@ -744,6 +749,17 @@ function onEnterEffects(card: Card, game: GameState, lp: 'p1' | 'p2'):
   return { effects: live.flatMap(c => c.effects), gatedOut: live.length < clauses.length };
 }
 
+/** The onPlay twin (Requiem Arc B, 2026-08-25 — Encore of the Dawn's additive
+ *  crescendo draw): clause-level `if` evaluated at CAST time, so the armed/resolved
+ *  effect list is the gated one. Identity for every card without a conditional
+ *  clause — the raw flatten this replaced dropped `if` silently (the trap family). */
+function onPlayEffects(card: Card, game: GameState, lp: 'p1' | 'p2'): Effect[] {
+  return (card.effects ?? [])
+    .filter(c => c.trigger === 'onPlay')
+    .filter(c => !c.if || conditionMet(game, lp, c.if))
+    .flatMap(c => c.effects);
+}
+
 /**
  * The GAME-LEVEL enter triggers a card statically carries (Arc G 2026-08-04, the
  * multi-pending enter window). A card with >1 splits into owner-ordered 'enterUnit'
@@ -984,9 +1000,23 @@ function runStack(game: GameState, s: StackRunCtx):
       g = setStack(g, stack.slice(0, -1));
       // Declaration-window clauses resolve from the queued SNAPSHOT — they fire even
       // if the attacker died to a trap that resolved above them (R1).
-      const ct = resolveCombatTriggers(g, top.attacker, top.side, [], armorSink, ['onAttack']);
+      // Requiem Arc B (owner-ruled 2026-08-25): an interactive-spec clause DEFERS to
+      // the attacker's controller via the pickSink — the attack stays paused on the
+      // stack beneath the pick (the pendingForcedSacrifice discipline) and
+      // resolveCombatPick resumes it.
+      const pickSink: CombatPickRequest[] = [];
+      const ct = resolveCombatTriggers(g, top.attacker, top.side, [], armorSink, ['onAttack'], pickSink);
       g = ct.game;
       if (ct.msgs.length) toastMsgs.push(ct.msgs.join(' | '));
+      if (pickSink.length > 0) {
+        // One slot, detection over enumeration: no card carries two targeted onAttack
+        // clauses — the first that does must extend this to a queue, loudly.
+        if (pickSink.length > 1) throw new Error(
+          `combat pick collision: ${pickSink.map(p => p.source).join(' + ')} both demand a target in one declaration window — extend pendingCombatPick to a queue before shipping this card.`);
+        g = { ...g, pendingCombatPick: pickSink[0] };
+        toastMsgs.push(`${pickSink[0].source}: choose a target.`);
+        break; // PAUSE — the attackDamage entry waits beneath; resolveCombatPick resumes
+      }
       continue;
     }
 
@@ -1197,6 +1227,11 @@ interface GameStoreState {
    *  chosen own permanent (never the PC) — MANDATORY, no decline; the paused
    *  declaration window resumes after. */
   resolveForcedSacrifice: (entityId: string) => void;
+  /** A combat-trigger target choice (Requiem Arc B, 2026-08-25 — Satyr of the Reel):
+   *  the attacker's controller picks the clause's own-side target; the paused
+   *  declaration window (and the attack beneath it) resumes on pick. MANDATORY —
+   *  no decline; the only escape was not attacking. */
+  resolveCombatPick: (targetId: string) => void;
   /** Control-theft reversion (Arc I): the OWNER places their returning companion in
    *  the clicked open slot — any line (ruling 6) — and the paused endTurn resumes. */
   resolveReversionSlot: (slot: SlotId) => void;
@@ -1714,7 +1749,7 @@ export const useGameStore = create<GameStoreState>()(
     // refused before any cost is paid, card stays in hand. SCOPED to
     // gainControl-carrying actions: the shipped fizzle-to-Dead-Zone behavior of
     // every other action is untouched.
-    const preOnPlay = (card.effects ?? []).filter(c => c.trigger === 'onPlay').flatMap(c => c.effects);
+    const preOnPlay = onPlayEffects(card, s.game, lp);
     const preGc = preOnPlay.find(e => e.op === 'gainControl');
     if (preGc && preGc.op === 'gainControl') {
       const stealables = isInteractiveSpec(preGc.target)
@@ -1802,7 +1837,9 @@ export const useGameStore = create<GameStoreState>()(
       }
     }
 
-    const onPlay = (card.effects ?? []).filter(c => c.trigger === 'onPlay').flatMap(c => c.effects);
+    // Requiem Arc B (2026-08-25): clause-`if` gated at cast time (onPlayEffects) —
+    // the armed pendingActionTarget carries the GATED set.
+    const onPlay = onPlayEffects(card, g0, lp);
 
     // Two-step action: pick one of your characters first (then a slot or an enemy).
     // gainControl (Arc I): step 1 picks the OPPOSING companion instead (CURRENT-hp
@@ -1813,11 +1850,15 @@ export const useGameStore = create<GameStoreState>()(
       // Arc A (2026-08-19): for the destroy two-steps, STEP 1 is the destroy target
       // (Gear / Physical Construct / the union), NOT one of the caster's characters.
       const dOp = onPlay.find(e => e.op === 'destroy');
+      // Requiem Arc B (2026-08-25): readyUpTo's step 1 is the ready's own target.
+      const rOp = onPlay.find(e => e.op === 'ready');
       const eligibleIds =
         (ts === 'destroyThenHeal' || ts === 'destroyUpTo') && dOp && dOp.op === 'destroy'
           ? filterEligibleByEffects(g0, eligibleTargets(g0, lp, dOp.target), onPlay, card)
         : ts === 'gainControl' && gcOp && gcOp.op === 'gainControl' && isInteractiveSpec(gcOp.target)
           ? filterEligibleByEffects(g0, eligibleTargets(g0, lp, gcOp.target), onPlay, card)
+        : ts === 'readyUpTo' && rOp && rOp.op === 'ready'
+          ? filterEligibleByEffects(g0, eligibleTargets(g0, lp, rOp.target), onPlay, card)
         : charsOf(g0, lp);
       const newHand = g0[lp].hand.filter(c => c.id !== handCardId);
       if (eligibleIds.length === 0) {
@@ -1939,6 +1980,34 @@ export const useGameStore = create<GameStoreState>()(
         return { game: recomputeStatics(done), pendingActionTarget: null,
                  toasts: [...s.toasts, { id: id1, msg: `${pa.sourceName}: ${msgs.join(' | ')}` }] };
       }
+      // Requiem Arc B (2026-08-25, Standing Ovation): STEP 1 READIES the first pick,
+      // then offers the OPTIONAL second only while `maxIf` holds — evaluated NOW, at
+      // the moment the second pick would arm (the twoStepKind comment's runtime gate).
+      // The destroyUpTo shape exactly: the board has already changed when step 2 is
+      // offered, so cancelActionTarget COMMITS for this kind (decline keeps pick 1).
+      if (pa.twoStep === 'readyUpTo') {
+        const readyEff = pa.effects.filter(e => e.op === 'ready');
+        const r = resolveActionEffects(s.game, pa.lp, pa.sourceName, readyEff, targetId, pa.sourceId,
+                                       magicCtx(s.game, pa.lp, pa.card));
+        let g = r.game;
+        const msgs = [...r.msgs];
+        const rOp = pa.effects.find(e => e.op === 'ready');
+        const capOk = !(rOp && rOp.op === 'ready' && rOp.maxIf) || conditionMet(g, pa.lp, (rOp as { maxIf: Condition }).maxIf);
+        const nextEligible = capOk && rOp && rOp.op === 'ready'
+          ? filterEligibleByEffects(g, eligibleTargets(g, pa.lp, rOp.target), pa.effects, pa.card).filter(id => id !== targetId)
+          : [];
+        if (nextEligible.length) {
+          const id0 = ++toastId;
+          setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id0) })), 4000);
+          return { game: g, pendingActionTarget: { ...pa, firstId: targetId, eligibleIds: nextEligible },
+                   toasts: [...s.toasts, { id: id0, msg: `${pa.sourceName}: ${msgs.join(' | ')}` }] };
+        }
+        const done = pa.card ? { ...g, [pa.lp]: { ...g[pa.lp], dead: [...g[pa.lp].dead, pa.card] } } : g;
+        const id1 = ++toastId;
+        setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id1) })), 4000);
+        return { game: recomputeStatics(done), pendingActionTarget: null,
+                 toasts: [...s.toasts, { id: id1, msg: `${pa.sourceName}: ${msgs.join(' | ')}` }] };
+      }
       if (pa.twoStep === 'reposition') {
         // Effect-driven repositioning is still MOVEMENT (R3, owner 2026-07-15): an
         // opposing between-lines restriction removes cross-line destinations here,
@@ -1980,10 +2049,12 @@ export const useGameStore = create<GameStoreState>()(
       setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 4000);
       return { game: recomputeStatics(armPrompts(g, deadSink, armorSink)), pendingActionTarget: null, toasts: [...s.toasts, { id, msg: `${pa.sourceName}: ${msgs.join(' | ')}` }] };
     }
-    if ((pa.twoStep === 'destroyThenHeal' || pa.twoStep === 'destroyUpTo') && pa.firstId) {
-      // Step 2: the heal's chosen target, or the second destroy.
+    if ((pa.twoStep === 'destroyThenHeal' || pa.twoStep === 'destroyUpTo' || pa.twoStep === 'readyUpTo') && pa.firstId) {
+      // Step 2: the heal's chosen target, the second destroy, or the second ready.
       const step2 = pa.twoStep === 'destroyThenHeal'
         ? pa.effects.filter(e => e.op !== 'destroy')
+        : pa.twoStep === 'readyUpTo'
+        ? (pa.effects.filter(e => e.op === 'ready') as Effect[])
         : (pa.effects.filter(e => e.op === 'destroy') as Effect[]);
       const r = resolveActionEffects(s.game, pa.lp, pa.sourceName, step2, targetId, pa.sourceId,
                                      magicCtx(s.game, pa.lp, pa.card));
@@ -2409,7 +2480,8 @@ export const useGameStore = create<GameStoreState>()(
     // "Skip" at step 2 means STOP (an "up to two" that takes one), never undo — so the
     // card goes to the Dead Zone like any resolved Action. Rolling it back to hand here
     // would hand the player a free destroy.
-    if (pa.firstId && (pa.twoStep === 'destroyThenHeal' || pa.twoStep === 'destroyUpTo')) {
+    if (pa.firstId && (pa.twoStep === 'destroyThenHeal' || pa.twoStep === 'destroyUpTo'
+        || pa.twoStep === 'readyUpTo')) { // readyUpTo (Arc B): "up to two" that took one — same commit
       const g = pa.card ? { ...s.game, [pa.lp]: { ...s.game[pa.lp], dead: [...s.game[pa.lp].dead, pa.card] } } : s.game;
       return { pendingActionTarget: null, game: g };
     }
@@ -2463,7 +2535,8 @@ export const useGameStore = create<GameStoreState>()(
     const top = stack?.[stack.length - 1];
     if (!top) return s;
     if (s.game.pendingTriggerOrder || s.game.pendingPeek || s.game.pendingArmor || s.game.pendingPreventOrder
-      || s.game.pendingDiscard || s.game.pendingHandReveal || s.game.pendingForcedSacrifice) return s; // paused on a prompt, not a hand-off
+      || s.game.pendingDiscard || s.game.pendingHandReveal || s.game.pendingForcedSacrifice
+      || s.game.pendingCombatPick) return s; // paused on a prompt, not a hand-off
     // Arc G (2026-08-04): an enterUnit-headed stack also pauses on the game-level
     // prompts the global list doesn't cover — narrow to the new kind, so shipped
     // ownEnter resumption (which can legitimately coexist with a dead pick) is
@@ -2845,6 +2918,7 @@ export const useGameStore = create<GameStoreState>()(
       // A pending forced sacrifice rides the trigger stack, which a save never
       // resumes mid-window — drop it with the rest of the transient prompts.
       pendingForcedSacrifice: undefined,
+      pendingCombatPick: undefined,
       // A dropped reversion pick is safe: the stolenFrom marker persists, so the
       // next endTurn simply re-arms it.
       pendingReversion: undefined,
@@ -3158,6 +3232,39 @@ export const useGameStore = create<GameStoreState>()(
     }
     return { ...local, game: g,
       toasts: [...s.toasts, mkToast(msgs.join(' | ')), ...mkToasts(stackMsgs)] };
+  }),
+
+  // ── Combat-trigger target pick (Requiem Arc B, 2026-08-25 — Satyr of the Reel) ──
+  // The resolveForcedSacrifice discipline exactly: picker-only, the clause resolves
+  // with the chosen target, then the paused stack (the attack's damage step beneath)
+  // resumes in the same reducer.
+  resolveCombatPick: (targetId) => set(s => {
+    if (gameIsOver(s.game)) return s;
+    const pcp = s.game.pendingCombatPick;
+    if (!pcp) return s;
+    if (s.conn.mode !== 'solo' && pcp.lp !== s.localPlayer) return s; // picker-only
+    if (!pcp.eligibleIds.includes(targetId)) return s; // re-check: only an offered target
+    const loc = findEntityAnywhere(s.game, targetId);
+    if (!loc) return s; // target vanished while the prompt was up — pick another (or none left: see below)
+    const mkToast = (msg: string) => {
+      const id = ++toastId;
+      setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 4000);
+      return { id, msg };
+    };
+    const deadSink: PendingDeadPick[] = [];
+    const armorSink: ArmorChoiceData[] = [];
+    const r = resolveActionEffects({ ...s.game, pendingCombatPick: undefined }, pcp.lp,
+      pcp.source, pcp.effects, targetId, pcp.sourceId, undefined, deadSink, armorSink);
+    let g = recomputeStatics(armPrompts(r.game, deadSink, armorSink));
+    // Resume the paused declaration window: the damage step beneath runs now.
+    let local: Partial<GameStoreState> = {};
+    const stackMsgs: string[] = [];
+    if (!g.pendingCombatPick && g.triggerStack?.length) {
+      const rs = runStack(g, s);
+      g = rs.game; local = rs.local; stackMsgs.push(...rs.toastMsgs);
+    }
+    return { ...local, game: g,
+      toasts: [...s.toasts, mkToast(`${pcp.source}: ${r.msgs.join(' | ')}`), ...mkToasts(stackMsgs)] };
   }),
 
   // ── Optional pre-attack ability (Mara): pay HP for +damage, or decline ─────────
@@ -3784,6 +3891,8 @@ export const useGameStore = create<GameStoreState>()(
     // is untouched; the non-empty stack beneath it blocks endTurn anyway —
     // defensive double-lock).
     if (s.game.pendingForcedSacrifice) return s;
+    // Likewise an open combat-trigger target pick (Requiem Arc B — same double-lock).
+    if (s.game.pendingCombatPick) return s;
     if (s.game.pendingReversion) return s; // a reversion pick is out — the turn waits for it
 
     // ── Control-theft reversion (Arc I 2026-08-11) — the FIRST substantive step of

@@ -363,6 +363,19 @@ export function optionalAttackAbility(attacker: BoardEntity, game: GameState, si
 /** A clause (effects + gate + label) drawn from an entity's combat triggers. */
 export interface CombatClause { effects: Effect[]; if?: Condition; sourceName: string; optional?: boolean; cost?: Cost }
 
+/** A deferred combat-trigger target choice (Requiem Arc B, 2026-08-25): the clause
+ *  whose interactive target the ATTACKER's controller must pick — armed as the
+ *  game-level `pendingCombatPick` by the 'ownAttack' stack handler, which pauses the
+ *  stack (the pendingForcedSacrifice discipline: the declared attack sits beneath and
+ *  resumes on resolution). */
+export interface CombatPickRequest {
+  source: string;          // the clause's card (prompt/hold label)
+  lp: 'p1' | 'p2';         // who picks — the attacker's controller
+  sourceId: string;        // the attacker (effect source for resolveActionEffects)
+  effects: Effect[];
+  eligibleIds: string[];   // own-side eligible targets, evaluated at the window
+}
+
 /** Combat-trigger clauses from an entity's own card AND its equipped items. */
 export function combatTriggerEffects(ent: BoardEntity, trigger: Trigger): CombatClause[] {
   const out: CombatClause[] = [];
@@ -423,7 +436,7 @@ export function eventMatches(cond: Condition | undefined, ev: DamageEvent, attac
  * own side (no mid-combat prompt). `attacker` is a snapshot, so a queued onAttack
  * still resolves if the attacker died to a trap above it on the stack (R1).
  */
-export function resolveCombatTriggers(game: GameState, attacker: BoardEntity, attackerOwner: 'p1' | 'p2', events: DamageEvent[], armorSink?: ArmorChoiceData[], which: ('onAttack' | 'onDealDamage' | 'onKill')[] = ['onAttack', 'onDealDamage', 'onKill']): { game: GameState; msgs: string[] } {
+export function resolveCombatTriggers(game: GameState, attacker: BoardEntity, attackerOwner: 'p1' | 'p2', events: DamageEvent[], armorSink?: ArmorChoiceData[], which: ('onAttack' | 'onDealDamage' | 'onKill')[] = ['onAttack', 'onDealDamage', 'onKill'], pickSink?: CombatPickRequest[]): { game: GameState; msgs: string[] } {
   let g = game;
   const msgs: string[] = [];
   const run = (clause: CombatClause, ctx?: EffectCtx) => {
@@ -432,6 +445,19 @@ export function resolveCombatTriggers(game: GameState, attacker: BoardEntity, at
     if (spec) {
       const elig = eligibleTargets(g, attackerOwner, spec).filter(id => findEntityAnywhere(g, id)?.player === attackerOwner);
       if (elig.length === 0) return; // no own target — fizzle
+      // Requiem Arc B (owner-ruled 2026-08-25, Satyr of the Reel): when the caller
+      // supplies a pickSink, an interactive-spec clause DEFERS to a real player
+      // choice instead of auto-picking elig[0]. Only the 'ownAttack' declaration
+      // window passes a sink today — the attack stays paused on the stack beneath the
+      // pick, and resolveCombatPick resumes it. onKill/onDealDamage keep the
+      // documented auto-pick (Mason's Hammer, shipped) — unify only with an owner
+      // ruling AND a fixture audit, because deferring a clause moves its interpreter
+      // die draw and would shift recorded RNG cadence.
+      if (pickSink) {
+        pickSink.push({ source: clause.sourceName, lp: attackerOwner, sourceId: attacker.id,
+          effects: clause.effects, eligibleIds: elig });
+        return;
+      }
       targetId = elig[0];
     }
     const r = resolveActionEffects(g, attackerOwner, clause.sourceName, clause.effects, targetId, attacker.id, ctx, undefined, armorSink);

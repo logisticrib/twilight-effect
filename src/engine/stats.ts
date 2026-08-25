@@ -142,6 +142,31 @@ export function isPhysicalConstruct(ent: BoardEntity): boolean {
   return ent.kind === 'construct' && (ent.subtype === 'Trap' || ent.subtype === 'Fortification');
 }
 
+/**
+ * Vocal Constructs (Requiem Arc B, 2026-08-25) — the Master List's Vocal subtype
+ * family: Chant/Song (Bard), Rite (Druid), Blessing (Paladin), Utterance/Dirge
+ * (Doom-Whisperer). Same one-definition discipline as isPhysicalConstruct above:
+ * subtype string equality, the single Vocal classifier for CRESCENDO, the
+ * 'vocalConstruct' TargetSpec, and whatever asks next.
+ */
+const VOCAL_SUBTYPES = new Set(['Chant', 'Song', 'Rite', 'Blessing', 'Utterance', 'Dirge']);
+export function isVocalConstruct(ent: BoardEntity): boolean {
+  return ent.kind === 'construct' && VOCAL_SUBTYPES.has(ent.subtype);
+}
+
+/**
+ * CRESCENDO (Requiem Arc B, 2026-08-25) — "While you control a Vocal Construct in the
+ * encounter, your characters are in Crescendo" (Master_Keyword_List, ratified
+ * 2026-08-25). The isUntamedEncounter pattern with the OPPOSITE scope: derived on
+ * read, never stored — and CONTROLLER-scoped by design (your own performance; the
+ * opponent's songs never put YOUR characters in Crescendo). Keyword-independent:
+ * whenever `side` controls a Vocal Construct, ALL their characters are in Crescendo,
+ * and a card may ask without printing CRESCENDO.
+ */
+export function inCrescendo(game: GameState, side: 'p1' | 'p2'): boolean {
+  return Object.values(game[side].board).some(e => !!e && isVocalConstruct(e));
+}
+
 // --- The Gear universe + UNTAMED (Arc C, owner-ratified 2026-08-23) -----------
 // `gearItemsOf` MOVED HERE from engine/entities.ts this date (re-exported there, so
 // no call site changed). Reason: `isUntamedEncounter` below must be readable from
@@ -236,6 +261,10 @@ export function conditionMet(game: GameState, lp: 'p1' | 'p2', cond: Condition):
     // unused. The five continuous carriers read this on EVERY stat/keyword read; the
     // dd000066 entry-snapshot reads it exactly once, when its enter trigger resolves.
     case 'untamed': return isUntamedEncounter(game);
+    // Requiem Arc B (2026-08-25): CONTROLLER-scoped by design — `lp` is the asking
+    // clause's controller, threaded at every call site (the mirror image of untamed's
+    // deliberately-unused lp).
+    case 'crescendo': return inCrescendo(game, lp);
     // Final Sweep (2026-08-21, Call to the Vow): do you control ANY permanent whose
     // keywords include this one? Companion or construct host both count; the OPPONENT's
     // carriers never do (the scan never leaves `lp`'s board). effectiveKeywords, so a
@@ -314,13 +343,21 @@ function effectsOf(name: string): CardEffect[] | undefined {
  *  instead if the equipped character is a Beast". This is the ONE site that holds both
  *  the item's clauses and the character wearing them, which is why the binding lives
  *  here rather than in conditionMet (which sees neither). */
-function selfItemStat(item: EquippedItem, stat: 'atk' | 'hp', bearer: BoardEntity): number {
+function selfItemStat(item: EquippedItem, stat: 'atk' | 'hp', bearer: BoardEntity, game?: GameState): number {
   const effects = effectsOf(item.name);
   if (!effects) return 0;
   let sum = 0;
   for (const ce of effects) {
     if (ce.trigger !== 'equipped' && ce.trigger !== 'static') continue;
     if (ce.if?.kind === 'bearerIsSubtype' && !hasSubtype(bearer, ce.if.subtype)) continue;
+    // Requiem Arc B (2026-08-25, Gilded Lute "+1 attack while you are in Crescendo"):
+    // a BOARD-STATE gate on an item clause, answered for the BEARER'S controller —
+    // derive-on-read like every crescendo/untamed gate. `game` is threaded from
+    // itemAndAuraStat; a caller without it (none today) fails the gate closed.
+    if (ce.if && ce.if.kind !== 'bearerIsSubtype') {
+      const side = game ? controllerOf(game, bearer.id) : null;
+      if (!side || !conditionMet(game!, side, ce.if)) continue;
+    }
     for (const e of ce.effects) {
       if (e.op === 'buff' && e.stat === stat && e.scope === 'self') sum += e.amount ?? 0;
     }
@@ -434,8 +471,8 @@ function itemAndAuraStat(ent: BoardEntity, game: GameState, stat: 'atk' | 'hp'):
   let sum = 0;
   const lo = ent.loadout;
   if (lo) {
-    if (lo.weapon) sum += selfItemStat(lo.weapon, stat, ent);
-    for (const g of lo.gear) if (g) sum += selfItemStat(g, stat, ent);
+    if (lo.weapon) sum += selfItemStat(lo.weapon, stat, ent, game);
+    for (const g of lo.gear) if (g) sum += selfItemStat(g, stat, ent, game);
   }
   return sum + staticAuraStat(ent, game, stat);
 }

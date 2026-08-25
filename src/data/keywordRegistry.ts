@@ -90,7 +90,10 @@ export const KEYWORDS: Record<string, KeywordSpec> = {
   // bonus on) but CONTROLLER-scoped: "you control a Vocal Construct" — never
   // encounter-wide. Keyword-independent like Untamed: cards may ask "if you are in
   // Crescendo" without printing it.
-  Crescendo:      { event: 'static',  done: false, note: 'canon: while you control a Vocal Construct in the encounter, your characters are in Crescendo; per-card text defines the bonus. No derived predicate exists yet (wants the isUntamedEncounter pattern, controller-scoped)' },
+  // Arc B (2026-08-25): LIVE — inCrescendo (engine/stats.ts), the isUntamedEncounter
+  // pattern CONTROLLER-scoped; condition kind 'crescendo' in conditionMet (+ the
+  // selfItemStat bearer's-controller binding for item clauses). Keyword-independent.
+  Crescendo:      { event: 'static',  done: true,  note: 'inCrescendo: any Vocal Construct (subtype in {Chant, Song, Rite, Blessing, Utterance, Dirge} — isVocalConstruct) on YOUR board. Bonuses ride clause-level if:{kind:crescendo} — static = continuous, onEnter = entry snapshot (Siren), onPlay = cast-time (Encore), startOfTurn (Skald), equipped = bearer-controller (Gilded Lute), onAttack = declaration window (Satyr, with the pendingCombatPick target prompt)' },
   // Replaces the sacrifice fired by LAST-Anchor-counter removal (decay AND effect
   // removal — canon unifies them, 2026-07-15 family) with a return to hand. The
   // construct leaves but never dies: no sacrifice event, no Dead Zone.

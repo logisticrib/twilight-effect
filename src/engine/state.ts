@@ -119,6 +119,13 @@ export interface GameState {
    *  `undefined` when cleared — games that never arm it keep their exact pre-arc
    *  canonical replay hash (the triggerStack discipline). */
   pendingForcedSacrifice?: PendingForcedSacrifice | null;
+  /** A combat-trigger target choice (Requiem Arc B, owner-ruled 2026-08-25 — Satyr of
+   *  the Reel): the attacker's controller picks the clause's own-side target while
+   *  the declared attack sits paused beneath it on the stack (the forced-sacrifice
+   *  discipline exactly; resolveCombatPick resumes). Routes to `lp`; everyone else
+   *  is held (reactiveHold). OPTIONAL and absent when clear — games that never arm
+   *  it keep their exact pre-arc canonical replay hash. */
+  pendingCombatPick?: import('./combat').CombatPickRequest | null;
   /** Control-theft reversion slot pick (Arc I 2026-08-11, Command the Broken —
    *  owner-ratified GENERAL rule, ruling 6): a companion returning to its owner's
    *  control WITHOUT passing through their hand may be placed in ANY available
