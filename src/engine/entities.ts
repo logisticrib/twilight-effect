@@ -8,7 +8,7 @@ import type { BoardEntity, Card } from '../types/card';
 import { CATALOG } from '../data/catalog';
 import { isFront, FRONT_SLOTS, BACK_SLOTS, type Board, type SlotId } from './geometry';
 import type { GameState, PendingItemTransfer, PendingDeadPick, ArmorChoiceData } from './state';
-import { isCharacter, canHoldItem, isPhysicalConstruct, gearItemsOf, hasSubtype, effectiveKeywords } from './stats';
+import { isCharacter, canHoldItem, isPhysicalConstruct, isVocalConstruct, gearItemsOf, hasSubtype, effectiveKeywords } from './stats';
 // Function-level cycle with combat.ts (destroyEntity fires removal triggers; the
 // trigger machinery damages/destroys entities) and interpreter.ts (on-sacrifice
 // listeners resolve card effects). Safe: hoisted functions, called only at
@@ -354,6 +354,30 @@ export function destroyEntity(game: GameState, entityId: string, sink: PendingDe
     msgs.push(...st.msgs);
   }
   return { game: g, msgs };
+}
+
+/** REPRISE (Requiem Arc E, 2026-08-25) — the replacement for a Vocal Construct's
+ *  sacrifice-by-last-Anchor-counter-removal (BOTH kinds: start-of-turn decay and
+ *  effect removal — canon's unified 2026-07-15 sacrifice family, the owner-ratified
+ *  "any last-counter removal" scope): the construct LEAVES the encounter but never
+ *  DIES — its card (plus any sworn card: canon, leaving returns it) goes to its
+ *  OWNER's hand, no sacrifice/death listeners fire, nothing touches the Dead Zone.
+ *  Gate: isVocalConstruct + EFFECTIVE Reprise (suppression kills it; a granted
+ *  Reprise works). Returns null when the gate fails — the caller sacrifices as
+ *  before. No Manifest collision is possible: Animate Magic is Magic-Construct-only.
+ *  Callers: applyReadyRemovals' decay branch handles this inline (its own loop);
+ *  the three effect sites (anchor op, moveAnchor, Dismantle) call this. */
+export function repriseInstead(game: GameState, entityId: string): { game: GameState; msgs: string[] } | null {
+  const loc = findEntityAnywhere(game, entityId);
+  if (!loc) return null;
+  if (!isVocalConstruct(loc.ent) || !effectiveKeywords(loc.ent, game).includes('Reprise')) return null;
+  const owner: 'p1' | 'p2' = loc.ent.stolenFrom ?? loc.player;
+  const card = CATALOG.find(c => c.name === loc.ent.name);
+  if (!card) return null;
+  const removed = removeEntity(game, entityId);
+  const g: GameState = { ...removed, [owner]: { ...removed[owner],
+    hand: [...removed[owner].hand, card, ...(loc.ent.sworn ? [loc.ent.sworn] : [])] } };
+  return { game: g, msgs: [`${loc.ent.name}: Reprise — it returns to ${g[owner].name}'s hand instead of being sacrificed.`] };
 }
 
 /** Eligible rescuers for one item of a transfer window, re-derived LIVE: ready

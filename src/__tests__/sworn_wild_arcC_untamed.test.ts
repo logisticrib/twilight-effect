@@ -366,11 +366,15 @@ describe('serialization + contract discipline', () => {
 
   it('ONLY buff and grantKeywords honour a static `if` — anything else must fail loudly here', () => {
     // Arc C gated the two static derive-on-read paths (staticBuffsOf, auraGrantedKeywords).
-    // Four other static readers exist — magicDamageBonus, preventAnchorDecay, lineWard,
+    // Other static readers exist — magicDamageBonus, preventAnchorDecay, lineWard,
     // backLineAttack — and they do NOT consult `if`. No card authors that combination
     // today; this guard fails the day one does, instead of silently ignoring the gate.
     // Detection over enumeration (the enterUnitsOf idiom).
-    const GATED_OPS = new Set(['buff', 'grantKeywords']);
+    // AMENDED 2026-08-25 (Requiem Arc E): 'attackTwice' joined the gated set —
+    // extraAttackAllowed (engine/stats.ts) evaluates its clause `if` via conditionMet
+    // at attack-2 time (Vielle's crescendo gate), exactly the discipline this pin
+    // exists to demand.
+    const GATED_OPS = new Set(['buff', 'grantKeywords', 'attackTwice']);
     const offenders: string[] = [];
     for (const c of CATALOG) {
       for (const ce of c.effects ?? []) {

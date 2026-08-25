@@ -97,7 +97,11 @@ export const KEYWORDS: Record<string, KeywordSpec> = {
   // Replaces the sacrifice fired by LAST-Anchor-counter removal (decay AND effect
   // removal — canon unifies them, 2026-07-15 family) with a return to hand. The
   // construct leaves but never dies: no sacrifice event, no Dead Zone.
-  Reprise:        { event: 'static',  done: false, note: 'canon: when this Vocal Construct would be sacrificed because its last Anchor counter was removed, return it to your hand instead. No replacement hook exists at either last-counter site (readyPhase decay / anchor-removal ops)' },
+  // Arc E (2026-08-25): LIVE — repriseInstead (engine/entities.ts) replaces the
+  // sacrifice at ALL FOUR last-counter sites (readyPhase decay inline; the anchor
+  // op, moveAnchor, and Dismantle call the helper). Leaves-but-never-dies: card +
+  // sworn to the OWNER's hand, no listeners, no Dead Zone. Suppression kills it.
+  Reprise:        { event: 'static',  done: true,  note: 'repriseInstead at the four last-anchor sacrifice sites (decay + anchor op + moveAnchor + Dismantle — the unified 2026-07-15 family). Vocal-only by classifier; no Manifest collision (Animate Magic is Magic-only)' },
   // The death fully happens first (listeners fire, items transfer, card touches the
   // Dead Zone), THEN the return — WITH a Memory counter, which IS the whole tracker:
   // a companion that dies carrying a Memory counter stays dead. Reworked from

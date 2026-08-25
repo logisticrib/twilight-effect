@@ -80,7 +80,28 @@ export function controlsPreventAnchorDecay(ps: PlayerState): boolean {
     if (lo) for (const it of [lo.weapon, ...lo.gear]) if (it) names.push(it.name);
     for (const name of names)
       for (const ce of CATALOG.find(c => c.name === name)?.effects ?? [])
-        if (ce.trigger === 'static') for (const e of ce.effects) if (e.op === 'preventAnchorDecay') return true;
+        // Arc E: constructKind-filtered — absent = 'physical' (Master of Foundations
+        // byte-identical); the vocal kind is answered by vocalDecaySkippedFor below.
+        if (ce.trigger === 'static') for (const e of ce.effects)
+          if (e.op === 'preventAnchorDecay' && (e.constructKind ?? 'physical') === 'physical') return true;
+  }
+  return false;
+}
+
+/** Arc E (2026-08-25, Anthem of the Unbroken): is `ent`'s start-of-turn decay skipped
+ *  by a VOCAL-kind preventAnchorDecay source the same player controls? `excludeSelf`
+ *  sources never protect themselves — the Anthem decays while everything else sings on. */
+export function vocalDecaySkippedFor(ps: PlayerState, ent: BoardEntity): boolean {
+  for (const src of Object.values(ps.board)) {
+    if (!src) continue;
+    for (const ce of CATALOG.find(c => c.name === src.name)?.effects ?? []) {
+      if (ce.trigger !== 'static') continue;
+      for (const e of ce.effects) {
+        if (e.op !== 'preventAnchorDecay' || e.constructKind !== 'vocal') continue;
+        if (e.excludeSelf && src.id === ent.id) continue;
+        return true;
+      }
+    }
   }
   return false;
 }

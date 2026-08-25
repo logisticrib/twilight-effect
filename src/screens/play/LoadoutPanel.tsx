@@ -3,7 +3,7 @@ import { CardFace } from '../../components/CardFace';
 import { CATALOG } from '../../data/catalog';
 import { TBL, CLASSCLR, GLYPH } from '../../tokens';
 import { btnProps } from '../../lib/a11y';
-import { useGameStore, gatherActivated, abilityUsedTag, type GameState } from '../../store/gameStore';
+import { extraAttackAllowed, useGameStore, gatherActivated, abilityUsedTag, type GameState } from '../../store/gameStore';
 import { canPlayActionCard, canAttackFromPosition, attackRestrictedBy } from '../../store/keywords';
 import { handlePreviewWheel } from './previewScroll';
 import type { BoardEntity, EquippedItem } from '../../types/card';
@@ -106,7 +106,10 @@ function computeActions(
   const attackRestricted = entSlot ? attackRestrictedBy(game, ent, side, entSlot as Parameters<typeof attackRestrictedBy>[3]) : null;
 
   // Zealous bypasses the entry-turn ("fresh") restriction for attacks (only).
-  const attackOk = !sealed && !acts.major && !isExhausted && (!fresh || zealous) && (!isPC || hasWeapon) && canAttackFromPos && !attackRestricted;
+  // Arc E (Vielle): a live attackTwice allowance keeps the button up for the SECOND
+  // attack even though the first exhausted her — the same read beginAttack enforces.
+  const secondAttack = extraAttackAllowed(game, ent);
+  const attackOk = !sealed && (!acts.major || secondAttack) && (!isExhausted || secondAttack) && (!fresh || zealous) && (!isPC || hasWeapon) && canAttackFromPos && !attackRestricted;
   const attackReason = sealed ? 'Activation finished' :
     attackRestricted ? `Cannot attack — ${attackRestricted}` :
     !canAttackFromPos ? 'Must be in Front Line (or have Ranged)' :

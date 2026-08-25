@@ -338,7 +338,19 @@ export type Effect =
   // Engine-supported scopes only (contract must not advertise unimplemented space).
   | { op: 'preventDamage'; amount: number; scope: 'ownCompanions' | 'ownParty'; where?: { cls?: string } }
   | { op: 'magicDamageBonus'; amount: number }   // (static) +dmg to each enemy your Magic Actions damage
-  | { op: 'preventAnchorDecay' }                 // (static) your Physical Constructs skip start-of-turn anchor decay
+  // Arc E (2026-08-25): `constructKind` widens the family — absent = 'physical'
+  // (Master of Foundations byte-identical); 'vocal' = the Anthem of the Unbroken.
+  // `excludeSelf` = the source itself still decays ("OTHER Vocal Constructs").
+  | { op: 'preventAnchorDecay'; constructKind?: 'physical' | 'vocal'; excludeSelf?: boolean } // (static) the controller's Constructs of that kind skip start-of-turn anchor decay
+  // Arc E (2026-08-25, Song of Hearthlight): OTHER Vocal Constructs the controller
+  // PLACES enter with +amount Anchor counters ('other' is inherent — the enterer is
+  // never on-board as its own source; the singleton game means no second copy).
+  | { op: 'entryAnchorBonus'; amount: number }
+  // Arc E (2026-08-25, Vielle): a STANDING attack allowance — the carrier may attack
+  // twice each turn while the clause is live (gate it with if:{kind:'crescendo'}).
+  // The allowance is read AT THE SECOND ATTACK: losing the condition between attacks
+  // kills it. Tracked via BoardEntity.attacksUsed (stamped only on carriers).
+  | { op: 'attackTwice' }
   | { op: 'lineWard' }                           // (static) opposing companions can't attack characters on the line opposite this construct
   | { op: 'exhaustSelf' }                        // exhaust the source permanent (e.g. Library of Memory's "if you do")
   // ready (Arc B, 2026-08-19 — Greywind Courser). The exact inverse of `exhaust`, and

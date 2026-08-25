@@ -167,6 +167,45 @@ export function inCrescendo(game: GameState, side: 'p1' | 'p2'): boolean {
   return Object.values(game[side].board).some(e => !!e && isVocalConstruct(e));
 }
 
+/** Arc E (2026-08-25, Song of Hearthlight): the total entryAnchorBonus the
+ *  controller's board projects onto a Vocal Construct they are placing. 'Other' is
+ *  inherent — the enterer is never on-board as its own source (and the singleton
+ *  game means no second copy). Clause-level `if` honored via conditionMet. */
+export function vocalEntryAnchorBonus(game: GameState, side: 'p1' | 'p2'): number {
+  let sum = 0;
+  for (const src of Object.values(game[side].board)) {
+    if (!src) continue;
+    for (const ce of CATALOG.find(c => c.name === src.name)?.effects ?? []) {
+      if (ce.trigger !== 'static') continue;
+      if (ce.if && !conditionMet(game, side, ce.if)) continue;
+      for (const e of ce.effects) if (e.op === 'entryAnchorBonus') sum += e.amount;
+    }
+  }
+  return sum;
+}
+
+/** Arc E (2026-08-25, Vielle): does this entity's CARD carry an attackTwice clause at
+ *  all? A cheap SHAPE query — used to decide whether to stamp `attacksUsed` (vanilla
+ *  attackers never carry the key, so fixtures stay byte-identical). */
+export function hasAttackTwiceClause(ent: BoardEntity): boolean {
+  return (CATALOG.find(c => c.name === ent.name)?.effects ?? [])
+    .some(ce => ce.effects.some(e => e.op === 'attackTwice'));
+}
+
+/** Arc E (2026-08-25, Vielle): may this entity take its SECOND attack right now?
+ *  The standing allowance is read AT ATTACK-2 TIME (a live attackTwice clause —
+ *  clause-`if`, e.g. crescendo, evaluated against the controller NOW: losing the
+ *  song between attacks kills the second) and exactly one attack has been used. */
+export function extraAttackAllowed(game: GameState, ent: BoardEntity): boolean {
+  if ((ent.attacksUsed ?? 0) !== 1) return false;
+  const side = controllerOf(game, ent.id);
+  if (!side) return false;
+  return (CATALOG.find(c => c.name === ent.name)?.effects ?? [])
+    .filter(ce => ce.trigger === 'static')
+    .filter(ce => !ce.if || conditionMet(game, side, ce.if))
+    .some(ce => ce.effects.some(e => e.op === 'attackTwice'));
+}
+
 // --- The Gear universe + UNTAMED (Arc C, owner-ratified 2026-08-23) -----------
 // `gearItemsOf` MOVED HERE from engine/entities.ts this date (re-exported there, so
 // no call site changed). Reason: `isUntamedEncounter` below must be readable from

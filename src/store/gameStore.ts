@@ -13,6 +13,11 @@ import { recomputeStatics, isImmuneToSplash, HIT_RUN_STATUS,
          canAttackFromPosition, isLegalAttackTarget, bindingGuardianIds, legalAttackTargetIds,
          conditionMet } from './keywords';
 
+// Arc E: the Vocal subtype family, for the entry-anchor bonus check (mirrors
+// isVocalConstruct's set — the entity does not exist yet at this point, so the
+// check reads the CARD's subtype).
+const VOCAL_ENTRY = new Set(['Chant', 'Song', 'Rite', 'Blessing', 'Utterance', 'Dirge']);
+
 // Everything relocated to the headless engine stays importable from this module —
 // external import sites don't churn during the extraction (see src/engine/index.ts).
 export * from '../engine';
@@ -26,7 +31,7 @@ import { ADJ, FRONT_SLOTS, BACK_SLOTS, isFront, findSlot, type SlotId, type Boar
          orderedForStack, batchOrderer, segmentBatch, resolveCombatTriggers, combatTriggerEffects,
          findEntityAnywhere, updateEntity, removeEntity, canBeSacrificed,
          itemProfileOf, itemTransferCandidates, armNextItemTransfer,
-         setPcHp, payPcHp, pcIdOf, charsOf, millCards, drawCards, type CombatPickRequest,
+         setPcHp, payPcHp, pcIdOf, charsOf, millCards, drawCards, repriseInstead, vocalEntryAnchorBonus, hasAttackTwiceClause, extraAttackAllowed, type CombatPickRequest,
          ownPhysicalConstructIds,
          eligibleTargets, filterEligibleByEffects, effectsWouldAffectSomething, actionTargetSpec, twoStepKind, isInteractiveSpec,
          permanentEffects, gatherActivated, abilityUsedTag, magicCtx,
@@ -233,7 +238,11 @@ function declareAttack(game: GameState, charId: string, targetEntityId: string, 
   const attacker = attLoc.ent;
   const oppPlayer: 'p1' | 'p2' = attLoc.player === 'p1' ? 'p2' : 'p1';
 
-  const newGame = updateEntity(game, charId, { tapped: 'major', exhausted: true, acts: { ...attacker.acts, major: true } });
+  // Arc E (Vielle): carriers of an attackTwice clause tally their attacks —
+  // stamped ONLY for them (shape query), so vanilla attackers and every committed
+  // fixture keep their exact entity shape.
+  const newGame = updateEntity(game, charId, { tapped: 'major', exhausted: true, acts: { ...attacker.acts, major: true },
+    ...(hasAttackTwiceClause(attacker) ? { attacksUsed: (attacker.attacksUsed ?? 0) + 1 } : {}) });
   const dmg = effectiveAttack(attacker, game) + attackDamageBonus(attacker, game, attLoc.player) + bonusDmg;
   const attackerKws = effectiveKeywords(attacker, game);
   const hitQueue = [targetEntityId];
@@ -1469,8 +1478,15 @@ function commitPlay(
       atk: card.attack ?? undefined,
       hp: card.hp ?? 0,
       maxHp: card.hp ?? 0,
-      anchors: card.anchor ?? undefined,
-      anchorsStart: card.anchor ?? undefined,
+      // Arc E (2026-08-25, Song of Hearthlight): a Vocal Construct enters with the
+      // controller's projected bonus ("enters with an additional Anchor counter") —
+      // both the live count and the start value, because that IS its start.
+      anchors: card.anchor != null
+        ? card.anchor + (isConstruct && VOCAL_ENTRY.has(card.subtype) ? vocalEntryAnchorBonus(s.game, lp) : 0)
+        : undefined,
+      anchorsStart: card.anchor != null
+        ? card.anchor + (isConstruct && VOCAL_ENTRY.has(card.subtype) ? vocalEntryAnchorBonus(s.game, lp) : 0)
+        : undefined,
       // Companion-variant Armor X: "This companion enters the encounter with X armor
       // counters" (canon 2026-08-18). Placed ONCE here — from then on the COUNTERS
       // carry the behavior, not a keyword check (universal counter rule).
@@ -2123,9 +2139,13 @@ export const useGameStore = create<GameStoreState>()(
         g = updateEntity(g, targetId, { anchors: (dstLoc.ent.anchors ?? 0) + moved });
         const srcNext = (srcLoc.ent.anchors ?? 0) - moved;
         if (srcNext <= 0) {
-          const d = destroyEntity(g, pa.firstId, deadSink, armorSink, 'sacrifice'); // sacrifice = death (fires triggers + on-sacrifice listeners)
-          g = d.game;
-          msgs.push(`${srcLoc.ent.name} loses its last anchor — sacrificed!`, ...d.msgs);
+          const rep = repriseInstead(g, pa.firstId); // Arc E: Vocal + Reprise → hand instead
+          if (rep) { g = rep.game; msgs.push(...rep.msgs); }
+          else {
+            const d = destroyEntity(g, pa.firstId, deadSink, armorSink, 'sacrifice'); // sacrifice = death (fires triggers + on-sacrifice listeners)
+            g = d.game;
+            msgs.push(`${srcLoc.ent.name} loses its last anchor — sacrificed!`, ...d.msgs);
+          }
         }
         else g = updateEntity(g, pa.firstId, { anchors: srcNext });
         msgs.push(`Moved ${moved} anchor${moved !== 1 ? 's' : ''} ${srcLoc.ent.name} → ${dstLoc.ent.name}`);
@@ -3181,11 +3201,14 @@ export const useGameStore = create<GameStoreState>()(
     // Atomic activation: can't return to a character once you've activated another.
     if (isSealed(s.game, charId)) return { ...toast(`${ent.name} has already finished its activation this turn.`) };
 
-    // Already used major action this turn
-    if (ent.acts.major) return { ...toast('Already used a Major Action this turn.') };
+    // Already used major action this turn — unless the standing attackTwice
+    // allowance grants a second ATTACK (Arc E, Vielle: read live, so losing the
+    // song between attacks kills it; attacks only — no free second Major).
+    const secondAttack = extraAttackAllowed(s.game, ent);
+    if (ent.acts.major && !secondAttack) return { ...toast('Already used a Major Action this turn.') };
 
     // Exhausted (shouldn't happen if acts.major is tracked, but guard anyway)
-    if (ent.exhausted) return { ...toast('This character is exhausted.') };
+    if (ent.exhausted && !secondAttack) return { ...toast('This character is exhausted.') };
 
     // Summoning sickness — fresh companions cannot attack unless Zealous
     // (effectiveKeywords: item-granted Zealous counts, suppressed Zealous doesn't).
@@ -3596,6 +3619,16 @@ export const useGameStore = create<GameStoreState>()(
     } else {
       const next = Math.max(0, cur - pt.n);
       if (next <= 0) {
+        // Arc E: Dismantle-to-zero is the same last-counter sacrifice event —
+        // a Vocal Construct with Reprise returns to hand instead (owner re-ruled
+        // after examining Dismantle's actual text, 2026-08-25).
+        const rep = repriseInstead(game, targetId);
+        if (rep) {
+          const id = ++toastId;
+          setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 4000);
+          return { pendingTrigger: null, game: recomputeStatics(rep.game),
+            toasts: [...s.toasts, { id, msg: `${pt.sourceName}: ${rep.msgs.join(' | ')}` }] };
+        }
         const d = destroyEntity(game, targetId, deadSink, armorSink, 'sacrifice'); // sacrifice = death (fires triggers + on-sacrifice listeners)
         game = d.game;
         msg = [`${pt.sourceName} dismantles ${loc.ent.name} — no anchors left, sacrificed!`, ...d.msgs].join(' | ');

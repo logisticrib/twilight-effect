@@ -159,6 +159,11 @@ export interface BoardEntity {
    *  permanent, not only companions. OPTIONAL and absent-when-zero (hash
    *  discipline, as with `poison` / `armorCounters`). */
   memoryCounters?: number;
+  /** Attacks declared this turn (Arc E, 2026-08-25 — Vielle's attackTwice allowance).
+   *  Stamped ONLY on entities whose card carries an attackTwice clause, so vanilla
+   *  attackers never carry it (fixture-hash discipline); stripped at the controller's
+   *  ready. */
+  attacksUsed?: number;
   loadout?: Loadout;
   sworn?: Card | null; // oathsworn card tucked beneath
   acts: Acts;          // per-turn action budget

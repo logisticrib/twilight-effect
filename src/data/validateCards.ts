@@ -60,6 +60,8 @@ const OPS = [
   'destroy',
   'ready',
   'placeArmor',
+  // Requiem Arc E (2026-08-25): the Song machinery ops.
+  'entryAnchorBonus', 'attackTwice',
 ] as const satisfies readonly Effect['op'][];
 export type _ExhaustiveOps = AssertNever<Exclude<Effect['op'], (typeof OPS)[number]>>;
 
@@ -258,6 +260,9 @@ function validateEffect(e: Effect, path: string, p: (msg: string) => void, keywo
       count('count');
       // Engine-supported scope only (Arc D 2026-07-23; the preventDamage precedent).
       if (e.target !== 'eventSubject') p(`${path}(applyPoison): target must be eventSubject (trap windows)`);
+      break;
+    case 'entryAnchorBonus':
+      if (!isInt(e.amount) || e.amount < 1) p(`${path}(entryAnchorBonus): amount must be an integer ≥ 1`);
       break;
     case 'placeArmor':
       count('count');

@@ -12,7 +12,7 @@ import type { GameState, PendingDeadPick, ArmorChoiceData } from './state';
 import { pushStack } from './state';
 import { charsOf, companionIds, constructIds, findEntityAnywhere, updateEntity,
          removeEntity, destroyEntity, setPcHp, pcIdOf, itemCardsOf, itemTransferOf, canBeSacrificed,
-         gearItemsOf, destroyItemById, millCards, drawCards } from './entities';
+         gearItemsOf, destroyItemById, millCards, drawCards, repriseInstead } from './entities';
 import { hasSubtype, cardHasSubtype } from './stats';
 import { isPhysicalConstruct, isVocalConstruct, conditionMet, effectiveMaxHp, isImmuneToSplash, isCharacter, poisonHitPatch,
          effectiveKeywords, isWardedAgainst } from './stats';
@@ -697,6 +697,10 @@ export function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceNam
         const cur = loc.ent.anchors ?? 0;
         const next = Math.max(0, cur + e.delta);
         if (e.delta < 0 && next <= 0) {
+          // REPRISE (Arc E): a Vocal Construct returns to hand instead (the unified
+          // sacrifice family — effect removal and decay are the same event).
+          const rep = repriseInstead(g, targetId);
+          if (rep) { g = rep.game; msgs.push(...rep.msgs); break; }
           const d = destroyEntity(g, targetId, sink, armorSink, 'sacrifice'); // sacrifice = death (fires triggers + on-sacrifice listeners)
           g = d.game;
           msgs.push(`${loc.ent.name} loses its last anchor — sacrificed!`, ...d.msgs);

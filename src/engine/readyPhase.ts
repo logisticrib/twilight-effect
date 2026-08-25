@@ -13,11 +13,11 @@ import type { GameState, PlayerState, PendingItemTransfer, PendingDeadPick,
               PendingModalChoice, PeekRequest, ArmorChoiceData, PendingHauntReturn } from './state';
 import type { Board, SlotId } from './geometry';
 import { FRONT_SLOTS, BACK_SLOTS } from './geometry';
-import { HIT_RUN_STATUS, currentWillpower, isPhysicalConstruct, hasAnchorCounters, recomputeStatics, hasModifier, effectiveKeywords } from './stats';
+import { HIT_RUN_STATUS, currentWillpower, isPhysicalConstruct, isVocalConstruct, hasAnchorCounters, recomputeStatics, hasModifier, effectiveKeywords } from './stats';
 import { CATALOG } from '../data/catalog';
 import { deadCardsOf, itemTransferOf, fireSacrificeTriggers } from './entities';
 import { hasRemovalTrigger, resolveRemovalTriggers } from './combat';
-import { freshActs, computeWillpower, controlsPreventAnchorDecay, resolveStartOfTurn } from './lifecycle';
+import { freshActs, computeWillpower, controlsPreventAnchorDecay, vocalDecaySkippedFor, resolveStartOfTurn } from './lifecycle';
 import { permanentEffects, resolveActionEffects } from './interpreter';
 
 /** Step 1 — ready all permanents + flip the Class Zone (no removals here). */
@@ -66,8 +66,11 @@ export function readyAndFlip(ps: PlayerState): PlayerState {
     const readiedLoadout = lo && [lo.weapon, ...lo.gear].some(it => it?.exhausted)
       ? { weapon: readyItem(lo.weapon), gear: lo.gear.map(readyItem) }
       : lo;
+    // Arc E: per-turn attack tally (Vielle's attackTwice) resets at the ready —
+    // key STRIPPED, never written 0 (fixture-hash discipline).
+    const { attacksUsed: _spentAttacks, ...entRest } = ent;
     newBoard[slot as SlotId] = {
-      ...ent, fresh: false, acts: freshActs(),
+      ...entRest, fresh: false, acts: freshActs(),
       tapped: poisoned || skipReady ? ent.tapped : 'none' as TapState,
       exhausted: poisoned || skipReady ? ent.exhausted : false,
       ...(readiedLoadout !== lo ? { loadout: readiedLoadout } : {}),
@@ -106,6 +109,7 @@ export function applyReadyRemovals(game: GameState, side: 'p1' | 'p2', whose: st
   const sacrificed: BoardEntity[] = [];
   const fled: BoardEntity[] = [];
   const haunts: PendingHauntReturn[] = [];
+  const reprisedToHand: Card[] = [];
   // Fleeing checks read THE current Willpower (Dismayed-adjusted; base was
   // recomputed at the flip). Dismay pressure can cause fleeing — intended
   // (owner ruling 2026-07-04).
@@ -132,9 +136,24 @@ export function applyReadyRemovals(game: GameState, side: 'p1' | 'p2', whose: st
     // does NOT protect Manifests — its text names Physical Constructs).
     let cur = ent;
     if (hasAnchorCounters(ent)) {
-      const skipDecay = noPhysicalDecay && isPhysicalConstruct(ent);
+      // Arc E (2026-08-25): the Anthem of the Unbroken — the VOCAL twin of the
+      // Master-of-Foundations skip, with an 'other' exclusion (the Anthem itself
+      // still decays; the live Satyr can sustain it instead).
+      const skipDecay = (noPhysicalDecay && isPhysicalConstruct(ent))
+        || (isVocalConstruct(ent) && vocalDecaySkippedFor(ps, ent));
       const newAnchors = skipDecay ? (ent.anchors ?? 0) : (ent.anchors ?? 0) - 1;
       if (newAnchors <= 0) { // last anchor decayed — sacrificed (it already ticked)
+        // REPRISE (Arc E): a Vocal Construct with effective Reprise LEAVES to its
+        // owner's hand instead of dying — no bury, no sacrifice listeners, no Dead
+        // Zone (the ratified leaves-but-never-dies). Sworn card returns with it.
+        if (isVocalConstruct(ent) && effectiveKeywords(ent, game).includes('Reprise')) {
+          const card = CATALOG.find(c => c.name === ent.name);
+          if (card) {
+            reprisedToHand.push(...(ent.sworn ? [card, ent.sworn] : [card]));
+            notices.push(`${whose} ${ent.name}: Reprise — it returns to hand instead of being sacrificed.`);
+            continue;
+          }
+        }
         bury(ent);
         sacrificed.push(ent);
         notices.push(`${whose} ${ent.name} crumbles — its last Anchor decayed.`);
@@ -172,7 +191,8 @@ export function applyReadyRemovals(game: GameState, side: 'p1' | 'p2', whose: st
   }
   return { game: { ...game, [side]: { ...ps, board: newBoard,
     dead: buried.length ? [...ps.dead, ...buried] : ps.dead,
-    hand: returnedSworn.length ? [...ps.hand, ...returnedSworn] : ps.hand },
+    hand: returnedSworn.length || reprisedToHand.length
+      ? [...ps.hand, ...returnedSworn, ...reprisedToHand] : ps.hand },
     ...(haunts.length ? { pendingHauntQueue: [...(game.pendingHauntQueue ?? []), ...haunts] } : {}) },
     notices, transfers, sacrificed, fled };
 }
