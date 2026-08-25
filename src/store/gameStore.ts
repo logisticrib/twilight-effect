@@ -18,7 +18,7 @@ import { recomputeStatics, isImmuneToSplash, HIT_RUN_STATUS,
 export * from '../engine';
 import { ADJ, FRONT_SLOTS, BACK_SLOTS, isFront, findSlot, type SlotId, type Board,
          type Phase, type GameState,
-         type PendingCoercion, type PendingDeadPick, type PendingDiscard, type PendingHauntReturn,
+         type PendingCoercion, type PendingDeadPick, type PendingDiscard, type PendingHauntReturn, type ContinueReturn,
          type AttackCtx, type ArmorChoiceData,
          type PendingItemTransfer, type StackEntry, type ReactiveStackEntry,
          gatherParanoia, gatherReactive, gatherOwnSide, gatherEquippedAttacked, gatherSelfAttacked,
@@ -417,7 +417,7 @@ export function reactiveHold(game: GameState, localPlayer: 'p1' | 'p2'): string 
   if (pcp && pcp.lp !== localPlayer) return `${pcp.source} (combat target)`;
   // The opponent's Haunt slot pick (Requiem Arc C) — the OWNER places their
   // returning companion; everyone else waits.
-  const phr = game.pendingHauntReturn;
+  const phr = game.pendingDeadReturn;
   if (phr && phr.lp !== localPlayer) return `${phr.cardName} (haunting)`;
   // The opponent's reversion slot pick (Arc I control theft) — the OWNER chooses
   // where their companion returns; the caster's turn cannot end until they do.
@@ -754,17 +754,18 @@ function onEnterEffects(card: Card, game: GameState, lp: 'p1' | 'p2'):
 }
 
 /** Perform one HAUNT return (Requiem Arc C, 2026-08-25) — shared by armHaunt's
- *  singleton auto-place and resolveHauntSlot. Removes the card from the owner's Dead
+ *  singleton auto-place and resolveReturnSlot. Removes the card from the owner's Dead
  *  Zone, rebuilds the entity the way placeCard does (fresh acts, `fresh: true` so the
  *  willpower gate applies, armor counters re-placed — an enter is an enter) PLUS
  *  `exhausted` (the ratified wording) and ONE Memory counter, then pushes the 'enter'
  *  stack entry so the FULL entry machinery fires and runs the stack. */
-function performHauntReturn(game: GameState, head: PendingHauntReturn, slot: SlotId, s: StackRunCtx):
+function performDeadReturn(game: GameState, head: PendingHauntReturn & { memory?: boolean; exhausted?: boolean; continueReturn?: ContinueReturn }, slot: SlotId, s: StackRunCtx):
   { game: GameState; local: Partial<GameStoreState>; msgs: string[] } {
   const card = game[head.lp].dead.find(c => c.id === head.cardId);
   if (!card) return { game, local: {}, msgs: [] };
+  const exhausted = head.exhausted !== false; // every current consumer returns exhausted
   const ent: BoardEntity = {
-    id: uid(`haunt-${card.id}`),
+    id: uid(`return-${card.id}`),
     kind: 'companion',
     name: card.name, cls: card.class1, level: card.level,
     atk: card.attack ?? undefined,
@@ -773,16 +774,56 @@ function performHauntReturn(game: GameState, head: PendingHauntReturn, slot: Slo
     armorStart: parseArmorKeyword(card.keywords) ?? undefined,
     keywords: card.keywords, statuses: [],
     subtype: card.subtype, text: card.text,
-    tapped: 'major', exhausted: true,   // "return it ... exhausted"
+    tapped: exhausted ? 'major' : 'none', exhausted,
     fresh: true,                        // an enter — the willpower gate applies
-    memoryCounters: 1,                  // the per-stint tracker, placed BY the return
+    // Haunt's return (memory) places the per-stint tracker; a plain reanimation
+    // (Arc D) returns the body CLEAN — outside recursion resets Haunt by design.
+    ...(head.memory ? { memoryCounters: 1 } : {}),
     acts: freshActs(),
   };
   let g: GameState = { ...game, [head.lp]: { ...game[head.lp], dead: game[head.lp].dead.filter(c => c.id !== card.id) } };
   g = pushStack(g, [{ kind: 'enter', ent, card, slot, controller: head.lp }]);
   const r = runStack(g, s);
-  return { game: r.game, local: r.local,
-    msgs: [`${card.name} haunts — it returns to the encounter with a Memory counter.`, ...r.toastMsgs] };
+  let out = r.game;
+  const msgs = [head.memory
+    ? `${card.name} haunts — it returns to the encounter with a Memory counter.`
+    : `${card.name} returns from the Dead Zone${exhausted ? ' exhausted' : ''}.`, ...r.toastMsgs];
+  // The Great Unrest loop (Arc D): re-arm the NEXT dead pick, options evaluated
+  // FRESH (the board and Dead Zone both just changed). Queued behind any prompt the
+  // enter itself armed (the pendingDeadPickQueue discipline).
+  const cont = head.continueReturn;
+  if (cont && cont.remaining > 0) {
+    const next = buildEncounterDeadPick(out, head.lp, cont.source, {
+      exhausted: cont.exhausted, remaining: cont.remaining,
+      levelAtMost: cont.levelAtMost, excludeName: cont.excludeName });
+    if (next) {
+      out = out.pendingDeadPick
+        ? { ...out, pendingDeadPickQueue: [...out.pendingDeadPickQueue, next] }
+        : { ...out, pendingDeadPick: next };
+      msgs.push(`${cont.source}: you may return another (${cont.remaining} more).`);
+    }
+  }
+  return { game: out, local: r.local, msgs };
+}
+
+/** Build the return-to-encounter dead pick (Arc D), or null when nothing is eligible
+ *  or no slot is open — the caller decides how loudly. Options: the controller's dead
+ *  COMPANION cards under the level cap, excluding `excludeName` (the Wraith's
+ *  'another' — exact in a singleton game). */
+function buildEncounterDeadPick(g: GameState, lp: 'p1' | 'p2', source: string,
+  spec: { exhausted: boolean; remaining?: number; levelAtMost?: number; excludeName?: string; sourceId?: string; optional?: boolean }): PendingDeadPick | null {
+  const options = g[lp].dead.map((card, idx) => ({ card, idx }))
+    .filter(o => o.card.type === 'Companion')
+    .filter(o => spec.levelAtMost == null || o.card.level <= spec.levelAtMost)
+    .filter(o => !spec.excludeName || o.card.name !== spec.excludeName);
+  if (!options.length) return null;
+  if (![...FRONT_SLOTS, ...BACK_SLOTS].some(sl => !g[lp].board[sl])) return null; // no room
+  return { source, lp, options, postEffects: [], optional: spec.optional ?? true,
+    sourceId: spec.sourceId,
+    toEncounter: { exhausted: spec.exhausted,
+      ...(spec.remaining != null ? { remaining: spec.remaining } : {}),
+      ...(spec.levelAtMost != null ? { levelAtMost: spec.levelAtMost } : {}),
+      ...(spec.excludeName ? { excludeName: spec.excludeName } : {}) } };
 }
 
 /** The onPlay twin (Requiem Arc B, 2026-08-25 — Encore of the Dawn's additive
@@ -1275,7 +1316,7 @@ interface GameStoreState {
   armHaunt: () => void;
   /** The OWNER places their haunting companion in the clicked open slot (any line —
    *  the ratified wording carries no line restriction); the return is an ENTER. */
-  resolveHauntSlot: (slot: SlotId) => void;
+  resolveReturnSlot: (slot: SlotId) => void;
   /** Control-theft reversion (Arc I): the OWNER places their returning companion in
    *  the clicked open slot — any line (ruling 6) — and the paused endTurn resumes. */
   resolveReversionSlot: (slot: SlotId) => void;
@@ -2580,7 +2621,7 @@ export const useGameStore = create<GameStoreState>()(
     if (!top) return s;
     if (s.game.pendingTriggerOrder || s.game.pendingPeek || s.game.pendingArmor || s.game.pendingPreventOrder
       || s.game.pendingDiscard || s.game.pendingHandReveal || s.game.pendingForcedSacrifice
-      || s.game.pendingCombatPick || s.game.pendingHauntReturn) return s; // paused on a prompt, not a hand-off
+      || s.game.pendingCombatPick || s.game.pendingDeadReturn) return s; // paused on a prompt, not a hand-off
     // Arc G (2026-08-04): an enterUnit-headed stack also pauses on the game-level
     // prompts the global list doesn't cover — narrow to the new kind, so shipped
     // ownEnter resumption (which can legitimately coexist with a dead pick) is
@@ -2727,6 +2768,36 @@ export const useGameStore = create<GameStoreState>()(
       const [next, ...rest] = s.game.pendingDeadPickQueue;
       const ru = resumeEnterUnits(armNextItemTransfer({ ...s.game, pendingDeadPick: next ?? null, pendingDeadPickQueue: rest }), s);
       return { ...ru.local, game: ru.game, toasts: [...s.toasts, ...mkToasts(ru.msgs)] };
+    }
+    // Arc D (2026-08-25): a return-to-ENCOUNTER pick — the card does not go to hand.
+    // The slot flow runs; the return is a real ENTER (windows re-fire); the Great
+    // Unrest loop chains through continueReturn.
+    if (dp.toEncounter) {
+      const [nextQ, ...restQ] = s.game.pendingDeadPickQueue;
+      const base: GameState = { ...s.game, pendingDeadPick: nextQ ?? null, pendingDeadPickQueue: restQ };
+      const te = dp.toEncounter;
+      const cont: ContinueReturn | undefined = (te.remaining ?? 1) > 1
+        ? { source: dp.source, remaining: (te.remaining ?? 1) - 1, exhausted: te.exhausted,
+            ...(te.levelAtMost != null ? { levelAtMost: te.levelAtMost } : {}),
+            ...(te.excludeName ? { excludeName: te.excludeName } : {}) }
+        : undefined;
+      const head = { lp: dp.lp, cardId: card.id, cardName: card.name,
+        exhausted: te.exhausted, ...(cont ? { continueReturn: cont } : {}) };
+      const empty = [...BACK_SLOTS, ...FRONT_SLOTS].filter(sl => !base[dp.lp].board[sl]);
+      if (empty.length === 0) { // room vanished since arming — the card stays dead
+        const ru0 = resumeEnterUnits(armNextItemTransfer(base), s);
+        return { ...ru0.local, game: ru0.game, toasts: [...s.toasts, ...mkToasts([`${dp.source}: no room — ${card.name} stays in the Dead Zone.`, ...ru0.msgs])] };
+      }
+      if (empty.length > 1) {
+        const id0 = ++toastId;
+        setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id0) })), 4000);
+        return { game: { ...base, pendingDeadReturn: { ...head, eligibleSlots: empty } },
+          toasts: [...s.toasts, { id: id0, msg: `${dp.source}: choose an empty slot for ${card.name}.` }] };
+      }
+      const r = performDeadReturn(base, head, empty[0] as SlotId, s);
+      const id1 = ++toastId;
+      setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id1) })), 4000);
+      return { ...r.local, game: r.game, toasts: [...s.toasts, { id: id1, msg: `${dp.source}: ${r.msgs.join(' | ')}` }] };
     }
     const taken: GameState = { ...s.game, [dp.lp]: { ...ps, dead: ps.dead.filter((_, i) => i !== liveIdx), hand: [...ps.hand, card] } };
     let g = taken;
@@ -2967,7 +3038,7 @@ export const useGameStore = create<GameStoreState>()(
       // so a reloaded game simply proceeds without the owed return (transient-prompt
       // policy, same as the forced sacrifice above).
       pendingHauntQueue: undefined,
-      pendingHauntReturn: undefined,
+      pendingDeadReturn: undefined,
       // A dropped reversion pick is safe: the stolenFrom marker persists, so the
       // next endTurn simply re-arms it.
       pendingReversion: undefined,
@@ -3295,7 +3366,7 @@ export const useGameStore = create<GameStoreState>()(
     const g0 = s.game;
     if (gameIsOver(g0)) return s;
     const q = g0.pendingHauntQueue ?? [];
-    if (!q.length || g0.pendingHauntReturn) return s;
+    if (!q.length || g0.pendingDeadReturn) return s;
     // "The death fully happens FIRST": every window a death can open must drain.
     if (g0.pendingItemTransfer || g0.pendingItemTransferQueue.length || g0.pendingPoison
       || g0.pendingArmor || g0.pendingPreventOrder || g0.pendingDeadPick || g0.pendingCoercion
@@ -3322,20 +3393,20 @@ export const useGameStore = create<GameStoreState>()(
         toasts: [...s.toasts, mkToast(`${head.cardName} finds no room to return — it stays in the Dead Zone (its Haunt is not spent).`)] };
     }
     if (empty.length > 1) {
-      return { game: { ...g0, ...restPatch, pendingHauntReturn: { ...head, eligibleSlots: empty } },
+      return { game: { ...g0, ...restPatch, pendingDeadReturn: { ...head, eligibleSlots: empty, memory: true, exhausted: true } },
         toasts: [...s.toasts, mkToast(`${head.cardName} haunts — choose an empty slot for its return.`)] };
     }
-    const r = performHauntReturn({ ...g0, ...restPatch }, head, empty[0] as SlotId, s);
+    const r = performDeadReturn({ ...g0, ...restPatch }, { ...head, memory: true, exhausted: true }, empty[0] as SlotId, s);
     return { ...r.local, game: r.game, toasts: [...s.toasts, ...mkToasts(r.msgs)] };
   }),
 
-  resolveHauntSlot: (slot) => set(s => {
+  resolveReturnSlot: (slot) => set(s => {
     if (gameIsOver(s.game)) return s;
-    const ph = s.game.pendingHauntReturn;
+    const ph = s.game.pendingDeadReturn;
     if (!ph) return s;
     if (s.conn.mode !== 'solo' && ph.lp !== s.localPlayer) return s; // owner-only
     if (!ph.eligibleSlots.includes(slot)) return s; // must be one of the offered slots
-    const r = performHauntReturn({ ...s.game, pendingHauntReturn: undefined }, ph, slot, s);
+    const r = performDeadReturn({ ...s.game, pendingDeadReturn: undefined }, ph, slot, s);
     return { ...r.local, game: r.game, toasts: [...s.toasts, ...mkToasts(r.msgs)] };
   }),
 
@@ -4000,7 +4071,7 @@ export const useGameStore = create<GameStoreState>()(
     if (s.game.pendingCombatPick) return s;
     // An armed Haunt slot pick holds the turn; a QUEUED (not yet armed) return does
     // not — armHaunt advances it whenever its windows drain, either side of the flip.
-    if (s.game.pendingHauntReturn) return s;
+    if (s.game.pendingDeadReturn) return s;
     if (s.game.pendingReversion) return s; // a reversion pick is out — the turn waits for it
 
     // ── Control-theft reversion (Arc I 2026-08-11) — the FIRST substantive step of

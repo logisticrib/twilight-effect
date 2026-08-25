@@ -7,7 +7,7 @@
 import type { BoardEntity, Card } from '../types/card';
 import type { Effect, Amount, TargetSpec, Trigger, Cost, CardEffect } from '../types/effects';
 import { CATALOG } from '../data/catalog';
-import { isFront } from './geometry';
+import { isFront, FRONT_SLOTS, BACK_SLOTS } from './geometry';
 import type { GameState, PendingDeadPick, ArmorChoiceData } from './state';
 import { pushStack } from './state';
 import { charsOf, companionIds, constructIds, findEntityAnywhere, updateEntity,
@@ -64,10 +64,22 @@ export function effectsWouldAffectSomething(game: GameState, lp: 'p1' | 'p2', ef
         // aligned 2026-07-22 for Fence's Ledger (owner-confirmed): a recovery with
         // no eligible Dead-Zone card affects nothing — refuse BEFORE any cost is
         // paid. Filters mirror the interpreter's (cardType, itemKind).
-        if (e.to !== 'hand') return true; // 'encounter' unimplemented — stay conservative
-        if (game[lp].dead.some(c =>
+        // Arc D (2026-08-25): the encounter destination is live — meaningful iff at
+        // least one eligible dead card AND one open slot exist (the pre-cost refusal /
+        // dd000096 "castable at one" precedent). levelFromDestroyed pairs with a
+        // destroy in the same list, whose target makes the action meaningful — the
+        // return half alone never gates castability.
+        const anyEligible = game[lp].dead.some(c =>
           (!e.cardType || c.type === e.cardType) && (!e.itemKind || c.itemKind === e.itemKind)
-          && (!e.subtype || cardHasSubtype(c, e.subtype)))) return true;
+          && (!e.subtype || cardHasSubtype(c, e.subtype))
+          && (e.levelAtMost == null || c.level <= e.levelAtMost)
+          && (!e.excludeSelf || true /* the subject is not yet dead at cast time */));
+        if (e.levelFromDestroyed) break; // the destroy half carries the meaningfulness
+        if (e.to === 'encounter') {
+          if (anyEligible && [...FRONT_SLOTS, ...BACK_SLOTS].some(sl => !game[lp].board[sl])) return true;
+          break;
+        }
+        if (anyEligible) return true;
         break;
       }
       default:
@@ -377,6 +389,10 @@ export function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceNam
   // How many permanents THIS resolution destroyed — read by a following
   // `draw.perDestroyed` (Let the Wild In). Arc A, 2026-08-19.
   let destroyedThisResolution = 0;
+  // Arc D (2026-08-25, Requiem of the Hollow Bell): the printed LEVEL of the last
+  // COMPANION this resolution destroyed — read by a following returnFromDead with
+  // `levelFromDestroyed` ("with level equal to or less than that companion's level").
+  let lastDestroyedLevel: number | null = null;
 
   for (const e of effects) {
     switch (e.op) {
@@ -736,13 +752,32 @@ export function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceNam
         // Recover a card from the controller's Dead Zone (Memory Stone onDestroy). If a
         // `sink` was supplied, defer to a player-facing picker (the calling reducer arms
         // `pendingDeadPick`); otherwise auto-pick the most-recent eligible card.
-        if (e.to !== 'hand') break;
+        // Arc D (2026-08-25): levelAtMost / excludeSelf narrow BOTH destinations;
+        // `to:'encounter'` is LIVE — the pick carries a toEncounter payload and the
+        // store's slot flow re-enters the card (a real ENTER). levelFromDestroyed
+        // reads the level of the companion THIS resolution destroyed (Hollow Bell) —
+        // no destroy this resolution → the return simply fizzles.
+        const lvlCap = e.levelFromDestroyed ? lastDestroyedLevel : (e.levelAtMost ?? null);
+        if (e.levelFromDestroyed && lvlCap == null) { msgs.push('Nothing was destroyed — no return'); break; }
         const dead = g[lp].dead;
         const options = dead.map((card, idx) => ({ card, idx }))
           .filter(o => !e.cardType || o.card.type === e.cardType)
           .filter(o => !e.itemKind || o.card.itemKind === e.itemKind)
-          .filter(o => !e.subtype || cardHasSubtype(o.card, e.subtype));
+          .filter(o => !e.subtype || cardHasSubtype(o.card, e.subtype))
+          .filter(o => lvlCap == null || o.card.level <= lvlCap)
+          .filter(o => !e.excludeSelf || o.card.name !== sourceName);
         if (options.length === 0) { msgs.push('Dead Zone has no eligible card'); break; }
+        if (e.to === 'encounter') {
+          if (![...FRONT_SLOTS, ...BACK_SLOTS].some(sl => !g[lp].board[sl])) { msgs.push('No room in the Command Zone — no return'); break; }
+          if (!sink) { msgs.push('Choose a card to return from the Dead Zone'); break; } // no picker path — refuse rather than auto-enter
+          sink.push({ source: sourceName, lp, sourceId, options, postEffects: [], optional: e.optional ?? true,
+            toEncounter: { exhausted: e.exhausted ?? true,
+              ...(e.max != null ? { remaining: e.max } : {}),
+              ...(lvlCap != null ? { levelAtMost: lvlCap } : {}),
+              ...(e.excludeSelf ? { excludeName: sourceName } : {}) } });
+          msgs.push('Choose a companion to return to the encounter');
+          break;
+        }
         if (sink) {
           sink.push({ source: sourceName, lp, sourceId, options, postEffects: [], optional: e.optional ?? false });
           msgs.push('Choose a card to return from the Dead Zone');
@@ -804,6 +839,7 @@ export function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceNam
           g = d.game;
           msgs.push(`${loc.ent.name} is destroyed`, ...d.msgs);
           destroyedThisResolution++;
+          if (loc.ent.kind === 'companion') lastDestroyedLevel = loc.ent.level;
         }
         break;
       }

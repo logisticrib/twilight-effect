@@ -94,7 +94,7 @@ export function CommandZone({ player, owner, flip, boardScale = DEFAULT_BOARD_SC
   const resolveActionTarget = useGameStore(s => s.resolveActionTarget);
   const resolveActionSlot   = useGameStore(s => s.resolveActionSlot);
   const resolveReversionSlot = useGameStore(s => s.resolveReversionSlot);
-  const resolveHauntSlot = useGameStore(s => s.resolveHauntSlot);
+  const resolveReturnSlot = useGameStore(s => s.resolveReturnSlot);
   const isSolo              = useGameStore(s => s.conn.mode === 'solo');
   const oppPlayer: 'p1' | 'p2' = localPlayer === 'p1' ? 'p2' : 'p1';
 
@@ -191,10 +191,10 @@ export function CommandZone({ player, owner, flip, boardScale = DEFAULT_BOARD_SC
               && (isSolo || localPlayer === game.pendingReversion.lp);
             // Haunt return (Requiem Arc C): the OWNER clicks any offered open slot
             // for the haunting companion — the reversion pattern exactly.
-            const isHauntSlot = !!game.pendingHauntReturn && !card
-              && owner === game.pendingHauntReturn.lp
-              && game.pendingHauntReturn.eligibleSlots.includes(sid)
-              && (isSolo || localPlayer === game.pendingHauntReturn.lp);
+            const isHauntSlot = !!game.pendingDeadReturn && !card
+              && owner === game.pendingDeadReturn.lp
+              && game.pendingDeadReturn.eligibleSlots.includes(sid)
+              && (isSolo || localPlayer === game.pendingDeadReturn.lp);
 
             const state: SlotState = isPcPlacement   ? 'pc-placement'
                                    : (isTriggerTarget || isKitTarget) ? 'trigger-target'
@@ -211,7 +211,7 @@ export function CommandZone({ player, owner, flip, boardScale = DEFAULT_BOARD_SC
             const pendingIsItem = pendingCard?.type === 'Item';
             const handleClick = () => {
               if (isReversionSlot)         { resolveReversionSlot(sid); return; }
-              if (isHauntSlot)             { resolveHauntSlot(sid); return; }
+              if (isHauntSlot)             { resolveReturnSlot(sid); return; }
               if (isTriggerTarget && card) { resolveTrigger(card.id); return; }
               if (isKitTarget && card)     { resolveKit(card.id); return; }
               if (isActionTarget && card)  { resolveActionTarget(card.id); return; }

@@ -66,13 +66,13 @@ describe('HAUNT — the death fully happens, then the return', () => {
     kill('ghoul');
     // Death fully happened first: the card reached the Dead Zone before any return —
     // and with >1 open slots, the OWNER's slot pick is armed rather than auto-placed.
-    const ph = g().pendingHauntReturn;
+    const ph = g().pendingDeadReturn;
     expect(ph?.cardName).toBe('Barrowlight Ghoul');
     expect(ph?.lp, 'routed to the OWNER').toBe('p1');
     expect(g().p1.dead.some(c => c.name === 'Barrowlight Ghoul'), 'still in the Dead Zone while the pick is up').toBe(true);
     // The owner picks a FRONT slot — the ratified wording carries no line restriction.
     expect(ph!.eligibleSlots).toContain('f2');
-    gs.getState().resolveHauntSlot('f2');
+    gs.getState().resolveReturnSlot('f2');
     const back = g().p1.board.f2;
     expect(back?.name).toBe('Barrowlight Ghoul');
     expect(back?.exhausted, 'returns exhausted').toBe(true);
@@ -84,7 +84,7 @@ describe('HAUNT — the death fully happens, then the return', () => {
   it('dies CARRYING a Memory counter → stays dead (the per-stint gate; provenance-blind)', () => {
     seed({ b3: mkPc('pc-1'), f1: ghoul('ghoul', { memoryCounters: 1 }) });
     kill('ghoul');
-    expect(g().pendingHauntReturn ?? null).toBeFalsy();
+    expect(g().pendingDeadReturn ?? null).toBeFalsy();
     expect(g().pendingHauntQueue ?? null, 'nothing even queued').toBeFalsy();
     expect(g().p1.dead.some(c => c.name === 'Barrowlight Ghoul'), 'it stays down').toBe(true);
   });
@@ -103,7 +103,7 @@ describe('HAUNT — the death fully happens, then the return', () => {
     gs.setState(s => ({ game: { ...s.game, p1: { ...s.game.p1,
       board: { ...s.game.p1.board, f1: mkComp('squatter', filler[4].name) } } } }));
     gs.getState().armHaunt();
-    expect(g().pendingHauntReturn ?? null, 'no pick — no room').toBeFalsy();
+    expect(g().pendingDeadReturn ?? null, 'no pick — no room').toBeFalsy();
     expect(g().p1.dead.some(c => c.name === 'Barrowlight Ghoul')).toBe(true);
     // Outside recursion brings it back (seeded directly, clean — per-stint), a slot is
     // open now, and it dies AGAIN: Haunt was never spent, so it returns this time.
@@ -111,7 +111,7 @@ describe('HAUNT — the death fully happens, then the return', () => {
       dead: s.game.p1.dead.filter(c => c.name !== 'Barrowlight Ghoul'),
       board: { b3: s.game.p1.board.b3!, f1: ghoul('ghoul-2') } } } }));
     kill('ghoul-2');
-    expect(g().pendingHauntReturn?.cardName, 'the retained Haunt fires on the second death').toBe('Barrowlight Ghoul');
+    expect(g().pendingDeadReturn?.cardName, 'the retained Haunt fires on the second death').toBe('Barrowlight Ghoul');
   });
 });
 
@@ -127,14 +127,14 @@ describe('HAUNT — a FLEE is a death (self-balancing)', () => {
     expect(g().pendingHauntQueue?.length, 'the owed return queued from the flee exit').toBe(1);
     gs.getState().armHaunt();
     // Board has plenty of room (>1 slots) → the owner picks; take one.
-    gs.getState().resolveHauntSlot(g().pendingHauntReturn!.eligibleSlots[0] as never);
+    gs.getState().resolveReturnSlot(g().pendingDeadReturn!.eligibleSlots[0] as never);
     const returned = Object.values(g().p1.board).find(e => e?.name === 'Barrowlight Ghoul');
     expect(returned?.memoryCounters).toBe(1);
     // Willpower is still 1 < level 2: the NEXT check flees it again — and this time
     // it carries the counter, so it stays down. Self-balancing, end to end.
     gs.setState(s => ({ game: applyReadyRemovals(s.game, 'p1', 'Your').game }));
     gs.getState().armHaunt();
-    expect(g().pendingHauntReturn ?? null, 'second flee: the counter gates the return').toBeFalsy();
+    expect(g().pendingDeadReturn ?? null, 'second flee: the counter gates the return').toBeFalsy();
     expect(g().p1.dead.some(c => c.name === 'Barrowlight Ghoul')).toBe(true);
   });
 });
@@ -144,7 +144,7 @@ describe('the return is an ENTER', () => {
     const [A, B, C] = filler;
     seed({ b3: mkPc('pc-1'), f1: fromCard('lich', 'Marrowlight Lich') }, { deck: [A, B, C] });
     kill('lich');
-    gs.getState().resolveHauntSlot(g().pendingHauntReturn!.eligibleSlots[0] as never);
+    gs.getState().resolveReturnSlot(g().pendingDeadReturn!.eligibleSlots[0] as never);
     expect(Object.values(g().p1.board).some(e => e?.name === 'Marrowlight Lich'), 'returned').toBe(true);
     // The enter window fired: Entomb 2 milled the top two on the RETURN.
     expect(g().p1.deck.map(c => c.id)).toEqual([C.id]);
@@ -157,7 +157,7 @@ describe('the return is an ENTER', () => {
     gs.setState(s => ({ game: { ...s.game, p2: { ...s.game.p2,
       board: { ...s.game.p2.board, f1: mkComp('par', 'Watcher', { keywords: ['Paranoia'] }) } } } }));
     kill('ghoul');
-    gs.getState().resolveHauntSlot(g().pendingHauntReturn!.eligibleSlots[0] as never);
+    gs.getState().resolveReturnSlot(g().pendingDeadReturn!.eligibleSlots[0] as never);
     expect(g().pendingPeek ?? null, 'no Paranoia peek — returns are enters, not plays').toBeFalsy();
     expect(Object.values(g().p1.board).some(e => e?.name === 'Barrowlight Ghoul'), 'the return completed').toBe(true);
   });
@@ -172,14 +172,14 @@ describe('Crown of the Unquiet King — the item grant', () => {
     // return can arm (the death fully happened).
     seed({ b3: mkPc('pc-1', { exhausted: true, tapped: 'major' }), f1: bearer });
     kill('bear');
-    expect(g().pendingHauntReturn?.cardName, 'the granted Haunt fired').toBe(filler[0].name);
-    gs.getState().resolveHauntSlot(g().pendingHauntReturn!.eligibleSlots[0] as never);
+    expect(g().pendingDeadReturn?.cardName, 'the granted Haunt fired').toBe(filler[0].name);
+    gs.getState().resolveReturnSlot(g().pendingDeadReturn!.eligibleSlots[0] as never);
     const back = Object.values(g().p1.board).find(e => e?.name === filler[0].name)!;
     expect(back.loadout ?? null, 'the body returns bare — the Crown went to the Dead Zone').toBeFalsy();
     expect(back.memoryCounters).toBe(1);
     // It dies again WITHOUT the Crown: the counter (not the item) is the tracker.
     kill(back.id);
-    expect(g().pendingHauntReturn ?? null, 'stays down — marked').toBeFalsy();
+    expect(g().pendingDeadReturn ?? null, 'stays down — marked').toBeFalsy();
     expect(g().pendingHauntQueue ?? null).toBeFalsy();
   });
 });

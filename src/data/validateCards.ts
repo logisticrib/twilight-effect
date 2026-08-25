@@ -271,6 +271,11 @@ function validateEffect(e: Effect, path: string, p: (msg: string) => void, keywo
     case 'returnFromDead':
       if (e.to !== 'hand' && e.to !== 'encounter') p(`${path}(returnFromDead): bad to "${String(e.to)}"`);
       if (e.itemKind !== undefined && !has(ITEM_KINDS, e.itemKind)) p(`${path}(returnFromDead): bad itemKind "${String(e.itemKind)}"`);
+      // Arc D (2026-08-25): the reanimation family's fields.
+      if (e.levelAtMost !== undefined && (!isInt(e.levelAtMost) || e.levelAtMost < 1)) p(`${path}(returnFromDead): levelAtMost must be an integer ≥ 1`);
+      if (e.max !== undefined && (!isInt(e.max) || e.max < 2)) p(`${path}(returnFromDead): max must be an integer ≥ 2 (omit for a single return)`);
+      if (e.levelAtMost !== undefined && e.levelFromDestroyed) p(`${path}(returnFromDead): levelAtMost and levelFromDestroyed are mutually exclusive caps`);
+      if ((e.exhausted !== undefined || e.max !== undefined) && e.to !== 'encounter') p(`${path}(returnFromDead): exhausted/max only make sense with to:'encounter'`);
       break;
     case 'search':
       if (typeof e.cardType !== 'string' || !e.cardType) p(`${path}(search): cardType required`);

@@ -133,11 +133,14 @@ export interface GameState {
    *  death fully happens first"). `lp` is the card's OWNER (stolenFrom routing).
    *  Both keys OPTIONAL and absent when clear (fixture-hash discipline). */
   pendingHauntQueue?: PendingHauntReturn[];
-  /** The armed Haunt return: >1 open owner slots → the OWNER picks the slot
-   *  (resolveHauntSlot, any line — the ratified wording carries no line
-   *  restriction); a singleton auto-places; a full board drops the return with NO
-   *  Memory counter placed (Haunt retained — the 2026-08-25 counter-rework ruling). */
-  pendingHauntReturn?: (PendingHauntReturn & { eligibleSlots: string[] }) | null;
+  /** The armed return-to-encounter slot pick (Arc C: Haunt; GENERALIZED Arc D for
+   *  the reanimation family): >1 open owner slots → the OWNER picks the slot
+   *  (resolveReturnSlot, any line); a singleton auto-places. `memory` = Haunt's
+   *  return (places the Memory counter; a full board drops the return with NO
+   *  counter — Haunt retained). `continueReturn` = the Great Unrest loop: after
+   *  this return's enter resolves, re-arm the next dead pick with remaining−1,
+   *  options evaluated FRESH (per-event state). */
+  pendingDeadReturn?: PendingDeadReturn | null;
   /** Control-theft reversion slot pick (Arc I 2026-08-11, Command the Broken —
    *  owner-ratified GENERAL rule, ruling 6): a companion returning to its owner's
    *  control WITHOUT passing through their hand may be placed in ANY available
@@ -424,6 +427,12 @@ export interface PendingDeadPick {
   optional: boolean;
   /** Scavenger: the recovered ITEM is attached to this entity instead of going to hand. */
   attachTo?: { id: string; name: string };
+  /** Arc D (2026-08-25, the reanimation family): the picked COMPANION card returns to
+   *  the ENCOUNTER instead of the hand — the slot flow runs (>1 open slots: the
+   *  owner's pendingDeadReturn pick; singleton: auto-place; the return is a real
+   *  ENTER). `remaining` chains the Great Unrest's "up to three" — after the enter
+   *  resolves, the next pick re-arms with remaining−1, options evaluated fresh. */
+  toEncounter?: { exhausted: boolean; remaining?: number; levelAtMost?: number; excludeName?: string };
 }
 
 /** One record of damage the attacker dealt this combat (used to fire combat triggers). */
@@ -532,6 +541,26 @@ export interface PendingHauntReturn {
   lp: 'p1' | 'p2';       // the card's OWNER — the return routes to their board
   cardId: string;        // the card in the owner's Dead Zone
   cardName: string;      // prompt/hold label
+}
+
+/** The multi-return continuation (Arc D, The Great Unrest's "up to three"). */
+export interface ContinueReturn {
+  source: string;
+  remaining: number;      // returns still owed AFTER the current one
+  levelAtMost?: number;
+  excludeName?: string;
+  exhausted: boolean;
+}
+
+/** The armed slot pick for any return-from-Dead-Zone-to-encounter (Arc C shape,
+ *  generalized Arc D). `memory` marks a Haunt return (places the Memory counter);
+ *  `exhausted` is the enters-exhausted rider (true for Haunt and for every Requiem
+ *  reanimation card). */
+export interface PendingDeadReturn extends PendingHauntReturn {
+  eligibleSlots: string[];
+  memory?: boolean;
+  exhausted: boolean;
+  continueReturn?: ContinueReturn;
 }
 
 /** A control-theft reversion awaiting the OWNER's slot choice (Arc I 2026-08-11):

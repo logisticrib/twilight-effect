@@ -288,7 +288,15 @@ export type Effect =
   // subtype (Arc B, 2026-08-19): "Return target Beast from your Dead Zone" — matched
   // by SET MEMBERSHIP on the card's authored `subtypes`, never by string equality
   // against the display type line (a Beast Crow IS a Beast).
-  | { op: 'returnFromDead'; cardType?: string; itemKind?: string; subtype?: string; optional?: boolean; to: 'hand' | 'encounter' }
+  // Arc D (2026-08-25, the reanimation family): `to:'encounter'` is LIVE — the picked
+  // COMPANION card re-enters (a real ENTER: windows re-fire) in an empty owner slot
+  // (owner pick >1 open). levelAtMost = option cap; exhausted = the enters-exhausted
+  // rider; max = "up to N" sequential returns (The Great Unrest); excludeSelf =
+  // "another" (drops the trigger's own card by name — exact in a singleton game);
+  // levelFromDestroyed = the cap is the level of the companion THIS resolution
+  // destroyed (Requiem of the Hollow Bell).
+  | { op: 'returnFromDead'; cardType?: string; itemKind?: string; subtype?: string; optional?: boolean; to: 'hand' | 'encounter';
+      levelAtMost?: number; exhausted?: boolean; max?: number; excludeSelf?: boolean; levelFromDestroyed?: boolean }
   | { op: 'search'; cardType: string }
   // board manipulation
   | { op: 'move'; target: TargetSpec; to: 'anySlot' | 'adjacent'; forced?: boolean }
