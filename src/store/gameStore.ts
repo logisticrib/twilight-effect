@@ -18,7 +18,7 @@ import { recomputeStatics, isImmuneToSplash, HIT_RUN_STATUS,
 export * from '../engine';
 import { ADJ, FRONT_SLOTS, BACK_SLOTS, isFront, findSlot, type SlotId, type Board,
          type Phase, type GameState,
-         type PendingCoercion, type PendingDeadPick, type PendingDiscard,
+         type PendingCoercion, type PendingDeadPick, type PendingDiscard, type PendingHauntReturn,
          type AttackCtx, type ArmorChoiceData,
          type PendingItemTransfer, type StackEntry, type ReactiveStackEntry,
          gatherParanoia, gatherReactive, gatherOwnSide, gatherEquippedAttacked, gatherSelfAttacked,
@@ -415,6 +415,10 @@ export function reactiveHold(game: GameState, localPlayer: 'p1' | 'p2'): string 
   // the attacker's controller chooses; everyone else waits.
   const pcp = game.pendingCombatPick;
   if (pcp && pcp.lp !== localPlayer) return `${pcp.source} (combat target)`;
+  // The opponent's Haunt slot pick (Requiem Arc C) — the OWNER places their
+  // returning companion; everyone else waits.
+  const phr = game.pendingHauntReturn;
+  if (phr && phr.lp !== localPlayer) return `${phr.cardName} (haunting)`;
   // The opponent's reversion slot pick (Arc I control theft) — the OWNER chooses
   // where their companion returns; the caster's turn cannot end until they do.
   const pr = game.pendingReversion;
@@ -747,6 +751,38 @@ function onEnterEffects(card: Card, game: GameState, lp: 'p1' | 'p2'):
   const clauses = (card.effects ?? []).filter(c => c.trigger === 'onEnter');
   const live = clauses.filter(c => !c.if || conditionMet(game, lp, c.if));
   return { effects: live.flatMap(c => c.effects), gatedOut: live.length < clauses.length };
+}
+
+/** Perform one HAUNT return (Requiem Arc C, 2026-08-25) — shared by armHaunt's
+ *  singleton auto-place and resolveHauntSlot. Removes the card from the owner's Dead
+ *  Zone, rebuilds the entity the way placeCard does (fresh acts, `fresh: true` so the
+ *  willpower gate applies, armor counters re-placed — an enter is an enter) PLUS
+ *  `exhausted` (the ratified wording) and ONE Memory counter, then pushes the 'enter'
+ *  stack entry so the FULL entry machinery fires and runs the stack. */
+function performHauntReturn(game: GameState, head: PendingHauntReturn, slot: SlotId, s: StackRunCtx):
+  { game: GameState; local: Partial<GameStoreState>; msgs: string[] } {
+  const card = game[head.lp].dead.find(c => c.id === head.cardId);
+  if (!card) return { game, local: {}, msgs: [] };
+  const ent: BoardEntity = {
+    id: uid(`haunt-${card.id}`),
+    kind: 'companion',
+    name: card.name, cls: card.class1, level: card.level,
+    atk: card.attack ?? undefined,
+    hp: card.hp ?? 0, maxHp: card.hp ?? 0,
+    armorCounters: parseArmorKeyword(card.keywords) ?? undefined,
+    armorStart: parseArmorKeyword(card.keywords) ?? undefined,
+    keywords: card.keywords, statuses: [],
+    subtype: card.subtype, text: card.text,
+    tapped: 'major', exhausted: true,   // "return it ... exhausted"
+    fresh: true,                        // an enter — the willpower gate applies
+    memoryCounters: 1,                  // the per-stint tracker, placed BY the return
+    acts: freshActs(),
+  };
+  let g: GameState = { ...game, [head.lp]: { ...game[head.lp], dead: game[head.lp].dead.filter(c => c.id !== card.id) } };
+  g = pushStack(g, [{ kind: 'enter', ent, card, slot, controller: head.lp }]);
+  const r = runStack(g, s);
+  return { game: r.game, local: r.local,
+    msgs: [`${card.name} haunts — it returns to the encounter with a Memory counter.`, ...r.toastMsgs] };
 }
 
 /** The onPlay twin (Requiem Arc B, 2026-08-25 — Encore of the Dawn's additive
@@ -1232,6 +1268,14 @@ interface GameStoreState {
    *  declaration window (and the attack beneath it) resumes on pick. MANDATORY —
    *  no decline; the only escape was not attacking. */
   resolveCombatPick: (targetId: string) => void;
+  /** HAUNT arming driver (Requiem Arc C, 2026-08-25): advances the owed-return queue
+   *  once every prompt from the death has drained ("the death fully happens FIRST").
+   *  Safe to call speculatively (the resumeStack discipline — a Play.tsx effect
+   *  drives it); no-ops unless a return is actually ready. Owner's client only. */
+  armHaunt: () => void;
+  /** The OWNER places their haunting companion in the clicked open slot (any line —
+   *  the ratified wording carries no line restriction); the return is an ENTER. */
+  resolveHauntSlot: (slot: SlotId) => void;
   /** Control-theft reversion (Arc I): the OWNER places their returning companion in
    *  the clicked open slot — any line (ruling 6) — and the paused endTurn resumes. */
   resolveReversionSlot: (slot: SlotId) => void;
@@ -2536,7 +2580,7 @@ export const useGameStore = create<GameStoreState>()(
     if (!top) return s;
     if (s.game.pendingTriggerOrder || s.game.pendingPeek || s.game.pendingArmor || s.game.pendingPreventOrder
       || s.game.pendingDiscard || s.game.pendingHandReveal || s.game.pendingForcedSacrifice
-      || s.game.pendingCombatPick) return s; // paused on a prompt, not a hand-off
+      || s.game.pendingCombatPick || s.game.pendingHauntReturn) return s; // paused on a prompt, not a hand-off
     // Arc G (2026-08-04): an enterUnit-headed stack also pauses on the game-level
     // prompts the global list doesn't cover — narrow to the new kind, so shipped
     // ownEnter resumption (which can legitimately coexist with a dead pick) is
@@ -2919,6 +2963,11 @@ export const useGameStore = create<GameStoreState>()(
       // resumes mid-window — drop it with the rest of the transient prompts.
       pendingForcedSacrifice: undefined,
       pendingCombatPick: undefined,
+      // A dropped Haunt queue/pick is safe to clear: the counter was never placed,
+      // so a reloaded game simply proceeds without the owed return (transient-prompt
+      // policy, same as the forced sacrifice above).
+      pendingHauntQueue: undefined,
+      pendingHauntReturn: undefined,
       // A dropped reversion pick is safe: the stolenFrom marker persists, so the
       // next endTurn simply re-arms it.
       pendingReversion: undefined,
@@ -3232,6 +3281,62 @@ export const useGameStore = create<GameStoreState>()(
     }
     return { ...local, game: g,
       toasts: [...s.toasts, mkToast(msgs.join(' | ')), ...mkToasts(stackMsgs)] };
+  }),
+
+  // ── HAUNT returns (Requiem Arc C, 2026-08-25) ─────────────────────────────────
+  // The death fully happened (destroyEntity / the flee exit queued the owed return);
+  // armHaunt advances the queue once every prompt from the death has drained. The
+  // return is an ENTER: the entity is rebuilt from the dead card (fresh acts, the
+  // willpower gate, armor counters re-placed) PLUS exhausted and ONE Memory counter —
+  // the counter IS the per-stint tracker (a body that dies carrying one stays dead) —
+  // and the 'enter' stack entry fires the full entry machinery: the Lich's Entomb 2
+  // re-fires, opposing enter-traps hear it; Paranoia does NOT (a return is not a play).
+  armHaunt: () => set(s => {
+    const g0 = s.game;
+    if (gameIsOver(g0)) return s;
+    const q = g0.pendingHauntQueue ?? [];
+    if (!q.length || g0.pendingHauntReturn) return s;
+    // "The death fully happens FIRST": every window a death can open must drain.
+    if (g0.pendingItemTransfer || g0.pendingItemTransferQueue.length || g0.pendingPoison
+      || g0.pendingArmor || g0.pendingPreventOrder || g0.pendingDeadPick || g0.pendingCoercion
+      || g0.pendingDiscard || g0.pendingHandReveal || g0.pendingPeek || g0.pendingTriggerOrder
+      || g0.pendingForcedSacrifice || g0.pendingCombatPick || g0.pendingModalChoice
+      || g0.triggerStack?.length) return s;
+    const [head, ...rest] = q;
+    if (s.conn.mode !== 'solo' && head.lp !== s.localPlayer) return s; // owner's client advances
+    const restPatch = rest.length ? { pendingHauntQueue: rest } : { pendingHauntQueue: undefined };
+    const mkToast = (msg: string) => {
+      const id = ++toastId;
+      setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 5000);
+      return { id, msg };
+    };
+    // The card must still be in the owner's Dead Zone — an outside recursion may have
+    // taken it first (their claim wins; the owed return simply evaporates).
+    const card = g0[head.lp].dead.find(c => c.id === head.cardId);
+    if (!card) return { game: { ...g0, ...restPatch } };
+    const empty = [...BACK_SLOTS, ...FRONT_SLOTS].filter(sl => !g0[head.lp].board[sl]);
+    if (empty.length === 0) {
+      // Full board: the return does not happen and NO Memory counter is placed —
+      // Haunt retained for a later death (the 2026-08-25 counter-rework ruling).
+      return { game: { ...g0, ...restPatch },
+        toasts: [...s.toasts, mkToast(`${head.cardName} finds no room to return — it stays in the Dead Zone (its Haunt is not spent).`)] };
+    }
+    if (empty.length > 1) {
+      return { game: { ...g0, ...restPatch, pendingHauntReturn: { ...head, eligibleSlots: empty } },
+        toasts: [...s.toasts, mkToast(`${head.cardName} haunts — choose an empty slot for its return.`)] };
+    }
+    const r = performHauntReturn({ ...g0, ...restPatch }, head, empty[0] as SlotId, s);
+    return { ...r.local, game: r.game, toasts: [...s.toasts, ...mkToasts(r.msgs)] };
+  }),
+
+  resolveHauntSlot: (slot) => set(s => {
+    if (gameIsOver(s.game)) return s;
+    const ph = s.game.pendingHauntReturn;
+    if (!ph) return s;
+    if (s.conn.mode !== 'solo' && ph.lp !== s.localPlayer) return s; // owner-only
+    if (!ph.eligibleSlots.includes(slot)) return s; // must be one of the offered slots
+    const r = performHauntReturn({ ...s.game, pendingHauntReturn: undefined }, ph, slot, s);
+    return { ...r.local, game: r.game, toasts: [...s.toasts, ...mkToasts(r.msgs)] };
   }),
 
   // ── Combat-trigger target pick (Requiem Arc B, 2026-08-25 — Satyr of the Reel) ──
@@ -3893,6 +3998,9 @@ export const useGameStore = create<GameStoreState>()(
     if (s.game.pendingForcedSacrifice) return s;
     // Likewise an open combat-trigger target pick (Requiem Arc B — same double-lock).
     if (s.game.pendingCombatPick) return s;
+    // An armed Haunt slot pick holds the turn; a QUEUED (not yet armed) return does
+    // not — armHaunt advances it whenever its windows drain, either side of the flip.
+    if (s.game.pendingHauntReturn) return s;
     if (s.game.pendingReversion) return s; // a reversion pick is out — the turn waits for it
 
     // ── Control-theft reversion (Arc I 2026-08-11) — the FIRST substantive step of

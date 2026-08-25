@@ -230,7 +230,12 @@ export type Effect =
   // not yet live at the ready step (Arc H finding, 2026-08-04). The entry stays
   // inertly live for the rest of that turn (nothing re-reads 'doesNotReady' after
   // the turn-start window) and strips at its end.
-  | { op: 'buff'; stat?: 'atk' | 'hp'; amount?: number; grant?: string[]; modifiers?: Modifier[]; scope: TargetSpec; duration: 'endOfTurn' | 'while' | 'untilYourNextTurn' | 'controllersNextTurn' | 'controllersNextTurnStart'; where?: { line?: 'front' | 'back'; cls?: string; subtype?: string } }
+  // `perOwnDeadCompanions` (Requiem Arc C, 2026-08-25 — Conductor of the Unquiet):
+  // a DERIVED amount, +N per companion card in the clause controller's own Dead
+  // Zone, re-read on every stat read (the Untamed derive-on-read discipline with a
+  // dynamic magnitude — never stamped, so it tracks mills and recursion live).
+  // Adds to `amount` when both are present.
+  | { op: 'buff'; stat?: 'atk' | 'hp'; amount?: number; perOwnDeadCompanions?: number; grant?: string[]; modifiers?: Modifier[]; scope: TargetSpec; duration: 'endOfTurn' | 'while' | 'untilYourNextTurn' | 'controllersNextTurn' | 'controllersNextTurnStart'; where?: { line?: 'front' | 'back'; cls?: string; subtype?: string } }
   // card / zone movement
   // perDestroyed (Arc A, 2026-08-19 — Let the Wild In: "draw a card for each Gear
   // destroyed this way"): the count is how many permanents THIS resolution actually

@@ -359,7 +359,12 @@ function selfItemStat(item: EquippedItem, stat: 'atk' | 'hp', bearer: BoardEntit
       if (!side || !conditionMet(game!, side, ce.if)) continue;
     }
     for (const e of ce.effects) {
-      if (e.op === 'buff' && e.stat === stat && e.scope === 'self') sum += e.amount ?? 0;
+      // Requiem Arc C: buffAmount folds in derived components (perOwnDeadCompanions)
+      // for the BEARER's controller; flat-only clauses are identical to before.
+      if (e.op === 'buff' && e.stat === stat && e.scope === 'self') {
+        const side = e.perOwnDeadCompanions && game ? controllerOf(game, bearer.id) : null;
+        sum += side && game ? buffAmount(e, game, side) : (e.amount ?? 0);
+      }
     }
   }
   return sum;
@@ -369,6 +374,18 @@ function controllerOf(game: GameState, entId: string): 'p1' | 'p2' | null {
   if (Object.values(game.p1.board).some(e => e?.id === entId)) return 'p1';
   if (Object.values(game.p2.board).some(e => e?.id === entId)) return 'p2';
   return null;
+}
+
+/** A buff clause's full amount: the flat `amount` plus any DERIVED component
+ *  (Requiem Arc C, 2026-08-25 — Conductor of the Unquiet's +1 per companion card in
+ *  your Dead Zone). `side` is the clause's controller ("your Dead Zone"); the census
+ *  is re-read on every stat read — the derive-on-read discipline, never stamped, so
+ *  mills raise it and recursion lowers it the moment they happen. */
+function buffAmount(e: { amount?: number; perOwnDeadCompanions?: number }, game: GameState, side: 'p1' | 'p2'): number {
+  const derived = e.perOwnDeadCompanions
+    ? e.perOwnDeadCompanions * game[side].dead.filter(c => c.type === 'Companion').length
+    : 0;
+  return (e.amount ?? 0) + derived;
 }
 
 /** Static `buff` effects projected by a source permanent: its own card's static
@@ -429,7 +446,7 @@ function staticAuraStat(ent: BoardEntity, game: GameState, stat: 'atk' | 'hp'): 
       // entering after the aura is already in play is covered, and the aura dies with
       // its source — no stamping, nothing to clean up.
       if (e.where?.subtype && !hasSubtype(ent, e.where.subtype)) continue;
-      sum += e.amount ?? 0;
+      sum += buffAmount(e, game, side); // Requiem Arc C: flat + derived (census) amounts
     }
   }
   // Hostile auras (Arc B, 2026-07-23 — Pale Confessor): the OPPONENT's static buff
@@ -445,7 +462,7 @@ function staticAuraStat(ent: BoardEntity, game: GameState, stat: 'atk' | 'hp'): 
         if (e.op !== 'buff' || e.stat !== stat || e.scope !== 'allEnemyCompanions') continue;
         if (e.where?.line && e.where.line !== entLine) continue;
         if (e.where?.cls && e.where.cls !== ent.cls) continue;
-        sum += e.amount ?? 0;
+        sum += buffAmount(e, game, opp); // clause controller = the aura's side
       }
     }
   }
@@ -503,7 +520,11 @@ export function effectiveMaxHp(ent: BoardEntity, game: GameState): number {
  *  Armor X and the equip-variant Kit-Master. Poison added Arc D (2026-07-23,
  *  Venom-Slicked Dagger — the combat hook already reads effectiveKeywords, so
  *  the whitelist was the only blocker). */
-const ITEM_GRANTED_KEYWORDS = new Set(['Cleave', 'Ranged', 'Hit & Run', 'Guardian', 'Evasive', 'Reckless', 'Zealous', 'Acrobatics', 'Poison']);
+const ITEM_GRANTED_KEYWORDS = new Set(['Cleave', 'Ranged', 'Hit & Run', 'Guardian', 'Evasive', 'Reckless', 'Zealous', 'Acrobatics', 'Poison',
+  // Haunt added Requiem Arc C (2026-08-25, Crown of the Unquiet King) — the death-time
+  // check reads effectiveKeywords on the PRE-removal entity, so the grant is visible
+  // while the Crown is still equipped; the Memory counter does all once-tracking.
+  'Haunt']);
 
 /** Whitelist membership incl. the ONE parameterized form (Arc D, 2026-07-23):
  *  "[NAME]'s Bane" cannot live in an exact-match set — the prefix allowance

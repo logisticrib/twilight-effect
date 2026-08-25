@@ -126,6 +126,18 @@ export interface GameState {
    *  is held (reactiveHold). OPTIONAL and absent when clear — games that never arm
    *  it keep their exact pre-arc canonical replay hash. */
   pendingCombatPick?: import('./combat').CombatPickRequest | null;
+  /** HAUNT returns owed but not yet resolved (Requiem Arc C, 2026-08-25). A death
+   *  that passes the Haunt check (companion, effective Haunt, no Memory counters —
+   *  read on the PRE-removal entity) queues here; the return arms only after the
+   *  death has FULLY resolved (item transfer + poison windows clear — canon "the
+   *  death fully happens first"). `lp` is the card's OWNER (stolenFrom routing).
+   *  Both keys OPTIONAL and absent when clear (fixture-hash discipline). */
+  pendingHauntQueue?: PendingHauntReturn[];
+  /** The armed Haunt return: >1 open owner slots → the OWNER picks the slot
+   *  (resolveHauntSlot, any line — the ratified wording carries no line
+   *  restriction); a singleton auto-places; a full board drops the return with NO
+   *  Memory counter placed (Haunt retained — the 2026-08-25 counter-rework ruling). */
+  pendingHauntReturn?: (PendingHauntReturn & { eligibleSlots: string[] }) | null;
   /** Control-theft reversion slot pick (Arc I 2026-08-11, Command the Broken —
    *  owner-ratified GENERAL rule, ruling 6): a companion returning to its owner's
    *  control WITHOUT passing through their hand may be placed in ANY available
@@ -512,6 +524,14 @@ export interface PendingAttackChoice {
 export interface PendingForcedSacrifice {
   lp: 'p1' | 'p2';       // who must sacrifice (the attacking companion's controller)
   sourceName: string;    // the demanding permanent (prompt/hold label)
+}
+
+/** One owed HAUNT return (Requiem Arc C, 2026-08-25): the dead card that returns to
+ *  an empty Command Zone slot its OWNER controls, exhausted, with a Memory counter. */
+export interface PendingHauntReturn {
+  lp: 'p1' | 'p2';       // the card's OWNER — the return routes to their board
+  cardId: string;        // the card in the owner's Dead Zone
+  cardName: string;      // prompt/hold label
 }
 
 /** A control-theft reversion awaiting the OWNER's slot choice (Arc I 2026-08-11):

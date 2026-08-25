@@ -10,10 +10,11 @@
 // runReadyPhase, the turn draw, and prompt arming.
 import type { BoardEntity, Card, TapState } from '../types/card';
 import type { GameState, PlayerState, PendingItemTransfer, PendingDeadPick,
-              PendingModalChoice, PeekRequest, ArmorChoiceData } from './state';
+              PendingModalChoice, PeekRequest, ArmorChoiceData, PendingHauntReturn } from './state';
 import type { Board, SlotId } from './geometry';
 import { FRONT_SLOTS, BACK_SLOTS } from './geometry';
-import { HIT_RUN_STATUS, currentWillpower, isPhysicalConstruct, hasAnchorCounters, recomputeStatics, hasModifier } from './stats';
+import { HIT_RUN_STATUS, currentWillpower, isPhysicalConstruct, hasAnchorCounters, recomputeStatics, hasModifier, effectiveKeywords } from './stats';
+import { CATALOG } from '../data/catalog';
 import { deadCardsOf, itemTransferOf, fireSacrificeTriggers } from './entities';
 import { hasRemovalTrigger, resolveRemovalTriggers } from './combat';
 import { freshActs, computeWillpower, controlsPreventAnchorDecay, resolveStartOfTurn } from './lifecycle';
@@ -104,6 +105,7 @@ export function applyReadyRemovals(game: GameState, side: 'p1' | 'p2', whose: st
   const transfers: PendingItemTransfer[] = [];
   const sacrificed: BoardEntity[] = [];
   const fled: BoardEntity[] = [];
+  const haunts: PendingHauntReturn[] = [];
   // Fleeing checks read THE current Willpower (Dismayed-adjusted; base was
   // recomputed at the flip). Dismay pressure can cause fleeing — intended
   // (owner ruling 2026-07-04).
@@ -151,6 +153,18 @@ export function applyReadyRemovals(game: GameState, side: 'p1' | 'p2', whose: st
       bury(cur);
       sacrificed.push(cur);
       fled.push(cur);
+      // HAUNT (Requiem Arc C, 2026-08-25): a FLEE is a death (2026-07-20) and canon
+      // rules it triggers Haunt — checked on the PRE-removal entity exactly like the
+      // destroyEntity site. Self-balancing by design: the return re-enters exhausted
+      // and, if its Level still exceeds Willpower, it simply flees again next check.
+      // (DECAY deaths above deliberately do NOT check: only constructs and Manifests
+      // decay, Haunt is companion-side, and the one corner — a decayed Manifest
+      // wearing the Crown — has no carrier scenario in any deck. Dated exclusion,
+      // not an oversight; revisit if a Wizard deck ever meets the Crown.)
+      if ((cur.memoryCounters ?? 0) === 0 && effectiveKeywords(cur, game).includes('Haunt')) {
+        const card = CATALOG.find(c => c.name === cur.name);
+        if (card) haunts.push({ lp: cur.stolenFrom ?? side, cardId: card.id, cardName: card.name });
+      }
       notices.push(`${whose} ${cur.name} flees — Level ${cur.level} exceeds Willpower ${effWP}.`);
       continue;
     }
@@ -158,7 +172,8 @@ export function applyReadyRemovals(game: GameState, side: 'p1' | 'p2', whose: st
   }
   return { game: { ...game, [side]: { ...ps, board: newBoard,
     dead: buried.length ? [...ps.dead, ...buried] : ps.dead,
-    hand: returnedSworn.length ? [...ps.hand, ...returnedSworn] : ps.hand } },
+    hand: returnedSworn.length ? [...ps.hand, ...returnedSworn] : ps.hand },
+    ...(haunts.length ? { pendingHauntQueue: [...(game.pendingHauntQueue ?? []), ...haunts] } : {}) },
     notices, transfers, sacrificed, fled };
 }
 

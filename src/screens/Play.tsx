@@ -90,6 +90,7 @@ function GameView() {
       <AttackChoiceModal />
       <ForcedSacrificeModal />
       <CombatPickModal />
+      <HauntDriver />
       <TributeModal />
       <PoisonHost />
       <CoercionModal />
@@ -390,6 +391,19 @@ function StackResumeDriver() {
       s.resumeStack();
     }
   }, [head]);
+  return null;
+}
+
+/** HAUNT arming driver (Requiem Arc C, 2026-08-25) — the resumeStack discipline: an
+ *  owed return sits in pendingHauntQueue until every window from the death drains,
+ *  then the OWNER's client advances it (armHaunt no-ops for everyone else and while
+ *  anything is still pending — safe to call speculatively). */
+function HauntDriver() {
+  const queueLen = useGameStore(s => s.game.pendingHauntQueue?.length ?? 0);
+  const game = useGameStore(s => s.game);
+  useEffect(() => {
+    if (queueLen > 0) useGameStore.getState().armHaunt();
+  }, [queueLen, game]);
   return null;
 }
 

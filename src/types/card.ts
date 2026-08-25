@@ -150,6 +150,15 @@ export interface BoardEntity {
    *  `anchorsStart` pattern. Absent when the counters came from an effect rather
    *  than a printed keyword. */
   armorStart?: number;
+  /** MEMORY counters (Requiem Arc C, 2026-08-25) — a GENERAL game resource by owner
+   *  flag (recorded in the MKL Haunt entry): today HAUNT places one on the body it
+   *  returns (a body that dies carrying one stays dead — the counter IS the
+   *  per-stint tracker), and future cards (possibly a Siblari ability) will place
+   *  them on permanents and key other effects off them. Universal counter principle:
+   *  a Memory counter is a Memory counter however it arrives. Lives on ANY
+   *  permanent, not only companions. OPTIONAL and absent-when-zero (hash
+   *  discipline, as with `poison` / `armorCounters`). */
+  memoryCounters?: number;
   loadout?: Loadout;
   sworn?: Card | null; // oathsworn card tucked beneath
   acts: Acts;          // per-turn action budget

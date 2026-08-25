@@ -8,7 +8,7 @@ import type { BoardEntity, Card } from '../types/card';
 import { CATALOG } from '../data/catalog';
 import { isFront, FRONT_SLOTS, BACK_SLOTS, type Board, type SlotId } from './geometry';
 import type { GameState, PendingItemTransfer, PendingDeadPick, ArmorChoiceData } from './state';
-import { isCharacter, canHoldItem, isPhysicalConstruct, gearItemsOf, hasSubtype } from './stats';
+import { isCharacter, canHoldItem, isPhysicalConstruct, gearItemsOf, hasSubtype, effectiveKeywords } from './stats';
 // Function-level cycle with combat.ts (destroyEntity fires removal triggers; the
 // trigger machinery damages/destroys entities) and interpreter.ts (on-sacrifice
 // listeners resolve card effects). Safe: hoisted functions, called only at
@@ -302,6 +302,17 @@ export function destroyEntity(game: GameState, entityId: string, sink: PendingDe
   const dead = deadCardsOf(loc.ent);
   const sworn = loc.ent.sworn;
   const transfer = itemTransferOf(loc.ent, owner);
+  // HAUNT (Requiem Arc C, 2026-08-25) — the check reads the PRE-removal entity: a
+  // companion whose EFFECTIVE keywords include Haunt (the Crown's item grant is
+  // visible — it is still equipped at this moment; an opposing suppression aura
+  // suppresses Haunt like any keyword) and which carries NO Memory counters. The
+  // RETURN is deferred: canon has the death fully happen first, so the owed return
+  // rides pendingHauntQueue and arms only after the transfer/poison windows drain
+  // (armNextHaunt). Owner-routed like the zones above.
+  const haunts = loc.ent.kind === 'companion'
+    && (loc.ent.memoryCounters ?? 0) === 0
+    && effectiveKeywords(loc.ent, game).includes('Haunt');
+  const hauntCard = haunts ? CATALOG.find(c => c.name === loc.ent.name) ?? null : null;
   // On-sacrifice listeners gather from the board AS OF the event (pre-removal) —
   // the dying permanent's own listener is included (R3, owner 2026-07-15). The
   // event stays on the CONTROLLER's board (where it died); only ZONES follow owner.
@@ -309,6 +320,10 @@ export function destroyEntity(game: GameState, entityId: string, sink: PendingDe
   const removed = removeEntity(game, entityId);
   let g: GameState = { ...removed,
     pendingItemTransferQueue: transfer ? [...removed.pendingItemTransferQueue, transfer] : removed.pendingItemTransferQueue,
+    // The owed Haunt return (Arc C): queued, never resolved here — armNextHaunt
+    // arms it after the death's windows drain.
+    ...(hauntCard ? { pendingHauntQueue: [...(removed.pendingHauntQueue ?? []),
+      { lp: owner, cardId: hauntCard.id, cardName: hauntCard.name }] } : {}),
     [owner]: {
       ...removed[owner],
       dead: dead.length ? [...removed[owner].dead, ...dead] : removed[owner].dead,

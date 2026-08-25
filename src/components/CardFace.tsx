@@ -197,6 +197,20 @@ const s = {
     letterSpacing: '0.06em',
     boxShadow: '0 1px 3px rgba(0,0,0,0.45)',
   } as CSSProperties,
+  // Memory counter badge (Requiem Arc C, 2026-08-25). A GENERAL resource by owner
+  // flag: today Haunt places one on the body it returns (a body that dies carrying
+  // one stays dead), and future cards will place and read them too — so the badge is
+  // generic "Memory", never Haunt-specific. Table-legible state, the poison/armor
+  // discipline.
+  memoryBadge: {
+    fontFamily: "'JetBrains Mono', monospace",
+    fontSize: 8, fontWeight: 700,
+    color: '#1a1226', background: 'rgba(186,156,222,0.95)',
+    flexShrink: 0,
+    padding: '1px 5px', borderRadius: 3,
+    letterSpacing: '0.06em',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.45)',
+  } as CSSProperties,
   condStack: {
     position: 'absolute', top: 38, right: 11,
     display: 'flex', flexDirection: 'column', gap: 3,
@@ -374,6 +388,7 @@ export function CardFace({
   const statuses  = ('statuses'  in data ? data.statuses  : []) ?? [];
   // Board entities carry `poison`; a hand/library Card never does.
   const poison    = 'poison' in data ? ((data as BoardEntity).poison ?? 0) : 0;
+  const memory    = 'statuses' in data ? ((data as BoardEntity).memoryCounters ?? 0) : 0;
   // Armor prevention available right now, across every source (own counters + each
   // equipped piece). Board entities only — a hand card has no loadout and no counters.
   const armorSrc  = 'statuses' in data ? armorCandidatesOf(data as BoardEntity) : [];
@@ -411,12 +426,17 @@ export function CardFace({
           {/* Condition badges + the poison COUNTER. The counter leads the stack: the
               'Poisoned' status says THAT it is poisoned, this says BY HOW MUCH, and the
               number is what the ready-phase check actually spends. */}
-          {(statuses.length > 0 || poison > 0 || armorLeft > 0) && (
+          {(statuses.length > 0 || poison > 0 || armorLeft > 0 || memory > 0) && (
             <div style={s.condStack}>
               {armorLeft > 0 && (
                 <div style={s.armorBadge}
                      title={armorSrc.map(a => `${a.name}: ${a.counters}/${a.armor}`).join('\n')}>
                   ⛨ {armorLeft}
+                </div>
+              )}
+              {memory > 0 && (
+                <div style={s.memoryBadge} title={`${memory} Memory counter${memory === 1 ? '' : 's'} — a body that dies carrying one stays dead (Haunt)`}>
+                  ✦ {memory}
                 </div>
               )}
               {poison > 0 && (

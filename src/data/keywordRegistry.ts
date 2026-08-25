@@ -104,7 +104,14 @@ export const KEYWORDS: Record<string, KeywordSpec> = {
   // "Restless" the same day (owner playtest feedback: the once-state needed a physical
   // tracker). Per-stint: counters cease on zone change, so outside reanimation resets
   // it. No slot = no return AND no counter (Haunt retained). A flee IS a death.
-  Haunt:          { event: 'death',   done: false, note: 'canon: when this companion dies, if it had no Memory counters on it, return it from your Dead Zone to an empty Command Zone slot you control, exhausted, with a Memory counter on it. Needs a death listener + Memory-counter check at death + owner-routed slot pick that places the counter; flee counts (a flee is a death, 2026-07-20)' },
+  // Arc C (2026-08-25): LIVE — the check reads the PRE-removal entity at BOTH death
+  // sites (destroyEntity for damage/sacrifice/destroy; the applyReadyRemovals flee
+  // exit), the owed return rides pendingHauntQueue and arms only after the death's
+  // windows drain (armHaunt — canon "the death fully happens first"), and the return
+  // is a real ENTER ('enter' stack entry: the Lich's Entomb re-fires, opposing
+  // enter-traps hear it, Paranoia does not). Memory counters are a GENERAL resource
+  // (owner flag 2026-08-25) — memoryCounters on BoardEntity, absent-when-zero.
+  Haunt:          { event: 'death',   done: true,  note: 'destroyEntity + applyReadyRemovals check effectiveKeywords (Crown grant visible) + memoryCounters on the pre-removal entity -> pendingHauntQueue -> armHaunt (owner slot pick >1 open, auto-place singleton, full board = no return AND no counter, Haunt retained) -> performHauntReturn places the Memory counter and fires the enter window' },
   // Printed parameterized as "Entomb N" — keywordBase strips the number as it does for
   // Armor/Reinforce. Self-mill: YOUR deck, YOUR Dead Zone. Arc A (2026-08-25): LIVE —
   // parseEntomb (stats) feeds millCards (entities) at both enter sites: the inline
