@@ -103,6 +103,11 @@ export const KEYWORDS: Record<string, KeywordSpec> = {
   // it. No slot = no return AND no counter (Haunt retained). A flee IS a death.
   Haunt:          { event: 'death',   done: false, note: 'canon: when this companion dies, if it had no Memory counters on it, return it from your Dead Zone to an empty Command Zone slot you control, exhausted, with a Memory counter on it. Needs a death listener + Memory-counter check at death + owner-routed slot pick that places the counter; flee counts (a flee is a death, 2026-07-20)' },
   // Printed parameterized as "Entomb N" — keywordBase strips the number as it does for
-  // Armor/Reinforce. Self-mill: YOUR deck, YOUR Dead Zone.
-  Entomb:         { event: 'enter',   done: false, note: 'canon: when this enters the encounter, put the top N cards of your deck into your Dead Zone (all remaining if fewer). The mill op exists; no keyword parser feeds it yet' },
+  // Armor/Reinforce. Self-mill: YOUR deck, YOUR Dead Zone. Arc A (2026-08-25): LIVE —
+  // parseEntomb (stats) feeds millCards (entities) at both enter sites: the inline
+  // runOnEnter block for single-unit carriers, and an 'entomb' enterUnit kind for the
+  // Arc G owner-ordered multi-pending window (Palegrove Gravekeeper + Scavenger).
+  // The same arc interpreted the mill op and installed the deck-out loss in drawCards
+  // (ANY mandatory draw from an empty deck loses — owner-ruled 2026-08-25).
+  Entomb:         { event: 'enter',   done: true,  note: 'parseEntomb -> millCards at runOnEnter (single-unit) and armEnterUnit (multi-pending, owner-ordered). Partial/empty mill no-ops (R4); milling never loses — only draws do (drawCards chokepoint)' },
 };

@@ -8,7 +8,7 @@ import { recomputeStatics, isImmuneToSplash, HIT_RUN_STATUS,
          isPhysicalConstruct, parseEnterTrigger, type EnterTriggerKind,
          isCharacter, firstItemOf, allItemsOf, canHoldItem, effectiveAttack, effectiveKeywords, effectiveMaxHp, wardedLines,
          canPlayActionCard, specialActionActor, minorActionReason, actionTypeOf, currentWillpower, parseBanes,
-         POISONED_STATUS, parseAnimateMagic, parseArmorKeyword,
+         POISONED_STATUS, parseAnimateMagic, parseArmorKeyword, parseEntomb,
          attackRestrictedBy, moveRestrictedBy, hasModifier,
          canAttackFromPosition, isLegalAttackTarget, bindingGuardianIds, legalAttackTargetIds,
          conditionMet } from './keywords';
@@ -26,7 +26,7 @@ import { ADJ, FRONT_SLOTS, BACK_SLOTS, isFront, findSlot, type SlotId, type Boar
          orderedForStack, batchOrderer, segmentBatch, resolveCombatTriggers, combatTriggerEffects,
          findEntityAnywhere, updateEntity, removeEntity, canBeSacrificed,
          itemProfileOf, itemTransferCandidates, armNextItemTransfer,
-         setPcHp, payPcHp, pcIdOf, charsOf,
+         setPcHp, payPcHp, pcIdOf, charsOf, millCards, drawCards,
          ownPhysicalConstructIds,
          eligibleTargets, filterEligibleByEffects, effectsWouldAffectSomething, actionTargetSpec, twoStepKind, isInteractiveSpec,
          permanentEffects, gatherActivated, abilityUsedTag, magicCtx,
@@ -550,6 +550,21 @@ function runOnEnter(
     }
   }
 
+  // Entomb N (Requiem Arc A, 2026-08-25) — on-enter, MANDATORY, promptless: put the
+  // top N cards of your own deck into your Dead Zone. A short/empty deck mills what
+  // it can (R4: mandatory triggers fire and no-op); milling never loses the game —
+  // only DRAWS do (the drawCards chokepoint). A card mixing Entomb with another
+  // enter unit (Palegrove Gravekeeper: + Scavenger) never reaches this inline path:
+  // enterUnitsOf splits it into owner-ordered 'enterUnit' entries (Arc G).
+  const entombN = parseEntomb(card.keywords);
+  if (isCompanion && entombN != null) {
+    const m = millCards(g, lp, entombN);
+    g = m.game;
+    enterMsg = m.milled.length
+      ? `${card.name}: Entomb ${entombN} — ${m.milled.map(c => c.name).join(', ')} into the Dead Zone.`
+      : `${card.name}: Entomb ${entombN} — the deck is empty, nothing to entomb.`;
+  }
+
   // Animate Magic X (on-enter): choose a Magical (Incantation) Construct you
   // control — it becomes an X/X Manifest companion via the interpreter's existing
   // 'animate' op. No Magical Construct → fizzles with a note.
@@ -740,11 +755,16 @@ function onEnterEffects(card: Card, game: GameState, lp: 'p1' | 'p2'):
  * shipped card carries more than one unit (Scavenger and Coercion have zero shipped
  * carriers), so every shipped enter runs the pre-Arc-G path byte-identically.
  */
-function enterUnitsOf(card: Card): ('scavenger' | 'coercion' | 'structured')[] {
+function enterUnitsOf(card: Card): ('scavenger' | 'coercion' | 'structured' | 'entomb')[] {
   const isCompanion = card.type === 'Companion';
-  const units: ('scavenger' | 'coercion' | 'structured')[] = [];
+  const units: ('scavenger' | 'coercion' | 'structured' | 'entomb')[] = [];
   if (isCompanion && card.keywords.includes('Scavenger')) units.push('scavenger');
   if (isCompanion && card.keywords.includes('Coercion')) units.push('coercion');
+  // Entomb (Requiem Arc A, 2026-08-25): promptless and game-level-safe, so QUEUEABLE.
+  // Palegrove Gravekeeper (Scavenger + Entomb 2) is the live multi-pending probe —
+  // the owner orders the two, and Entomb-first can mill an item Scavenger's fresh
+  // evaluation then offers (per-event state, 2026-07-21).
+  if (isCompanion && parseEntomb(card.keywords) != null) units.push('entomb');
   // DELIBERATELY UNGATED (Arc C, 2026-08-23): this is a static SHAPE query with no
   // GameState to read, and the enter trigger exists whether or not its condition will
   // hold -- a mandatory trigger fires and no-ops (R4). The `if` is evaluated when the
@@ -803,6 +823,16 @@ function armEnterUnit(
     if (!canDiscard && !canSacrifice) return { game: g, msg: `${name} — the opponent has nothing to coerce.` };
     return { game: { ...g, pendingCoercion: { source: name, victim: opp } },
       msg: `${name}: Coercion — opponent must discard a card or sacrifice a permanent.` };
+  }
+  if (entry.unit === 'entomb') {
+    // Mandatory + promptless — mirrors the runOnEnter inline twin exactly; evaluated
+    // fresh, so a unit resolved before this one (e.g. Scavenger reclaiming an item)
+    // has already changed the deck/Dead Zone this mill reads.
+    const n = parseEntomb(entry.card.keywords) ?? 0;
+    const m = millCards(g, lp, n);
+    return { game: m.game, msg: m.milled.length
+      ? `${name}: Entomb ${n} — ${m.milled.map(c => c.name).join(', ')} into the Dead Zone.`
+      : `${name}: Entomb ${n} — the deck is empty, nothing to entomb.` };
   }
   // 'structured': the card's authored onEnter clauses — no-target ops only
   // (enterUnitsOf refuses the rest), resolved through the interpreter. The dead
@@ -1510,12 +1540,20 @@ export const useGameStore = create<GameStoreState>()(
   clearBroadcast: () => set({ _broadcast: null }),
 
   // ── Draw card ──────────────────────────────────────────────────────────────
+  // Deck-out (Requiem Arc A, owner-ruled 2026-08-25): the Draw Phase draw from an
+  // empty deck LOSES the game (this replaced a silent no-op). drawCards is the
+  // chokepoint; it sets `gameOver` to the opponent.
   drawCard: (player) => set(s => {
     if (gameIsOver(s.game)) return s;
-    const ps = s.game[player];
-    if (ps.deck.length === 0) return s;
-    const [drawn, ...rest] = ps.deck;
-    return { game: { ...s.game, [player]: { ...ps, deck: rest, hand: [...ps.hand, drawn] } } };
+    const r = drawCards(s.game, player, 1);
+    if (r.lost) {
+      const winner = player === 'p1' ? 'p2' : 'p1';
+      const id = ++toastId;
+      setTimeout(() => set(s2 => ({ toasts: s2.toasts.filter(t => t.id !== id) })), 6000);
+      return { game: r.game, toasts: [...s.toasts,
+        { id, msg: `${s.game[player].name} must draw from an empty deck — ${s.game[winner].name} wins the game!` }] };
+    }
+    return { game: r.game };
   }),
 
   // ── Switch sides (sandbox) ─────────────────────────────────────────────────

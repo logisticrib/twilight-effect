@@ -230,6 +230,9 @@ export function reactiveLabel(e: ReactiveStackEntry): string {
     // more than the card name.
     if (e.unit === 'scavenger') return `${e.sourceName} — Scavenger (attach an item from your Dead Zone)`;
     if (e.unit === 'coercion') return `${e.sourceName} — Coercion (opponent discards or sacrifices)`;
+    // Entomb before/after Scavenger is information-relevant: milling first can put an
+    // item into the Dead Zone that Scavenger's fresh evaluation then offers.
+    if (e.unit === 'entomb') return `${e.sourceName} — Entomb (put the top of your deck into your Dead Zone)`;
     const ops = effectsOfCard(e.sourceName)
       .filter(c => c.trigger === 'onEnter').flatMap(c => c.effects).map(x => x.op);
     const what = ops.includes('revealHand') ? "look at the opponent's hand"

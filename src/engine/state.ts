@@ -208,7 +208,7 @@ export type ReactiveStackEntry =
    *  effects and the Scavenger attach; `card` carries the played card (the ownEnter
    *  discipline — read the hand card, never a catalog lookup); sourceName = card.name
    *  (labels, hold banners). */
-  | { kind: 'enterUnit'; unit: 'scavenger' | 'coercion' | 'structured';
+  | { kind: 'enterUnit'; unit: 'scavenger' | 'coercion' | 'structured' | 'entomb';
       entId: string; sourceName: string; card: Card; controller: 'p1' | 'p2' };
 
 export type StackEntry =

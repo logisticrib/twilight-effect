@@ -388,6 +388,46 @@ export function setPcHp(game: GameState, side: 'p1' | 'p2', pcEntityId: string, 
   return g;
 }
 
+// ─── Deck movement (Requiem Arc A, 2026-08-25) ────────────────────────────────
+
+/** Move the top `count` cards of `player`'s deck into their own Dead Zone (self-mill:
+ *  the `mill` op and the ENTOMB keyword). Mills all remaining when short. Milling an
+ *  EMPTY deck is NOT a loss — canon ties the empty-deck loss to DRAWS, never mills
+ *  (GRU §Win Conditions / CDP §6; the loss lives in `drawCards` below). */
+export function millCards(game: GameState, player: 'p1' | 'p2', count: number): { game: GameState; milled: Card[] } {
+  const ps = game[player];
+  const n = Math.min(count, ps.deck.length);
+  if (n === 0) return { game, milled: [] };
+  const milled = ps.deck.slice(0, n);
+  return { game: { ...game, [player]: { ...ps, deck: ps.deck.slice(n), dead: [...ps.dead, ...milled] } }, milled };
+}
+
+/** Draw up to `count` cards for `player` — THE deck-out chokepoint (owner-ruled
+ *  2026-08-25): a MANDATORY draw attempted while the deck is empty LOSES the game,
+ *  and the ruling covers ANY mandatory draw — effect draws included, not only the
+ *  Draw Phase ("When deck is empty and player must draw, player loses", GRU:158;
+ *  "lose immediately", CDP §6). Every draw in the game today is mandatory ("you may
+ *  draw" exists on no op or card); if an optional draw ever ships, route its decline
+ *  path around this helper, never through it. Partial draws happen first: "draw 2"
+ *  with 1 card left draws that card, THEN the second attempt hits the empty deck and
+ *  loses. `gameOver` gets the winning side (the setPcHp shape — an existing key, so
+ *  nothing new serializes into recordings). */
+export function drawCards(game: GameState, player: 'p1' | 'p2', count: number): { game: GameState; drawn: number; lost: boolean } {
+  let g = game;
+  let drawn = 0;
+  for (let i = 0; i < count; i++) {
+    const ps = g[player];
+    if (ps.deck.length === 0) {
+      if (!g.gameOver) g = { ...g, gameOver: player === 'p1' ? 'p2' : 'p1' };
+      return { game: g, drawn, lost: true };
+    }
+    const [top, ...rest] = ps.deck;
+    g = { ...g, [player]: { ...ps, deck: rest, hand: [...ps.hand, top] } };
+    drawn++;
+  }
+  return { game: g, drawn, lost: false };
+}
+
 /** Pay HP directly from a player's PC (a cost, not damage — armor/replacement don't apply). */
 export function payPcHp(game: GameState, side: 'p1' | 'p2', amount: number): GameState {
   const pcId = pcIdOf(game, side);

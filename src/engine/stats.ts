@@ -788,6 +788,20 @@ export function parseArmorKeyword(keywords: string[]): number | null {
   return null;
 }
 
+/**
+ * ENTOMB N (Requiem Arc A, 2026-08-25): "When this enters the encounter, put the top
+ * N cards of your deck into your Dead Zone." Parsed from the keyword string like
+ * Reinforce/Dismantle/Animate Magic/Armor, so card data stays declarative. Returns N,
+ * or null when the keyword is absent (or printed without its parameter).
+ */
+export function parseEntomb(keywords: string[]): number | null {
+  for (const kw of keywords) {
+    const m = /^Entomb\s+(\d+)$/.exec(kw);
+    if (m) return parseInt(m[1], 10);
+  }
+  return null;
+}
+
 // (Paranoia needs no parser: the canonical keyword is bare — see docs/Master_Keyword_List.md.
 //  It is not an on-enter trigger of the printed card at all; placeCard checks the OPPONENT's
 //  board for permanents whose effectiveKeywords include 'Paranoia' when a Companion is played.)

@@ -1,5 +1,5 @@
 {
-  "_comment": "DEV DECK - Requiem (Bard / Necromancer), 50 hand-authored dev cards (owner-designed, 2026-08-25). NON-CANON: every card carries dev:true so shipped-pool queries can exclude them. The THIRD dev deck - with it, all ten classes hold cards. Phase 1 = AUTHOR + FLAG (the Sworn Wild convention): cards whose behavior has a live engine path carry structured effects; every behavior the engine cannot yet honor carries an effectsFlag starting 'DEV NOT-IMPLEMENTED' (visible machinery debt; the validator reports it and does not fail). That flag list IS the arc plan for the implementation sessions that follow. FOUR NEW KEYWORDS ratified into Master_Keyword_List.md 2026-08-25, all done:false in the registry: CRESCENDO (Bard - the Untamed shape, CONTROLLER-scoped: while you control a Vocal Construct your characters are in Crescendo; keyword-independent like Untamed), REPRISE (Bard - replaces the sacrifice from LAST-Anchor-counter removal, decay AND effect removal alike per the unified 2026-07-15 sacrifice family, with a return to hand; the construct leaves but never dies), HAUNT (Necromancer - reworked same day from 'Restless' after the first owner playtest: the death fully happens FIRST, then an owner-routed return to an empty slot, exhausted, WITH A MEMORY COUNTER - the counter IS the tracker, and a companion that dies carrying one stays dead; per-stint - counters cease on zone change so outside reanimation resets it; no slot = no return and no counter, Haunt retained; a FLEE counts - a flee is a death, 2026-07-20), ENTOMB N (Necromancer - self-mill N on entry; renamed from 'Exhume' before authoring - to entomb is to bury). BARD HAS INSPIRE ACCESS (owner-ruled 2026-08-25, access-list amendment only - definition unchanged). Initiative remains BANNED - Bard was designed without it, deliberately. NO FREESTANDING STAT-MODIFIER TEXT (owner ruling 2026-08-25): generic +X/+X auras and riders are not this game's design vocabulary; every printed bonus is keyword-tied (Untamed-style, e.g. Gilded Lute's Crescendo attack bonus) or a derived characteristic (Conductor's Dead-Zone census). Typing: reanimated animals print BOTH modifiers ('Undead Beast Bear', per the 2026-08-18 zombified-shrew canon, owner-confirmed 2026-08-25); incorporeal entities print Spirit; Liches print Undead (a lich is a corporeal reanimation of itself). Vocal subtypes: Chant and Song (Bard's canon pair; Rite/Blessing are Druid/Paladin's, Utterance/Dirge are DW's). Construct subtype field carries the single token (the Rite precedent); Vocal-ness derives from subtype membership {Chant, Song, Rite, Blessing, Utterance, Dirge} - cf. isPhysicalConstruct. WIN CONDITIONS by design: Conductor of the Unquiet (count-derived attack off the stocked Dead Zone) and Vielle (twice-per-turn attacks while any song holds). Keyword reminder text is copied VERBATIM from docs/Master_Keyword_List.md.",
+  "_comment": "DEV DECK - Requiem (Bard / Necromancer), 50 hand-authored dev cards (owner-designed, 2026-08-25). NON-CANON: every card carries dev:true so shipped-pool queries can exclude them. The THIRD dev deck - with it, all ten classes hold cards. Phase 1 = AUTHOR + FLAG (the Sworn Wild convention): cards whose behavior has a live engine path carry structured effects; every behavior the engine cannot yet honor carries an effectsFlag starting 'DEV NOT-IMPLEMENTED' (visible machinery debt; the validator reports it and does not fail). That flag list IS the arc plan for the implementation sessions that follow. FOUR NEW KEYWORDS ratified into Master_Keyword_List.md 2026-08-25, all done:false in the registry: CRESCENDO (Bard - the Untamed shape, CONTROLLER-scoped: while you control a Vocal Construct your characters are in Crescendo; keyword-independent like Untamed), REPRISE (Bard - replaces the sacrifice from LAST-Anchor-counter removal, decay AND effect removal alike per the unified 2026-07-15 sacrifice family, with a return to hand; the construct leaves but never dies), HAUNT (Necromancer - reworked same day from 'Restless' after the first owner playtest: the death fully happens FIRST, then an owner-routed return to an empty slot, exhausted, WITH A MEMORY COUNTER - the counter IS the tracker, and a companion that dies carrying one stays dead; per-stint - counters cease on zone change so outside reanimation resets it; no slot = no return and no counter, Haunt retained; a FLEE counts - a flee is a death, 2026-07-20), ENTOMB N (Necromancer - self-mill N on entry; renamed from 'Exhume' before authoring - to entomb is to bury). BARD HAS INSPIRE ACCESS (owner-ruled 2026-08-25, access-list amendment only - definition unchanged). Initiative remains BANNED - Bard was designed without it, deliberately. NO FREESTANDING STAT-MODIFIER TEXT (owner ruling 2026-08-25): generic +X/+X auras and riders are not this game's design vocabulary; every printed bonus is keyword-tied (Untamed-style, e.g. Gilded Lute's Crescendo attack bonus) or a derived characteristic (Conductor's Dead-Zone census). Typing: reanimated animals print BOTH modifiers ('Undead Beast Bear', per the 2026-08-18 zombified-shrew canon, owner-confirmed 2026-08-25); incorporeal entities print Spirit; Liches print Undead (a lich is a corporeal reanimation of itself). Vocal subtypes: Chant and Song (Bard's canon pair; Rite/Blessing are Druid/Paladin's, Utterance/Dirge are DW's). Construct subtype field carries the single token (the Rite precedent); Vocal-ness derives from subtype membership {Chant, Song, Rite, Blessing, Utterance, Dirge} - cf. isPhysicalConstruct. WIN CONDITIONS by design: Conductor of the Unquiet (count-derived attack off the stocked Dead Zone) and Vielle (twice-per-turn attacks while any song holds). Keyword reminder text is copied VERBATIM from docs/Master_Keyword_List.md. ARC A (2026-08-25): MILL + ENTOMB + DECK-OUT landed. The mill op is interpreted (target:'self' = the controller's own deck, partial when short, never a loss); ENTOMB is live at both enter sites (inline runOnEnter for single-unit carriers, an 'entomb' enterUnit kind for the Arc G owner-ordered window - Palegrove Gravekeeper's Entomb+Scavenger ordering is the live probe); and the EMPTY-DECK LOSS is implemented at the drawCards chokepoint per the owner ruling 2026-08-25: ANY mandatory draw from an empty deck loses the game - the Draw Phase draw AND effect draws (canon GRU 'When deck is empty and player must draw, player loses'). Tomb Chanter and Grave Whispers are authored live against the op.",
   "cards": [
     {
       "id": "dd000101",
@@ -28,8 +28,7 @@
         "Undead",
         "Beast",
         "Rat"
-      ],
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): ENTOMB keyword — the mill op is declared but uninterpreted and no keyword parser feeds it (registry Entomb done:false)."
+      ]
     },
     {
       "id": "dd000102",
@@ -193,8 +192,7 @@
       "subtypes": [
         "Human",
         "Gravekeeper"
-      ],
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): ENTOMB keyword (Scavenger is live via the printed keyword). DELIBERATE COLLISION: Entomb and Scavenger share the enter window — Entomb can mill an item Scavenger could then reclaim, and the owner orders their own simultaneous triggers (2026-07-22), so the order is outcome-relevant."
+      ]
     },
     {
       "id": "dd000108",
@@ -333,7 +331,18 @@
         "Human",
         "Chanter"
       ],
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): the mill op is declared but uninterpreted (no interpreter case). Ongoing SELF-mill engine — deliberately walks its controller toward the empty-deck loss (a forced draw from an empty deck loses the game)."
+      "effects": [
+        {
+          "trigger": "startOfTurn",
+          "effects": [
+            {
+              "op": "mill",
+              "count": 1,
+              "target": "self"
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "dd000113",
@@ -418,7 +427,7 @@
         "Lich",
         "Deathpriest"
       ],
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): HAUNT and ENTOMB keywords - see Barrowlight Ghoul and Gravegnaw Rat. COLLISION: its own Haunt return is an enter, which re-fires Entomb 2 - the return mills again."
+      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): HAUNT keyword - see Barrowlight Ghoul. (ENTOMB half went LIVE in Arc A, 2026-08-25.) COLLISION pinned for the Haunt arc: its own Haunt return is an enter, which re-fires Entomb 2 - the return mills again."
     },
     {
       "id": "dd000116",
@@ -987,7 +996,22 @@
       "subtypes": [
         "Magic"
       ],
-      "effectsFlag": "DEV NOT-IMPLEMENTED (2026-08-25): the mill op is declared but uninterpreted — the draw half is trivially live but authoring half a card would misreport coverage; the whole card waits on mill."
+      "effects": [
+        {
+          "trigger": "onPlay",
+          "effects": [
+            {
+              "op": "mill",
+              "count": 2,
+              "target": "self"
+            },
+            {
+              "op": "draw",
+              "count": 1
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "dd000135",

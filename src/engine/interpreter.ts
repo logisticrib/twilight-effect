@@ -12,7 +12,7 @@ import type { GameState, PendingDeadPick, ArmorChoiceData } from './state';
 import { pushStack } from './state';
 import { charsOf, companionIds, constructIds, findEntityAnywhere, updateEntity,
          removeEntity, destroyEntity, setPcHp, pcIdOf, itemCardsOf, itemTransferOf, canBeSacrificed,
-         gearItemsOf, destroyItemById } from './entities';
+         gearItemsOf, destroyItemById, millCards, drawCards } from './entities';
 import { hasSubtype, cardHasSubtype } from './stats';
 import { isPhysicalConstruct, conditionMet, effectiveMaxHp, isImmuneToSplash, isCharacter, poisonHitPatch,
          effectiveKeywords, isWardedAgainst } from './stats';
@@ -495,15 +495,25 @@ export function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceNam
         // count is what THIS resolution actually destroyed, so a destroy that found
         // nothing draws nothing.
         const want = e.perDestroyed ? destroyedThisResolution : e.count;
-        let drawn = 0;
-        for (let i = 0; i < want; i++) {
-          const ps = g[lp];
-          if (ps.deck.length === 0) break;
-          const [d, ...rest] = ps.deck;
-          g = { ...g, [lp]: { ...ps, deck: rest, hand: [...ps.hand, d] } };
-          drawn++;
-        }
-        if (drawn) msgs.push(`Draw ${drawn}`);
+        // Deck-out chokepoint (Requiem Arc A, owner-ruled 2026-08-25): ANY mandatory
+        // draw from an empty deck loses — this replaced a silent `break` on empty.
+        const r = drawCards(g, lp, want);
+        g = r.game;
+        if (r.drawn) msgs.push(`Draw ${r.drawn}`);
+        if (r.lost) msgs.push(`${g[lp].name} must draw from an empty deck — ${g[lp === 'p1' ? 'p2' : 'p1'].name} wins the game!`);
+        break;
+      }
+      case 'mill': {
+        // Requiem Arc A (2026-08-25). target:'self' = the resolving controller's OWN
+        // deck — self-mill as fuel (the Entomb op-twin: Grave Whispers, Tomb Chanter).
+        // No other target has a carrier; extend when a card needs one. Empty/short
+        // deck mills what it can and never loses (only draws lose — drawCards).
+        if (e.target !== 'self') break;
+        const m = millCards(g, lp, e.count);
+        g = m.game;
+        msgs.push(m.milled.length
+          ? `${m.milled.map(c => c.name).join(', ')} — into the Dead Zone (${m.milled.length} milled)`
+          : 'Deck is empty — nothing to mill');
         break;
       }
       case 'shuffleHandRedraw': {
@@ -515,6 +525,14 @@ export function resolveActionEffects(game: GameState, lp: 'p1' | 'p2', sourceNam
         const reshuffled = shuffle([...ops.deck, ...ops.hand]);
         g = { ...g, [opp]: { ...ops, hand: reshuffled.slice(0, drawN), deck: reshuffled.slice(drawN) } };
         msgs.push(`Opponent shuffles ${n} card${n !== 1 ? 's' : ''} away, draws ${drawN}`);
+        // Deck-out (Requiem Arc A, 2026-08-25): a redraw bigger than hand+deck is a
+        // mandatory draw the deck cannot serve — the victim loses. Unreachable with
+        // the one shipped carrier (Convergence Sigil, offset -1: drawN < total by
+        // construction); guarded so a future positive-offset card inherits the rule.
+        if (drawN > reshuffled.length && !g.gameOver) {
+          g = { ...g, gameOver: lp };
+          msgs.push(`${g[opp].name} must draw from an empty deck — ${g[lp].name} wins the game!`);
+        }
         break;
       }
       case 'bounce': {
